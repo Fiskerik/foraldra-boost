@@ -61,7 +61,6 @@ const Index = () => {
       parent1Months,
       parent2Months,
       householdIncome,
-      daysPerWeek,
       simultaneousLeave ? simultaneousMonths : 0
     );
 
