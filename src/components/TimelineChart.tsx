@@ -1,3 +1,4 @@
+import React from "react";
 import { LeavePeriod, formatCurrency } from "@/utils/parentalCalculations";
 import { format, eachMonthOfInterval, startOfMonth, endOfMonth, differenceInCalendarDays } from "date-fns";
 import { sv } from "date-fns/locale";
@@ -9,6 +10,8 @@ interface TimelineChartProps {
 
 export function TimelineChart({ periods, minHouseholdIncome }: TimelineChartProps) {
   if (periods.length === 0) return null;
+
+  const [hoveredPoint, setHoveredPoint] = React.useState<{ income: number; month: string } | null>(null);
 
   const startDate = periods[0].startDate;
   const endDate = periods[periods.length - 1].endDate;
@@ -70,6 +73,14 @@ const monthlyData = months.map((month) => {
       <h3 className="text-xl font-semibold">Inkomsttidslinje</h3>
       
       <div className="relative h-64 bg-muted/30 rounded-lg p-4" aria-label="Inkomsttidslinje diagram">
+        {/* Hover tooltip box - top right */}
+        {hoveredPoint && (
+          <div className="absolute top-4 right-4 bg-popover text-popover-foreground border border-border rounded-lg shadow-lg p-3 z-20">
+            <div className="text-xs text-muted-foreground mb-1">{hoveredPoint.month}</div>
+            <div className="text-sm font-bold">{formatCurrency(hoveredPoint.income)}</div>
+          </div>
+        )}
+        
         {/* Y-axis labels */}
         <div className="absolute left-0 top-0 bottom-0 w-20 flex flex-col justify-between text-xs text-muted-foreground">
           <span>{formatCurrency(yMax)}</span>
@@ -103,11 +114,13 @@ const monthlyData = months.map((month) => {
               const y1 = 100 - (data.income / yMax) * 100;
               const y2 = 100 - (monthlyData[index + 1].income / yMax) * 100;
               
-              let strokeColor = 'hsl(var(--accent))';
+              let strokeColor = 'hsl(0 0% 0%)'; // Black baseline
               if (data.parent1Days > 0 && data.parent2Days === 0 && data.bothDays === 0) {
                 strokeColor = 'hsl(var(--parent1))';
               } else if (data.parent2Days > 0 && data.parent1Days === 0 && data.bothDays === 0) {
                 strokeColor = 'hsl(var(--parent2))';
+              } else if (data.bothDays > 0) {
+                strokeColor = 'hsl(var(--accent))';
               }
               
               return (
@@ -128,11 +141,13 @@ const monthlyData = months.map((month) => {
               const x = (index / (monthlyData.length - 1)) * 100;
               const y = 100 - (data.income / yMax) * 100;
               
-              let fillColor = 'hsl(var(--accent))';
+              let fillColor = 'hsl(0 0% 0%)'; // Black baseline
               if (data.parent1Days > 0 && data.parent2Days === 0 && data.bothDays === 0) {
                 fillColor = 'hsl(var(--parent1))';
               } else if (data.parent2Days > 0 && data.parent1Days === 0 && data.bothDays === 0) {
                 fillColor = 'hsl(var(--parent2))';
+              } else if (data.bothDays > 0) {
+                fillColor = 'hsl(var(--accent))';
               }
               
               return (
@@ -142,20 +157,10 @@ const monthlyData = months.map((month) => {
                     cy={`${y}%`}
                     r="4"
                     fill={fillColor}
-                    className="transition-all hover:r-6"
+                    className="transition-all cursor-pointer"
+                    onMouseEnter={() => setHoveredPoint({ income: data.income, month: data.month })}
+                    onMouseLeave={() => setHoveredPoint(null)}
                   />
-                  <foreignObject
-                    x={`${x}%`}
-                    y={`${y}%`}
-                    width="120"
-                    height="40"
-                    className="overflow-visible pointer-events-none"
-                    style={{ transform: 'translate(-60px, -50px)' }}
-                  >
-                    <div className="hidden group-hover:block bg-popover text-popover-foreground text-xs p-2 rounded shadow-lg whitespace-nowrap">
-                      {formatCurrency(data.income)}
-                    </div>
-                  </foreignObject>
                 </g>
               );
             })}

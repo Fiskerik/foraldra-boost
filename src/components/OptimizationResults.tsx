@@ -76,7 +76,9 @@ export function OptimizationResults({ results, minHouseholdIncome }: Optimizatio
                 </div>
                 
                 <div className="space-y-3">
-                  {result.periods.map((period, periodIndex) => {
+                  {result.periods
+                    .filter(period => period.benefitLevel !== 'none') // Only show leave periods, not work periods
+                    .map((period, periodIndex) => {
                     const parentColor = 
                       period.parent === 'both' ? 'accent' :
                       period.parent === 'parent1' ? 'parent1' : 'parent2';
@@ -116,6 +118,9 @@ export function OptimizationResults({ results, minHouseholdIncome }: Optimizatio
                           </div>
                           <div className="text-muted-foreground">
                             Hushållets dagsinkomst: {formatCurrency(period.dailyIncome)}
+                          </div>
+                          <div className="font-semibold text-sm mt-2">
+                            Periodinkomst: {formatCurrency(period.dailyIncome * period.daysCount)}
                           </div>
                         </div>
                       </div>
