@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/utils/parentalCalculations";
+import { TrendingUp, Users, Calendar, Sparkles } from "lucide-react";
 
 interface InteractiveSlidersProps {
   minHouseholdIncome: number;
@@ -27,10 +28,23 @@ export function InteractiveSliders({
   const parent2Months = totalMonths - parent1Months;
 
   return (
-    <Card className="p-6 space-y-6 bg-card/50 backdrop-blur">
+    <Card className="p-6 space-y-8 bg-card/50 backdrop-blur border-2">
+      <div className="space-y-2">
+        <h3 className="text-2xl font-bold flex items-center gap-2">
+          <Sparkles className="h-6 w-6 text-primary" />
+          Justera plan
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Justera en parameter så anpassas de andra automatiskt för att optimera er ekonomi
+        </p>
+      </div>
+
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">Hushållets minimiinkomst</Label>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            <Label className="text-sm font-medium">Hushållets minimiinkomst</Label>
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-xl font-bold text-primary">
               {formatCurrency(minHouseholdIncome)}
@@ -53,7 +67,10 @@ export function InteractiveSliders({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">Fördelning mellan föräldrar</Label>
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" />
+            <Label className="text-sm font-medium">Fördelning mellan föräldrar</Label>
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-parent1">
               F1: {parent1Months} mån
@@ -80,7 +97,10 @@ export function InteractiveSliders({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">Uttag av dagar per vecka</Label>
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary" />
+            <Label className="text-sm font-medium">Uttag av dagar per vecka</Label>
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-xl font-bold text-accent">
               {daysPerWeek} {daysPerWeek === 1 ? 'dag' : 'dagar'}
@@ -99,12 +119,6 @@ export function InteractiveSliders({
           <span>Inga dagar</span>
           <span>Alla dagar</span>
         </div>
-      </div>
-
-      <div className="pt-4 border-t">
-        <p className="text-xs text-muted-foreground">
-          Justera en parameter så anpassas de andra automatiskt för att optimera er ekonomi
-        </p>
       </div>
     </Card>
   );

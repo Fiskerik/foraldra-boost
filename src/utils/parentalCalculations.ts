@@ -210,7 +210,7 @@ function generateSaveDaysStrategy(
   let currentDate = new Date(birthDate);
   let totalIncome = 0;
   
-  // First 10 days - both parents home
+  // First 10 days - both parents home (mandatory)
   const bothPeriodEnd = addDays(currentDate, 10 - 1);
   const bothPeriodIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * 10;
   periods.push({
@@ -225,39 +225,14 @@ function generateSaveDaysStrategy(
   totalIncome += bothPeriodIncome;
   currentDate = addDays(bothPeriodEnd, 1);
   
-  // Add additional simultaneous period if requested (cap to available days per parent)
-  if (simultaneousMonths > 0) {
-    const requestedSimultaneousDays = simultaneousMonths * 30;
-    const allowedSimultaneousDays = Math.max(
-      0,
-      Math.min(requestedSimultaneousDays, Math.max(0, parent1Days - 10), Math.max(0, parent2Days - 10))
-    );
-    if (allowedSimultaneousDays > 0) {
-      const simultaneousPeriodEnd = addDays(currentDate, allowedSimultaneousDays - 1);
-      const simultaneousIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * allowedSimultaneousDays;
-      periods.push({
-        parent: 'both',
-        startDate: new Date(currentDate),
-        endDate: simultaneousPeriodEnd,
-        daysCount: allowedSimultaneousDays,
-        dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
-        dailyIncome: simultaneousIncome / allowedSimultaneousDays,
-        benefitLevel: 'high'
-      });
-      totalIncome += simultaneousIncome;
-      currentDate = addDays(simultaneousPeriodEnd, 1);
-    }
-  }
-  
+  // Remaining leave days per parent after initial 10 days
+  let p1Remaining = Math.max(0, parent1Days - 10);
+  let p2Remaining = Math.max(0, parent2Days - 10);
+
   // Apply contiguous parental salary for 6 months if available (choose lower earner with agreement)
   const p1HasCA = parent1.hasCollectiveAgreement;
   const p2HasCA = parent2.hasCollectiveAgreement;
   const lowerEarner: 'parent1' | 'parent2' = calc1.netIncome <= calc2.netIncome ? 'parent1' : 'parent2';
-  const higherEarner: 'parent1' | 'parent2' = lowerEarner === 'parent1' ? 'parent2' : 'parent1';
-
-  // Remaining leave days per parent after initial both-10 and optional simultaneous period
-  let p1Remaining = Math.max(0, parent1Days - 10 - (simultaneousMonths > 0 ? simultaneousMonths * 30 : 0));
-  let p2Remaining = Math.max(0, parent2Days - 10 - (simultaneousMonths > 0 ? simultaneousMonths * 30 : 0));
 
   const scheduleSalaryBlock = (who: 'parent1' | 'parent2') => {
     const remaining = who === 'parent1' ? p1Remaining : p2Remaining;
@@ -295,6 +270,7 @@ function generateSaveDaysStrategy(
     if (daysLeft <= 0) break;
     const chunkDays = Math.min(30, daysLeft);
 
+    // Prefer lower earner to save days
     const order: ('parent1' | 'parent2')[] =
       calc1.netIncome <= calc2.netIncome ? ['parent1', 'parent2'] : ['parent2', 'parent1'];
 
@@ -346,7 +322,7 @@ function generateSaveDaysStrategy(
         startDate: new Date(currentDate),
         endDate: periodEnd,
         daysCount: chosen.leaveDays,
-        dailyBenefit: chosen.leaveDailyIncome - partnerWorkDaily, // FP-delen
+        dailyBenefit: chosen.leaveDailyIncome - partnerWorkDaily,
         dailyIncome: chosen.leaveDailyIncome,
         benefitLevel: 'high'
       });

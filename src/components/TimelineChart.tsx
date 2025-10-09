@@ -47,7 +47,18 @@ const monthlyData = months.map((month) => {
   };
 });
   
-  const maxIncome = Math.max(1, Math.max(...monthlyData.map(d => d.income), minHouseholdIncome));
+  // Calculate Y-axis domain: max monthly income + 20%, rounded to nice intervals
+  const maxIncome = Math.max(...monthlyData.map(d => d.income));
+  const yAxisMax = maxIncome * 1.2;
+  
+  // Round to nearest 5000 or 10000 for clean scale
+  const roundToNice = (value: number) => {
+    if (value <= 50000) return Math.ceil(value / 5000) * 5000;
+    return Math.ceil(value / 10000) * 10000;
+  };
+  
+  const yMax = roundToNice(yAxisMax);
+  
   if (import.meta.env.DEV) {
     // Debug: verify data passed to chart
     // eslint-disable-next-line no-console
@@ -61,10 +72,10 @@ const monthlyData = months.map((month) => {
       <div className="relative h-64 bg-muted/30 rounded-lg p-4" aria-label="Inkomsttidslinje diagram">
         {/* Y-axis labels */}
         <div className="absolute left-0 top-0 bottom-0 w-20 flex flex-col justify-between text-xs text-muted-foreground">
-          <span>{formatCurrency(maxIncome)}</span>
-          <span>{formatCurrency(maxIncome * 0.75)}</span>
-          <span>{formatCurrency(maxIncome * 0.5)}</span>
-          <span>{formatCurrency(maxIncome * 0.25)}</span>
+          <span>{formatCurrency(yMax)}</span>
+          <span>{formatCurrency(yMax * 0.75)}</span>
+          <span>{formatCurrency(yMax * 0.5)}</span>
+          <span>{formatCurrency(yMax * 0.25)}</span>
           <span>0 kr</span>
         </div>
         
@@ -72,7 +83,7 @@ const monthlyData = months.map((month) => {
         <div 
           className="absolute left-20 right-0 border-t-2 border-destructive border-dashed z-10 pointer-events-none"
           style={{ 
-            bottom: `calc(${(minHouseholdIncome / maxIncome) * 100}% + 32px)`,
+            bottom: `calc(${(minHouseholdIncome / yMax) * 100}% + 32px)`,
           }}
         >
           <span className="absolute -top-5 right-0 text-xs text-destructive font-medium">
@@ -89,8 +100,8 @@ const monthlyData = months.map((month) => {
               
               const x1 = (index / (monthlyData.length - 1)) * 100;
               const x2 = ((index + 1) / (monthlyData.length - 1)) * 100;
-              const y1 = 100 - (data.income / maxIncome) * 100;
-              const y2 = 100 - (monthlyData[index + 1].income / maxIncome) * 100;
+              const y1 = 100 - (data.income / yMax) * 100;
+              const y2 = 100 - (monthlyData[index + 1].income / yMax) * 100;
               
               let strokeColor = 'hsl(var(--accent))';
               if (data.parent1Days > 0 && data.parent2Days === 0 && data.bothDays === 0) {
@@ -115,7 +126,7 @@ const monthlyData = months.map((month) => {
             {/* Draw points */}
             {monthlyData.map((data, index) => {
               const x = (index / (monthlyData.length - 1)) * 100;
-              const y = 100 - (data.income / maxIncome) * 100;
+              const y = 100 - (data.income / yMax) * 100;
               
               let fillColor = 'hsl(var(--accent))';
               if (data.parent1Days > 0 && data.parent2Days === 0 && data.bothDays === 0) {

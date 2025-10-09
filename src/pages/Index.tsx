@@ -142,17 +142,6 @@ const Index = () => {
           onSimultaneousMonthsChange={setSimultaneousMonths}
         />
 
-        <InteractiveSliders
-          minHouseholdIncome={minHouseholdIncome}
-          maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
-          totalMonths={totalMonths}
-          parent1Months={parent1Months}
-          daysPerWeek={daysPerWeek}
-          onMinIncomeChange={setMinHouseholdIncome}
-          onDistributionChange={setParent1Months}
-          onDaysPerWeekChange={setDaysPerWeek}
-        />
-
         <div className="flex justify-center pt-6">
           <Button
             onClick={handleOptimize}
@@ -172,6 +161,17 @@ const Index = () => {
             />
           </div>
         )}
+
+        <InteractiveSliders
+          minHouseholdIncome={minHouseholdIncome}
+          maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
+          totalMonths={totalMonths}
+          parent1Months={parent1Months}
+          daysPerWeek={daysPerWeek}
+          onMinIncomeChange={setMinHouseholdIncome}
+          onDistributionChange={setParent1Months}
+          onDaysPerWeekChange={setDaysPerWeek}
+        />
       </main>
 
       <footer className="bg-muted py-8 mt-20">
