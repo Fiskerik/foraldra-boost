@@ -24,7 +24,7 @@ export function ParentIncomeCard({
   return (
     <Card className="shadow-card">
       <CardHeader>
-        <CardTitle className={`text-${parentClass}`}>
+        <CardTitle className={parentNumber === 1 ? "text-parent1" : "text-parent2"}>
           Förälder {parentNumber}
         </CardTitle>
       </CardHeader>
@@ -41,10 +41,10 @@ export function ParentIncomeCard({
               step={1000}
               value={[income]}
               onValueChange={(values) => onIncomeChange(values[0])}
-              className={`slider-single [&_[role=slider]]:bg-${parentClass} [&_[role=slider]]:border-${parentClass}`}
+              className={`slider-single ${parentNumber === 1 ? "[&_[role=slider]]:bg-parent1 [&_[role=slider]]:border-parent1" : "[&_[role=slider]]:bg-parent2 [&_[role=slider]]:border-parent2"}`}
             />
             <div className="text-right">
-              <span className={`text-2xl font-bold text-${parentClass}`}>
+              <span className={`text-2xl font-bold ${parentNumber === 1 ? "text-parent1" : "text-parent2"}`}>
                 {formatCurrency(income)}
               </span>
             </div>

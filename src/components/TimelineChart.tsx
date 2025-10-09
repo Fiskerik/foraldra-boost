@@ -1,5 +1,5 @@
 import { LeavePeriod, formatCurrency } from "@/utils/parentalCalculations";
-import { format, eachMonthOfInterval } from "date-fns";
+import { format, eachMonthOfInterval, startOfMonth, endOfMonth, differenceInCalendarDays } from "date-fns";
 import { sv } from "date-fns/locale";
 
 interface TimelineChartProps {
@@ -13,35 +13,39 @@ export function TimelineChart({ periods, minHouseholdIncome }: TimelineChartProp
   const startDate = periods[0].startDate;
   const endDate = periods[periods.length - 1].endDate;
   
-  // Generate monthly data
-  const months = eachMonthOfInterval({ start: startDate, end: endDate });
-  
-  // Calculate income for each month
-  const monthlyData = months.map(month => {
-    let income = 0;
-    let parent1Days = 0;
-    let parent2Days = 0;
-    let bothDays = 0;
-    
-    periods.forEach(period => {
-      if (period.startDate <= month && period.endDate >= month) {
-        const daysInMonth = 30; // Simplified
-        income = period.dailyIncome * daysInMonth;
-        
-        if (period.parent === 'parent1') parent1Days = daysInMonth;
-        else if (period.parent === 'parent2') parent2Days = daysInMonth;
-        else bothDays = daysInMonth;
-      }
-    });
-    
-    return {
-      month: format(month, 'MMM yyyy', { locale: sv }),
-      income,
-      parent1Days,
-      parent2Days,
-      bothDays,
-    };
+// Generate monthly data based on overlap with each period
+const months = eachMonthOfInterval({ start: startDate, end: endDate });
+
+const monthlyData = months.map((month) => {
+  const mStart = startOfMonth(month);
+  const mEnd = endOfMonth(month);
+  let income = 0;
+  let parent1Days = 0;
+  let parent2Days = 0;
+  let bothDays = 0;
+
+  periods.forEach((period) => {
+    const overlapStart = period.startDate > mStart ? period.startDate : mStart;
+    const overlapEnd = period.endDate < mEnd ? period.endDate : mEnd;
+    const hasOverlap = overlapStart <= overlapEnd;
+    if (!hasOverlap) return;
+
+    const daysInOverlap = differenceInCalendarDays(overlapEnd, overlapStart) + 1;
+    income += period.dailyIncome * daysInOverlap;
+
+    if (period.parent === 'parent1') parent1Days += daysInOverlap;
+    else if (period.parent === 'parent2') parent2Days += daysInOverlap;
+    else bothDays += daysInOverlap;
   });
+
+  return {
+    month: format(month, 'MMM yyyy', { locale: sv }),
+    income,
+    parent1Days,
+    parent2Days,
+    bothDays,
+  };
+});
   
   const maxIncome = Math.max(...monthlyData.map(d => d.income), minHouseholdIncome);
   

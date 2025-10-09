@@ -35,7 +35,7 @@ export interface LeavePeriod {
   benefitLevel: 'parental-salary' | 'high' | 'low' | 'none';
 }
 
-const PARENTAL_BENEFIT_CEILING = 38000; // SEK per month before tax
+const PARENTAL_BENEFIT_CEILING = 49000; // SEK per month before tax
 const HIGH_BENEFIT_DAYS = 390;
 const LOW_BENEFIT_DAYS = 90;
 const TOTAL_DAYS = 480;
@@ -44,18 +44,27 @@ const HIGH_BENEFIT_RATE = 0.80; // 80% of income
 const SGI_RATE = 0.97; // 97% of gross income for SGI calculation
 const PRISBASBELOPP_2025 = 58800; // SEK per year
 const PARENTAL_SALARY_THRESHOLD = (10 * PRISBASBELOPP_2025) / 12; // 49,000 kr/month
+// Additional statutory thresholds
+const GRUNDNIVA_MONTHLY_THRESHOLD = 9800; // SEK per month
+const GRUNDNIVA_DAILY = 250; // SEK per day when income below threshold
+const MAX_PARENTAL_BENEFIT_PER_DAY = 1250; // SEK per day cap
 
 export function calculateNetIncome(grossIncome: number, taxRate: number): number {
   return grossIncome * (1 - taxRate / 100);
 }
 
 export function calculateDailyParentalBenefit(monthlyIncome: number): number {
-  // First calculate SGI (97% of gross income)
-  const sgi = monthlyIncome * SGI_RATE;
-  // Cap SGI at the ceiling
-  const cappedSGI = Math.min(sgi, PARENTAL_BENEFIT_CEILING);
-  // Parental benefit is 80% of SGI
-  return (cappedSGI * HIGH_BENEFIT_RATE) / 30;
+  // Grundnivå om inkomsten är under tröskeln
+  if (monthlyIncome < GRUNDNIVA_MONTHLY_THRESHOLD) {
+    return GRUNDNIVA_DAILY;
+  }
+  // Beräkna SGI (97% av månadsinkomst) och tillämpa taket
+  const sgiMonthly = monthlyIncome * SGI_RATE;
+  const cappedMonthly = Math.min(sgiMonthly, PARENTAL_BENEFIT_CEILING);
+  // Föräldrapenning = 80% av årsinkomsten/365
+  const daily = (cappedMonthly * 12 * HIGH_BENEFIT_RATE) / 365;
+  // Golv och tak enligt regler
+  return Math.min(MAX_PARENTAL_BENEFIT_PER_DAY, Math.max(LOW_BENEFIT_AMOUNT, daily));
 }
 
 export function calculateParentalSalary(monthlyIncome: number): number {
@@ -79,15 +88,13 @@ export function calculateAvailableIncome(
   const netParentalBenefitPerDay = calculateNetIncome(parentalBenefitPerDay * 30, parent.taxRate) / 30;
   
   let parentalSalaryPerDay = 0;
-  let availableIncome = netIncome;
+  let availableIncome = netParentalBenefitPerDay * 30; // default: endast FP
   
   if (parent.hasCollectiveAgreement) {
     parentalSalaryPerDay = calculateParentalSalary(parent.income);
     const netParentalSalaryPerDay = calculateNetIncome(parentalSalaryPerDay * 30, parent.taxRate) / 30;
-    // Available income during parental salary period (6 months = 180 days)
-    availableIncome = netParentalSalaryPerDay * 30;
-  } else {
-    availableIncome = netParentalBenefitPerDay * 30;
+    // Disponibel inkomst under föräldralönsperioden = FP + föräldralön (per dag)
+    availableIncome = (netParentalBenefitPerDay + netParentalSalaryPerDay) * 30;
   }
   
   return {
@@ -242,10 +249,10 @@ function generateSaveDaysStrategy(
     totalIncome += periodIncome;
   }
   
-  const daysUsed = parent1Days + parent2Days + (simultaneousMonths * 30);
-  const daysSaved = TOTAL_DAYS - daysUsed;
-  const totalDaysInPeriods = periods.reduce((sum, p) => sum + p.daysCount, 0);
-  const averageMonthlyIncome = totalDaysInPeriods > 0 ? (totalIncome / totalDaysInPeriods) * 30 : 0;
+const daysUsed = periods.reduce((sum, p) => sum + (p.parent === 'both' ? p.daysCount * 2 : p.daysCount), 0);
+const daysSaved = Math.max(0, TOTAL_DAYS - daysUsed);
+const totalDaysInPeriods = periods.reduce((sum, p) => sum + p.daysCount, 0);
+const averageMonthlyIncome = totalDaysInPeriods > 0 ? (totalIncome / totalDaysInPeriods) * 30 : 0;
   
   return {
     strategy: 'save-days',
@@ -397,9 +404,9 @@ function generateMaxIncomeStrategy(
     highBenefitDaysLeft -= daysToUse;
   }
   
-  const daysUsed = parent1Days + parent2Days + (simultaneousMonths * 30);
-  const daysSaved = TOTAL_DAYS - daysUsed;
-  const totalDaysInPeriods = periods.reduce((sum, p) => sum + p.daysCount, 0);
+const daysUsed = periods.reduce((sum, p) => sum + (p.parent === 'both' ? p.daysCount * 2 : p.daysCount), 0);
+const daysSaved = Math.max(0, TOTAL_DAYS - daysUsed);
+const totalDaysInPeriods = periods.reduce((sum, p) => sum + p.daysCount, 0);
   const averageMonthlyIncome = totalDaysInPeriods > 0 ? (totalIncome / totalDaysInPeriods) * 30 : 0;
   
   return {
