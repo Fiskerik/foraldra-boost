@@ -48,61 +48,87 @@ const PARENTAL_SALARY_THRESHOLD = (10 * PRISBASBELOPP_2025) / 12; // 49,000 kr/m
 const GRUNDNIVA_MONTHLY_THRESHOLD = 9800; // SEK per month
 const GRUNDNIVA_DAILY = 250; // SEK per day when income below threshold
 const MAX_PARENTAL_BENEFIT_PER_DAY = 1250; // SEK per day cap
+const WEEKS_PER_MONTH = 4.3;
 
 export function calculateNetIncome(grossIncome: number, taxRate: number): number {
   return grossIncome * (1 - taxRate / 100);
 }
 
 export function calculateDailyParentalBenefit(monthlyIncome: number): number {
-  // Grundnivå om inkomsten är under tröskeln
+  if (monthlyIncome <= 0) {
+    return 0;
+  }
+
   if (monthlyIncome < GRUNDNIVA_MONTHLY_THRESHOLD) {
     return GRUNDNIVA_DAILY;
   }
-  // Beräkna SGI (97% av månadsinkomst) och tillämpa taket
+
   const sgiMonthly = monthlyIncome * SGI_RATE;
   const cappedMonthly = Math.min(sgiMonthly, PARENTAL_BENEFIT_CEILING);
-  // Föräldrapenning = 80% av årsinkomsten/365
   const daily = (cappedMonthly * 12 * HIGH_BENEFIT_RATE) / 365;
-  // Golv och tak enligt regler
+
   return Math.min(MAX_PARENTAL_BENEFIT_PER_DAY, Math.max(LOW_BENEFIT_AMOUNT, daily));
 }
 
-export function calculateParentalSalary(monthlyIncome: number): number {
-  // Kollektivavtalslön enligt svenska regler 2025
-  if (monthlyIncome <= PARENTAL_SALARY_THRESHOLD) {
-    // 10% av lön upp till 10 prisbasbelopp/12
-    return (monthlyIncome * 0.10) / 30;
-  } else {
-    // 10% upp till gränsen + 90% på delen över gränsen
-    const basePart = PARENTAL_SALARY_THRESHOLD * 0.10;
-    const excessPart = (monthlyIncome - PARENTAL_SALARY_THRESHOLD) * 0.90;
-    return (basePart + excessPart) / 30;
+function calculateParentalSalaryMonthly(monthlyIncome: number): number {
+  if (monthlyIncome <= 0) {
+    return 0;
   }
+
+  if (monthlyIncome <= PARENTAL_SALARY_THRESHOLD) {
+    return monthlyIncome * 0.10;
+  }
+
+  const basePart = PARENTAL_SALARY_THRESHOLD * 0.10;
+  const excessPart = (monthlyIncome - PARENTAL_SALARY_THRESHOLD) * 0.90;
+  return basePart + excessPart;
 }
 
-export function calculateAvailableIncome(
-  parent: ParentData
-): CalculationResult {
-  const netIncome = calculateNetIncome(parent.income, parent.taxRate);
-  const parentalBenefitPerDay = calculateDailyParentalBenefit(parent.income);
-  const netParentalBenefitPerDay = calculateNetIncome(parentalBenefitPerDay * 30, parent.taxRate) / 30;
-  
-  let parentalSalaryPerDay = 0;
-  let availableIncome = netParentalBenefitPerDay * 30; // default: endast FP
-  
-  if (parent.hasCollectiveAgreement) {
-    parentalSalaryPerDay = calculateParentalSalary(parent.income);
-    const netParentalSalaryPerDay = calculateNetIncome(parentalSalaryPerDay * 30, parent.taxRate) / 30;
-    // Disponibel inkomst under föräldralönsperioden = FP + föräldralön (per dag)
-    availableIncome = (netParentalBenefitPerDay + netParentalSalaryPerDay) * 30;
+function calculateParentMonthlyIncomeDuringLeave(
+  calc: Pick<CalculationResult, 'netIncome' | 'parentalBenefitPerDay' | 'parentalSalaryPerDay'>,
+  daysPerWeek: number,
+  includeParentalSalary: boolean
+): number {
+  if (daysPerWeek <= 0) {
+    return calc.netIncome;
   }
-  
-  return {
+
+  const leaveDaysPerMonth = Math.min(30, Math.max(0, daysPerWeek * WEEKS_PER_MONTH));
+  const leaveDailyNet = calc.parentalBenefitPerDay + (includeParentalSalary ? calc.parentalSalaryPerDay : 0);
+  const leaveIncome = leaveDailyNet * leaveDaysPerMonth;
+  const workDays = Math.max(0, 30 - leaveDaysPerMonth);
+  const workDailyNet = calc.netIncome / 30;
+  const workIncome = workDailyNet * workDays;
+
+  return leaveIncome + workIncome;
+}
+
+export function calculateAvailableIncome(parent: ParentData): CalculationResult {
+  const netIncome = calculateNetIncome(parent.income, parent.taxRate);
+  const grossParentalBenefitPerDay = calculateDailyParentalBenefit(parent.income);
+  const netParentalBenefitPerDay = calculateNetIncome(grossParentalBenefitPerDay * 30, parent.taxRate) / 30;
+
+  let parentalSalaryPerDay = 0;
+  if (parent.hasCollectiveAgreement) {
+    const parentalSalaryMonthlyGross = calculateParentalSalaryMonthly(parent.income);
+    const parentalSalaryMonthlyNet = calculateNetIncome(parentalSalaryMonthlyGross, parent.taxRate);
+    parentalSalaryPerDay = parentalSalaryMonthlyNet / 30;
+  }
+
+  const base: CalculationResult = {
     netIncome,
-    availableIncome,
+    availableIncome: 0,
     parentalBenefitPerDay: netParentalBenefitPerDay,
-    parentalSalaryPerDay: parentalSalaryPerDay > 0 ? calculateNetIncome(parentalSalaryPerDay * 30, parent.taxRate) / 30 : 0,
+    parentalSalaryPerDay,
   };
+
+  const availableIncome = calculateParentMonthlyIncomeDuringLeave(
+    base,
+    7,
+    parent.hasCollectiveAgreement
+  );
+
+  return { ...base, availableIncome };
 }
 
 export function optimizeLeave(
@@ -212,13 +238,16 @@ function generateSaveDaysStrategy(
 
   // ONLY the first 10 days are double days (mandatory)
   const bothPeriodEnd = addDays(currentDate, 9);
-  const bothPeriodIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * 10;
+  const bothDailyBenefit =
+    calc1.parentalBenefitPerDay + (parent1.hasCollectiveAgreement ? calc1.parentalSalaryPerDay : 0) +
+    calc2.parentalBenefitPerDay + (parent2.hasCollectiveAgreement ? calc2.parentalSalaryPerDay : 0);
+  const bothPeriodIncome = bothDailyBenefit * 10;
   periods.push({
     parent: 'both',
     startDate: new Date(currentDate),
     endDate: bothPeriodEnd,
     daysCount: 10,
-    dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
+    dailyBenefit: bothDailyBenefit,
     dailyIncome: bothPeriodIncome / 10,
     benefitLevel: 'high'
   });
@@ -293,7 +322,12 @@ function generateSaveDaysStrategy(
     for (let dpw = 1; dpw <= 7; dpw++) {
       const leaveDays = Math.min(Math.floor((dpw * monthDays) / 7), remaining);
       const workDays = monthDays - leaveDays;
-      const leaveIncome = leaveDays * (whoCalc.parentalBenefitPerDay + otherCalc.netIncome / 30);
+      const includeSalary =
+        (chosenParent === 'parent1' ? parent1.hasCollectiveAgreement : parent2.hasCollectiveAgreement) &&
+        leaveDays > 0;
+      const parentLeaveDaily =
+        whoCalc.parentalBenefitPerDay + (includeSalary ? whoCalc.parentalSalaryPerDay : 0);
+      const leaveIncome = leaveDays * (parentLeaveDaily + otherCalc.netIncome / 30);
       const workIncome = workDays * bothWorkDaily;
       const monthlyIncome = leaveIncome + workIncome;
 
@@ -308,16 +342,23 @@ function generateSaveDaysStrategy(
     // Create single-parent leave period
     if (bestLeaveDays > 0) {
       const leavePeriodEnd = addDays(currentDate, bestLeaveDays - 1);
-      const leaveDailyIncome = whoCalc.parentalBenefitPerDay + otherCalc.netIncome / 30;
-      
+      const includeSalary =
+        (chosenParent === 'parent1' ? parent1.hasCollectiveAgreement : parent2.hasCollectiveAgreement) &&
+        bestLeaveDays > 0;
+      const leaveDailyIncome =
+        whoCalc.parentalBenefitPerDay +
+        (includeSalary ? whoCalc.parentalSalaryPerDay : 0) +
+        otherCalc.netIncome / 30;
+
       periods.push({
         parent: chosenParent,
         startDate: new Date(currentDate),
         endDate: leavePeriodEnd,
         daysCount: bestLeaveDays,
-        dailyBenefit: whoCalc.parentalBenefitPerDay,
+        dailyBenefit:
+          whoCalc.parentalBenefitPerDay + (includeSalary ? whoCalc.parentalSalaryPerDay : 0),
         dailyIncome: leaveDailyIncome,
-        benefitLevel: 'high'
+        benefitLevel: includeSalary ? 'parental-salary' : 'high'
       });
       totalIncome += bestLeaveDays * leaveDailyIncome;
 
@@ -405,13 +446,16 @@ function generateMaxIncomeStrategy(
   
   // First 10 days - both parents home
   const bothPeriodEnd = addDays(currentDate, 10 - 1);
-  const bothPeriodIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * 10;
+  const bothDailyBenefit =
+    calc1.parentalBenefitPerDay + (parent1.hasCollectiveAgreement ? calc1.parentalSalaryPerDay : 0) +
+    calc2.parentalBenefitPerDay + (parent2.hasCollectiveAgreement ? calc2.parentalSalaryPerDay : 0);
+  const bothPeriodIncome = bothDailyBenefit * 10;
   periods.push({
     parent: 'both',
     startDate: new Date(currentDate),
     endDate: bothPeriodEnd,
     daysCount: 10,
-    dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
+    dailyBenefit: bothDailyBenefit,
     dailyIncome: bothPeriodIncome / 10,
     benefitLevel: 'high'
   });
@@ -427,13 +471,16 @@ function generateMaxIncomeStrategy(
     );
     if (allowedSimultaneousDays > 0) {
       const simultaneousPeriodEnd = addDays(currentDate, allowedSimultaneousDays - 1);
-      const simultaneousIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * allowedSimultaneousDays;
+      const simultaneousDailyBenefit =
+        calc1.parentalBenefitPerDay + (parent1.hasCollectiveAgreement ? calc1.parentalSalaryPerDay : 0) +
+        calc2.parentalBenefitPerDay + (parent2.hasCollectiveAgreement ? calc2.parentalSalaryPerDay : 0);
+      const simultaneousIncome = simultaneousDailyBenefit * allowedSimultaneousDays;
       periods.push({
         parent: 'both',
         startDate: new Date(currentDate),
         endDate: simultaneousPeriodEnd,
         daysCount: allowedSimultaneousDays,
-        dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
+        dailyBenefit: simultaneousDailyBenefit,
         dailyIncome: simultaneousIncome / allowedSimultaneousDays,
         benefitLevel: 'high'
       });
