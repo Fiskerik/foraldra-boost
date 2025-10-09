@@ -70,9 +70,9 @@ const monthlyData = months.map((month) => {
         
         {/* Minimum income line */}
         <div 
-          className="absolute left-20 right-0 border-t-2 border-destructive border-dashed z-10"
+          className="absolute left-20 right-0 border-t-2 border-destructive border-dashed z-10 pointer-events-none"
           style={{ 
-            bottom: `${(minHouseholdIncome / maxIncome) * 100}%`,
+            bottom: `calc(${(minHouseholdIncome / maxIncome) * 100}% + 32px)`,
           }}
         >
           <span className="absolute -top-5 right-0 text-xs text-destructive font-medium">
@@ -80,31 +80,75 @@ const monthlyData = months.map((month) => {
           </span>
         </div>
         
-        {/* Bars */}
-        <div className="absolute left-20 right-0 top-0 bottom-8 flex items-end gap-1">
-          {monthlyData.map((data, index) => {
-            const height = (data.income / maxIncome) * 100;
-            let barColor = 'bg-accent';
+        {/* Line chart */}
+        <div className="absolute left-20 right-0 top-0 bottom-8">
+          <svg className="w-full h-full" preserveAspectRatio="none">
+            {/* Draw lines between points */}
+            {monthlyData.map((data, index) => {
+              if (index === monthlyData.length - 1) return null;
+              
+              const x1 = (index / (monthlyData.length - 1)) * 100;
+              const x2 = ((index + 1) / (monthlyData.length - 1)) * 100;
+              const y1 = 100 - (data.income / maxIncome) * 100;
+              const y2 = 100 - (monthlyData[index + 1].income / maxIncome) * 100;
+              
+              let strokeColor = 'hsl(var(--accent))';
+              if (data.parent1Days > 0 && data.parent2Days === 0 && data.bothDays === 0) {
+                strokeColor = 'hsl(var(--parent1))';
+              } else if (data.parent2Days > 0 && data.parent1Days === 0 && data.bothDays === 0) {
+                strokeColor = 'hsl(var(--parent2))';
+              }
+              
+              return (
+                <line
+                  key={index}
+                  x1={`${x1}%`}
+                  y1={`${y1}%`}
+                  x2={`${x2}%`}
+                  y2={`${y2}%`}
+                  stroke={strokeColor}
+                  strokeWidth="2"
+                />
+              );
+            })}
             
-            if (data.parent1Days > 0 && data.parent2Days === 0 && data.bothDays === 0) {
-              barColor = 'bg-parent1';
-            } else if (data.parent2Days > 0 && data.parent1Days === 0 && data.bothDays === 0) {
-              barColor = 'bg-parent2';
-            }
-            
-            return (
-              <div key={index} className="flex-1 min-w-[4px] h-full flex flex-col items-center group relative">
-                <div 
-                  className={`w-full ${barColor} rounded-t transition-all hover:opacity-80`}
-                  style={{ height: `${height}%`, minHeight: height > 0 ? '2px' : '0' }}
-                >
-                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block bg-popover text-popover-foreground text-xs p-2 rounded shadow-lg whitespace-nowrap z-20">
-                    {formatCurrency(data.income)}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+            {/* Draw points */}
+            {monthlyData.map((data, index) => {
+              const x = (index / (monthlyData.length - 1)) * 100;
+              const y = 100 - (data.income / maxIncome) * 100;
+              
+              let fillColor = 'hsl(var(--accent))';
+              if (data.parent1Days > 0 && data.parent2Days === 0 && data.bothDays === 0) {
+                fillColor = 'hsl(var(--parent1))';
+              } else if (data.parent2Days > 0 && data.parent1Days === 0 && data.bothDays === 0) {
+                fillColor = 'hsl(var(--parent2))';
+              }
+              
+              return (
+                <g key={index} className="group">
+                  <circle
+                    cx={`${x}%`}
+                    cy={`${y}%`}
+                    r="4"
+                    fill={fillColor}
+                    className="transition-all hover:r-6"
+                  />
+                  <foreignObject
+                    x={`${x}%`}
+                    y={`${y}%`}
+                    width="120"
+                    height="40"
+                    className="overflow-visible pointer-events-none"
+                    style={{ transform: 'translate(-60px, -50px)' }}
+                  >
+                    <div className="hidden group-hover:block bg-popover text-popover-foreground text-xs p-2 rounded shadow-lg whitespace-nowrap">
+                      {formatCurrency(data.income)}
+                    </div>
+                  </foreignObject>
+                </g>
+              );
+            })}
+          </svg>
         </div>
         
         {/* X-axis labels */}

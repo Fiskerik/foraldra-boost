@@ -385,7 +385,10 @@ function generateSaveDaysStrategy(
     currentDate = addDays(currentDate, chunkDays);
   }
   
-const daysUsed = periods.reduce((sum, p) => sum + (p.parent === 'both' ? p.daysCount * 2 : p.daysCount), 0);
+// Count only actual parental leave days (exclude "both working" periods)
+const daysUsed = periods
+  .filter(p => p.benefitLevel !== 'none')
+  .reduce((sum, p) => sum + (p.parent === 'both' ? p.daysCount * 2 : p.daysCount), 0);
 const daysSaved = Math.max(0, TOTAL_DAYS - daysUsed);
 const totalDaysInPeriods = periods.reduce((sum, p) => sum + p.daysCount, 0);
 const averageMonthlyIncome = totalDaysInPeriods > 0 ? (totalIncome / totalDaysInPeriods) * 30 : 0;

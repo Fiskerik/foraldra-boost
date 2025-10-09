@@ -5,6 +5,7 @@ import { MunicipalitySelect } from "@/components/MunicipalitySelect";
 import { AvailableIncomeDisplay } from "@/components/AvailableIncomeDisplay";
 import { LeavePeriodCard } from "@/components/LeavePeriodCard";
 import { OptimizationResults } from "@/components/OptimizationResults";
+import { InteractiveSliders } from "@/components/InteractiveSliders";
 import { ParentData, calculateAvailableIncome, optimizeLeave, OptimizationResult } from "@/utils/parentalCalculations";
 import { Baby, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ const Index = () => {
   const [minHouseholdIncome, setMinHouseholdIncome] = useState(30000);
   const [simultaneousLeave, setSimultaneousLeave] = useState(false);
   const [simultaneousMonths, setSimultaneousMonths] = useState(0);
+  const [daysPerWeek, setDaysPerWeek] = useState(5);
   const [optimizationResults, setOptimizationResults] = useState<OptimizationResult[] | null>(null);
 
   const parent2Months = totalMonths - parent1Months;
@@ -138,6 +140,17 @@ const Index = () => {
           simultaneousMonths={simultaneousMonths}
           onSimultaneousLeaveChange={setSimultaneousLeave}
           onSimultaneousMonthsChange={setSimultaneousMonths}
+        />
+
+        <InteractiveSliders
+          minHouseholdIncome={minHouseholdIncome}
+          maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
+          totalMonths={totalMonths}
+          parent1Months={parent1Months}
+          daysPerWeek={daysPerWeek}
+          onMinIncomeChange={setMinHouseholdIncome}
+          onDistributionChange={setParent1Months}
+          onDaysPerWeekChange={setDaysPerWeek}
         />
 
         <div className="flex justify-center pt-6">
