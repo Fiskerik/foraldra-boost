@@ -211,7 +211,7 @@ function generateSaveDaysStrategy(
   let totalIncome = 0;
   
   // First 10 days - both parents home
-  const bothPeriodEnd = addDays(currentDate, 10);
+  const bothPeriodEnd = addDays(currentDate, 10 - 1);
   const bothPeriodIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * 10;
   periods.push({
     parent: 'both',
@@ -225,22 +225,28 @@ function generateSaveDaysStrategy(
   totalIncome += bothPeriodIncome;
   currentDate = addDays(bothPeriodEnd, 1);
   
-  // Add additional simultaneous period if requested
+  // Add additional simultaneous period if requested (cap to available days per parent)
   if (simultaneousMonths > 0) {
-    const simultaneousDays = simultaneousMonths * 30;
-    const simultaneousPeriodEnd = addDays(currentDate, simultaneousDays - 1);
-    const simultaneousIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * simultaneousDays;
-    periods.push({
-      parent: 'both',
-      startDate: new Date(currentDate),
-      endDate: simultaneousPeriodEnd,
-      daysCount: simultaneousDays,
-      dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
-      dailyIncome: simultaneousIncome / simultaneousDays,
-      benefitLevel: 'high'
-    });
-    totalIncome += simultaneousIncome;
-    currentDate = addDays(simultaneousPeriodEnd, 1);
+    const requestedSimultaneousDays = simultaneousMonths * 30;
+    const allowedSimultaneousDays = Math.max(
+      0,
+      Math.min(requestedSimultaneousDays, Math.max(0, parent1Days - 10), Math.max(0, parent2Days - 10))
+    );
+    if (allowedSimultaneousDays > 0) {
+      const simultaneousPeriodEnd = addDays(currentDate, allowedSimultaneousDays - 1);
+      const simultaneousIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * allowedSimultaneousDays;
+      periods.push({
+        parent: 'both',
+        startDate: new Date(currentDate),
+        endDate: simultaneousPeriodEnd,
+        daysCount: allowedSimultaneousDays,
+        dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
+        dailyIncome: simultaneousIncome / allowedSimultaneousDays,
+        benefitLevel: 'high'
+      });
+      totalIncome += simultaneousIncome;
+      currentDate = addDays(simultaneousPeriodEnd, 1);
+    }
   }
   
   // Apply contiguous parental salary for 6 months if available (choose lower earner with agreement)
@@ -413,7 +419,7 @@ function generateMaxIncomeStrategy(
   let totalIncome = 0;
   
   // First 10 days - both parents home
-  const bothPeriodEnd = addDays(currentDate, 10);
+  const bothPeriodEnd = addDays(currentDate, 10 - 1);
   const bothPeriodIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * 10;
   periods.push({
     parent: 'both',
@@ -427,22 +433,28 @@ function generateMaxIncomeStrategy(
   totalIncome += bothPeriodIncome;
   currentDate = addDays(bothPeriodEnd, 1);
   
-  // Add additional simultaneous period if requested
+  // Add additional simultaneous period if requested (cap to available days per parent)
   if (simultaneousMonths > 0) {
-    const simultaneousDays = simultaneousMonths * 30;
-    const simultaneousPeriodEnd = addDays(currentDate, simultaneousDays - 1);
-    const simultaneousIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * simultaneousDays;
-    periods.push({
-      parent: 'both',
-      startDate: new Date(currentDate),
-      endDate: simultaneousPeriodEnd,
-      daysCount: simultaneousDays,
-      dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
-      dailyIncome: simultaneousIncome / simultaneousDays,
-      benefitLevel: 'high'
-    });
-    totalIncome += simultaneousIncome;
-    currentDate = addDays(simultaneousPeriodEnd, 1);
+    const requestedSimultaneousDays = simultaneousMonths * 30;
+    const allowedSimultaneousDays = Math.max(
+      0,
+      Math.min(requestedSimultaneousDays, Math.max(0, parent1Days - 10), Math.max(0, parent2Days - 10))
+    );
+    if (allowedSimultaneousDays > 0) {
+      const simultaneousPeriodEnd = addDays(currentDate, allowedSimultaneousDays - 1);
+      const simultaneousIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * allowedSimultaneousDays;
+      periods.push({
+        parent: 'both',
+        startDate: new Date(currentDate),
+        endDate: simultaneousPeriodEnd,
+        daysCount: allowedSimultaneousDays,
+        dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
+        dailyIncome: simultaneousIncome / allowedSimultaneousDays,
+        benefitLevel: 'high'
+      });
+      totalIncome += simultaneousIncome;
+      currentDate = addDays(simultaneousPeriodEnd, 1);
+    }
   }
   
   // Prioritize using parental salary days first (highest income)

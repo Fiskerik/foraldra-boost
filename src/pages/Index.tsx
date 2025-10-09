@@ -10,12 +10,12 @@ import { Baby, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 const Index = () => {
-  const [parent1Income, setParent1Income] = useState(35000);
-  const [parent2Income, setParent2Income] = useState(30000);
+  const [parent1Income, setParent1Income] = useState(30000);
+  const [parent2Income, setParent2Income] = useState(55000);
   const [parent1HasAgreement, setParent1HasAgreement] = useState(false);
   const [parent2HasAgreement, setParent2HasAgreement] = useState(false);
-  const [municipality, setMunicipality] = useState("");
-  const [taxRate, setTaxRate] = useState(32);
+  const [municipality, setMunicipality] = useState("Vallentuna");
+  const [taxRate, setTaxRate] = useState(30.2);
   const [totalMonths, setTotalMonths] = useState(12);
   const [parent1Months, setParent1Months] = useState(6);
   const [minHouseholdIncome, setMinHouseholdIncome] = useState(30000);

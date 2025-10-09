@@ -93,7 +93,7 @@ const monthlyData = months.map((month) => {
             }
             
             return (
-              <div key={index} className="flex-1 min-w-[4px] flex flex-col items-center group relative">
+              <div key={index} className="flex-1 min-w-[4px] h-full flex flex-col items-center group relative">
                 <div 
                   className={`w-full ${barColor} rounded-t transition-all hover:opacity-80`}
                   style={{ height: `${height}%`, minHeight: height > 0 ? '2px' : '0' }}
