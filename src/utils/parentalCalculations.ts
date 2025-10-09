@@ -149,7 +149,48 @@ export function optimizeLeave(
     simultaneousMonths
   );
   
-  return [saveDaysResult, maxIncomeResult];
+  // Normalize both strategies to cover the same calendar period for fair comparison
+  const lastEnd1 = saveDaysResult.periods[saveDaysResult.periods.length - 1]?.endDate ?? birthDate;
+  const lastEnd2 = maxIncomeResult.periods[maxIncomeResult.periods.length - 1]?.endDate ?? birthDate;
+  const sharedEndDate = lastEnd1 > lastEnd2 ? lastEnd1 : lastEnd2;
+
+  const normalize = (result: OptimizationResult): OptimizationResult => {
+    const periods = [...result.periods];
+    const lastEnd = periods[periods.length - 1]?.endDate ?? birthDate;
+
+    // Extend with non-leave (both working) period if this strategy ends earlier
+    if (lastEnd < sharedEndDate) {
+      const remainingDays = differenceInDays(sharedEndDate, lastEnd);
+      if (remainingDays > 0) {
+        const start = addDays(lastEnd, 1);
+        periods.push({
+          parent: 'both',
+          startDate: start,
+          endDate: sharedEndDate,
+          daysCount: remainingDays,
+          dailyBenefit: 0,
+          dailyIncome: (calc1.netIncome + calc2.netIncome) / 30,
+          benefitLevel: 'none'
+        });
+      }
+    }
+
+    // Recalculate metrics over the common horizon
+    const totalIncome = periods.reduce((sum, p) => sum + p.dailyIncome * p.daysCount, 0);
+    const leaveDaysUsed = periods
+      .filter(p => p.benefitLevel !== 'none')
+      .reduce((sum, p) => sum + (p.parent === 'both' ? p.daysCount * 2 : p.daysCount), 0);
+    const daysSaved = Math.max(0, TOTAL_DAYS - leaveDaysUsed);
+    const totalCalendarDays = differenceInDays(sharedEndDate, birthDate) + 1;
+    const averageMonthlyIncome = totalCalendarDays > 0 ? (totalIncome / totalCalendarDays) * 30 : 0;
+
+    return { ...result, periods, totalIncome, daysUsed: leaveDaysUsed, daysSaved, averageMonthlyIncome };
+  };
+
+  const normalizedSaveDays = normalize(saveDaysResult);
+  const normalizedMaxIncome = normalize(maxIncomeResult);
+
+  return [normalizedSaveDays, normalizedMaxIncome];
 }
 
 function generateSaveDaysStrategy(

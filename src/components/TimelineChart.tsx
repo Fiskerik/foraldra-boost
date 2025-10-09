@@ -47,7 +47,7 @@ const monthlyData = months.map((month) => {
   };
 });
   
-  const maxIncome = Math.max(...monthlyData.map(d => d.income), minHouseholdIncome);
+  const maxIncome = Math.max(1, Math.max(...monthlyData.map(d => d.income), minHouseholdIncome));
   
   return (
     <div className="space-y-4">
