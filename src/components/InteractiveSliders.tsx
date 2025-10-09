@@ -11,6 +11,9 @@ interface InteractiveSlidersProps {
   parent1Months: number;
   daysPerWeek: number;
   currentHouseholdIncome: number; // Calculated based on current plan
+  totalIncome?: number;
+  daysUsed?: number;
+  daysSaved?: number;
   onHouseholdIncomeChange: (value: number) => void;
   onDistributionChange: (parent1Months: number) => void;
   onDaysPerWeekChange: (days: number) => void;
@@ -23,6 +26,9 @@ export function InteractiveSliders({
   parent1Months,
   daysPerWeek,
   currentHouseholdIncome,
+  totalIncome,
+  daysUsed,
+  daysSaved,
   onHouseholdIncomeChange,
   onDistributionChange,
   onDaysPerWeekChange,
@@ -41,13 +47,19 @@ export function InteractiveSliders({
         </p>
       </div>
 
-      {/* Current Average Monthly Income Display */}
-      <div className="flex justify-center">
-        <div className="bg-primary/10 border-2 border-primary rounded-lg px-8 py-4 text-center">
-          <p className="text-sm text-muted-foreground mb-1">Snitt månadsinkomst</p>
-          <p className="text-3xl font-bold text-primary">
-            {formatCurrency(currentHouseholdIncome)}
-          </p>
+      {/* KPI Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
+          <p className="text-xs text-muted-foreground">Snitt månadsinkomst</p>
+          <p className="text-2xl font-bold text-primary">{formatCurrency(currentHouseholdIncome)}</p>
+        </div>
+        <div className="bg-accent/10 border border-accent/30 rounded-lg p-4">
+          <p className="text-xs text-muted-foreground">Total inkomst under perioden</p>
+          <p className="text-2xl font-bold text-accent">{formatCurrency(totalIncome || 0)}</p>
+        </div>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-xs text-muted-foreground">Använda dagar / Dagar kvar</p>
+          <p className="text-2xl font-bold">{(daysUsed ?? 0)} / {(daysSaved ?? 0)}</p>
         </div>
       </div>
 

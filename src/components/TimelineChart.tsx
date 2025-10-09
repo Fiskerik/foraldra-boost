@@ -35,7 +35,7 @@ const monthlyData = months.map((month) => {
 
     if (period.parent === 'parent1') parent1Days += daysInOverlap;
     else if (period.parent === 'parent2') parent2Days += daysInOverlap;
-    else bothDays += daysInOverlap;
+    else if (period.parent === 'both' && period.benefitLevel !== 'none') bothDays += daysInOverlap; // count only true double-leave
   });
 
   return {
@@ -189,7 +189,7 @@ const monthlyData = months.map((month) => {
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-accent rounded"></div>
-          <span>Båda hemma</span>
+          <span>Båda hemma (endast 10 första dagar)</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-8 h-0.5 border-t-2 border-destructive border-dashed"></div>

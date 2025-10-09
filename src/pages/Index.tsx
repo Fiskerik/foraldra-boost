@@ -61,6 +61,7 @@ const Index = () => {
       parent1Months,
       parent2Months,
       householdIncome,
+      daysPerWeek,
       simultaneousLeave ? simultaneousMonths : 0
     );
 
@@ -193,6 +194,9 @@ const Index = () => {
             parent1Months={parent1Months}
             daysPerWeek={daysPerWeek}
             currentHouseholdIncome={optimizationResults[0]?.averageMonthlyIncome || 0}
+            totalIncome={optimizationResults[0]?.totalIncome}
+            daysUsed={optimizationResults[0]?.daysUsed}
+            daysSaved={optimizationResults[0]?.daysSaved}
             onHouseholdIncomeChange={handleHouseholdIncomeChange}
             onDistributionChange={handleDistributionChange}
             onDaysPerWeekChange={handleDaysPerWeekChange}
