@@ -1,4 +1,4 @@
-import { addDays, format, differenceInDays } from 'date-fns';
+import { addDays, addMonths, format, differenceInDays } from 'date-fns';
 import { sv } from 'date-fns/locale';
 
 export interface ParentData {
@@ -122,6 +122,7 @@ export function optimizeLeave(
   const parent2Days = parent2Months * 30;
   
   const birthDate = new Date();
+  const fixedEndDate = addMonths(birthDate, totalMonths);
   
   // Strategy 1: Save as many days as possible (minimize days used)
   const saveDaysResult = generateSaveDaysStrategy(
@@ -150,9 +151,7 @@ export function optimizeLeave(
   );
   
   // Normalize both strategies to cover the same calendar period for fair comparison
-  const lastEnd1 = saveDaysResult.periods[saveDaysResult.periods.length - 1]?.endDate ?? birthDate;
-  const lastEnd2 = maxIncomeResult.periods[maxIncomeResult.periods.length - 1]?.endDate ?? birthDate;
-  const sharedEndDate = lastEnd1 > lastEnd2 ? lastEnd1 : lastEnd2;
+  const sharedEndDate = fixedEndDate;
 
   const normalize = (result: OptimizationResult): OptimizationResult => {
     const periods = [...result.periods];
