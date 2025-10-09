@@ -210,7 +210,7 @@ function generateSaveDaysStrategy(
   let currentDate = new Date(birthDate);
   let totalIncome = 0;
   
-  // First 10 days - both parents home (mandatory)
+  // ONLY the first 10 days - both parents home (mandatory double days)
   const bothPeriodEnd = addDays(currentDate, 10 - 1);
   const bothPeriodIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * 10;
   periods.push({
@@ -225,154 +225,165 @@ function generateSaveDaysStrategy(
   totalIncome += bothPeriodIncome;
   currentDate = addDays(bothPeriodEnd, 1);
   
-  // Remaining leave days per parent after initial 10 days
+  // Track remaining days per parent (each parent has their allocation minus the 10 initial days)
   let p1Remaining = Math.max(0, parent1Days - 10);
   let p2Remaining = Math.max(0, parent2Days - 10);
-
-  // Apply contiguous parental salary for 6 months if available (choose lower earner with agreement)
-  const p1HasCA = parent1.hasCollectiveAgreement;
-  const p2HasCA = parent2.hasCollectiveAgreement;
-  const lowerEarner: 'parent1' | 'parent2' = calc1.netIncome <= calc2.netIncome ? 'parent1' : 'parent2';
-
-  const scheduleSalaryBlock = (who: 'parent1' | 'parent2') => {
-    const remaining = who === 'parent1' ? p1Remaining : p2Remaining;
-    const daysToUse = Math.min(180, Math.max(0, remaining)); // 6 months contiguous or remaining
-    if (daysToUse <= 0) return;
-    const periodEnd = addDays(currentDate, daysToUse - 1);
-    const whoCalc = who === 'parent1' ? calc1 : calc2;
-    const otherCalc = who === 'parent1' ? calc2 : calc1;
-    const dailyLeaveIncome = whoCalc.parentalBenefitPerDay + whoCalc.parentalSalaryPerDay + otherCalc.netIncome / 30;
-    const periodIncome = dailyLeaveIncome * daysToUse;
-    periods.push({
-      parent: who,
-      startDate: new Date(currentDate),
-      endDate: periodEnd,
-      daysCount: daysToUse,
-      dailyBenefit: whoCalc.parentalBenefitPerDay + whoCalc.parentalSalaryPerDay,
-      dailyIncome: dailyLeaveIncome,
-      benefitLevel: 'parental-salary'
-    });
-    totalIncome += periodIncome;
-    currentDate = addDays(periodEnd, 1);
-    if (who === 'parent1') p1Remaining = Math.max(0, p1Remaining - daysToUse); else p2Remaining = Math.max(0, p2Remaining - daysToUse);
-  };
-
-  if (p1HasCA || p2HasCA) {
-    const salaryFirst = p1HasCA && p2HasCA ? lowerEarner : (p1HasCA ? 'parent1' : 'parent2');
-    scheduleSalaryBlock(salaryFirst);
-  }
   
-  // Plan month-by-month minimal leave days to meet min income (prefer lower earner), using 0–7 dagar/vecka
+  // Daily income when both work
   const bothWorkDaily = (calc1.netIncome + calc2.netIncome) / 30;
-
+  
+  // Plan month-by-month: meet minimum income using MINIMAL days per week
   while (currentDate <= endDate) {
     const daysLeft = differenceInDays(endDate, currentDate) + 1;
     if (daysLeft <= 0) break;
-    const chunkDays = Math.min(30, daysLeft);
-
-    // Prefer lower earner to save days
-    const order: ('parent1' | 'parent2')[] =
-      calc1.netIncome <= calc2.netIncome ? ['parent1', 'parent2'] : ['parent2', 'parent1'];
-
-    type Plan = { who: 'parent1' | 'parent2'; leaveDays: number; monthlyIncome: number; leaveDailyIncome: number };
-
-    const bestCandidates: Plan[] = [];
-    let fallbackBest: Plan | null = null;
-
-    const evalPlan = (who: 'parent1' | 'parent2', daysPerWeek: number): Plan => {
-      const whoCalc = who === 'parent1' ? calc1 : calc2;
-      const otherCalc = who === 'parent1' ? calc2 : calc1;
-      const remaining = who === 'parent1' ? p1Remaining : p2Remaining;
-      const leaveDays = Math.min(Math.floor((daysPerWeek * chunkDays) / 7), Math.max(0, remaining));
-      const partnerWorkDaily = otherCalc.netIncome / 30;
-      const leaveDailyIncome = whoCalc.parentalBenefitPerDay + partnerWorkDaily;
-      const monthlyIncome = leaveDays * leaveDailyIncome + (chunkDays - leaveDays) * bothWorkDaily;
-      return { who, leaveDays, monthlyIncome, leaveDailyIncome };
-    };
-
-    for (const who of order) {
-      // Find minimal daysPerWeek that meets min income for this parent
-      let found: Plan | null = null;
-      for (let d = 0; d <= 7; d++) {
-        const plan = evalPlan(who, d);
-        if (plan.monthlyIncome >= minHouseholdIncome) {
-          found = plan;
-          break;
-        }
-        if (d === 7) {
-          if (!fallbackBest || plan.monthlyIncome > fallbackBest.monthlyIncome) {
-            fallbackBest = plan;
-          }
-        }
-      }
-      if (found) bestCandidates.push(found);
-    }
-
-    const chosen: Plan =
-      bestCandidates.length > 0
-        ? bestCandidates.sort((a, b) => (a.leaveDays - b.leaveDays) || (b.monthlyIncome - a.monthlyIncome))[0]
-        : (fallbackBest as Plan);
-
-    // Create periods for this chunk
-    if (chosen.leaveDays > 0) {
-      const periodEnd = addDays(currentDate, chosen.leaveDays - 1);
-      const partnerWorkDaily = (chosen.who === 'parent1' ? calc2.netIncome : calc1.netIncome) / 30;
-      periods.push({
-        parent: chosen.who,
-        startDate: new Date(currentDate),
-        endDate: periodEnd,
-        daysCount: chosen.leaveDays,
-        dailyBenefit: chosen.leaveDailyIncome - partnerWorkDaily,
-        dailyIncome: chosen.leaveDailyIncome,
-        benefitLevel: 'high'
-      });
-      totalIncome += chosen.leaveDays * chosen.leaveDailyIncome;
-      if (chosen.who === 'parent1') {
-        p1Remaining = Math.max(0, p1Remaining - chosen.leaveDays);
-      } else {
-        p2Remaining = Math.max(0, p2Remaining - chosen.leaveDays);
-      }
-      const bothDays = chunkDays - chosen.leaveDays;
-      if (bothDays > 0) {
-        periods.push({
-          parent: 'both',
-          startDate: addDays(periodEnd, 1),
-          endDate: addDays(currentDate, chunkDays - 1),
-          daysCount: bothDays,
-          dailyBenefit: 0,
-          dailyIncome: bothWorkDaily,
-          benefitLevel: 'none'
-        });
-        totalIncome += bothDays * bothWorkDaily;
-      }
-    } else {
+    
+    const monthDays = Math.min(30, daysLeft);
+    
+    // Determine which parent should take leave (prioritize fulfilling their allocation)
+    // Also prefer lower earner to maximize household savings
+    const p1NeedsMore = p1Remaining > 0;
+    const p2NeedsMore = p2Remaining > 0;
+    
+    let chosenParent: 'parent1' | 'parent2' | null = null;
+    let minDaysNeeded = 0;
+    
+    if (!p1NeedsMore && !p2NeedsMore) {
+      // Both parents have used their allocation - both work full time
       periods.push({
         parent: 'both',
         startDate: new Date(currentDate),
-        endDate: addDays(currentDate, chunkDays - 1),
-        daysCount: chunkDays,
+        endDate: addDays(currentDate, monthDays - 1),
+        daysCount: monthDays,
         dailyBenefit: 0,
         dailyIncome: bothWorkDaily,
         benefitLevel: 'none'
       });
-      totalIncome += chunkDays * bothWorkDaily;
+      totalIncome += monthDays * bothWorkDaily;
+      currentDate = addDays(currentDate, monthDays);
+      continue;
     }
-
-    currentDate = addDays(currentDate, chunkDays);
+    
+    // Try each parent to find minimum days needed to meet income requirement
+    type ParentPlan = {
+      parent: 'parent1' | 'parent2';
+      daysNeeded: number;
+      monthlyIncome: number;
+      meetsRequirement: boolean;
+    };
+    
+    const plans: ParentPlan[] = [];
+    
+    for (const testParent of ['parent1', 'parent2'] as const) {
+      const hasRemaining = testParent === 'parent1' ? p1NeedsMore : p2NeedsMore;
+      if (!hasRemaining) continue;
+      
+      const remaining = testParent === 'parent1' ? p1Remaining : p2Remaining;
+      const whoCalc = testParent === 'parent1' ? calc1 : calc2;
+      const otherCalc = testParent === 'parent1' ? calc2 : calc1;
+      
+      // Try each days/week from 0 to 7 to find minimum that meets income
+      for (let daysPerWeek = 0; daysPerWeek <= 7; daysPerWeek++) {
+        const leaveDays = Math.min(
+          Math.floor((daysPerWeek * monthDays) / 7),
+          remaining
+        );
+        
+        const workDays = monthDays - leaveDays;
+        const leaveIncome = leaveDays * (whoCalc.parentalBenefitPerDay + otherCalc.netIncome / 30);
+        const workIncome = workDays * bothWorkDaily;
+        const monthlyIncome = leaveIncome + workIncome;
+        
+        plans.push({
+          parent: testParent,
+          daysNeeded: leaveDays,
+          monthlyIncome,
+          meetsRequirement: monthlyIncome >= minHouseholdIncome
+        });
+        
+        // Found minimum for this parent, stop searching
+        if (monthlyIncome >= minHouseholdIncome) break;
+      }
+    }
+    
+    // Select best plan: prioritize meeting requirement, then minimize days
+    const validPlans = plans.filter(p => p.meetsRequirement);
+    const selectedPlan = validPlans.length > 0
+      ? validPlans.sort((a, b) => a.daysNeeded - b.daysNeeded)[0]
+      : plans.sort((a, b) => b.monthlyIncome - a.monthlyIncome)[0]; // fallback: best income
+    
+    if (!selectedPlan || selectedPlan.daysNeeded === 0) {
+      // No leave needed - both work
+      periods.push({
+        parent: 'both',
+        startDate: new Date(currentDate),
+        endDate: addDays(currentDate, monthDays - 1),
+        daysCount: monthDays,
+        dailyBenefit: 0,
+        dailyIncome: bothWorkDaily,
+        benefitLevel: 'none'
+      });
+      totalIncome += monthDays * bothWorkDaily;
+    } else {
+      // One parent takes leave, other works
+      chosenParent = selectedPlan.parent;
+      minDaysNeeded = selectedPlan.daysNeeded;
+      
+      const whoCalc = chosenParent === 'parent1' ? calc1 : calc2;
+      const otherCalc = chosenParent === 'parent1' ? calc2 : calc1;
+      
+      // Leave period
+      const leavePeriodEnd = addDays(currentDate, minDaysNeeded - 1);
+      const leaveDailyIncome = whoCalc.parentalBenefitPerDay + otherCalc.netIncome / 30;
+      
+      periods.push({
+        parent: chosenParent,
+        startDate: new Date(currentDate),
+        endDate: leavePeriodEnd,
+        daysCount: minDaysNeeded,
+        dailyBenefit: whoCalc.parentalBenefitPerDay,
+        dailyIncome: leaveDailyIncome,
+        benefitLevel: 'high'
+      });
+      totalIncome += minDaysNeeded * leaveDailyIncome;
+      
+      // Update remaining
+      if (chosenParent === 'parent1') {
+        p1Remaining -= minDaysNeeded;
+      } else {
+        p2Remaining -= minDaysNeeded;
+      }
+      
+      // Both work for remaining days in month
+      const workDays = monthDays - minDaysNeeded;
+      if (workDays > 0) {
+        periods.push({
+          parent: 'both',
+          startDate: addDays(leavePeriodEnd, 1),
+          endDate: addDays(currentDate, monthDays - 1),
+          daysCount: workDays,
+          dailyBenefit: 0,
+          dailyIncome: bothWorkDaily,
+          benefitLevel: 'none'
+        });
+        totalIncome += workDays * bothWorkDaily;
+      }
+    }
+    
+    currentDate = addDays(currentDate, monthDays);
   }
   
-// Count only actual parental leave days (exclude "both working" periods)
-const daysUsed = periods
-  .filter(p => p.benefitLevel !== 'none')
-  .reduce((sum, p) => sum + (p.parent === 'both' ? p.daysCount * 2 : p.daysCount), 0);
-const daysSaved = Math.max(0, TOTAL_DAYS - daysUsed);
-const totalDaysInPeriods = periods.reduce((sum, p) => sum + p.daysCount, 0);
-const averageMonthlyIncome = totalDaysInPeriods > 0 ? (totalIncome / totalDaysInPeriods) * 30 : 0;
+  // Count only actual parental leave days (exclude "both working" periods)
+  const daysUsed = periods
+    .filter(p => p.benefitLevel !== 'none')
+    .reduce((sum, p) => sum + (p.parent === 'both' ? p.daysCount * 2 : p.daysCount), 0);
+  const daysSaved = Math.max(0, TOTAL_DAYS - daysUsed);
+  const totalDaysInPeriods = periods.reduce((sum, p) => sum + p.daysCount, 0);
+  const averageMonthlyIncome = totalDaysInPeriods > 0 ? (totalIncome / totalDaysInPeriods) * 30 : 0;
   
   return {
     strategy: 'save-days',
     title: 'Spara dagar',
-    description: 'Minimera användning av dagar; första 6 månader med föräldralön om möjligt',
+    description: 'Minimera användning av dagar medan minimiinkomst uppnås',
     periods,
     totalIncome,
     daysUsed,

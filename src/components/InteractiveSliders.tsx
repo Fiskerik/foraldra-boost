@@ -5,23 +5,25 @@ import { formatCurrency } from "@/utils/parentalCalculations";
 import { TrendingUp, Users, Calendar, Sparkles } from "lucide-react";
 
 interface InteractiveSlidersProps {
-  minHouseholdIncome: number;
+  householdIncome: number;
   maxHouseholdIncome: number;
   totalMonths: number;
   parent1Months: number;
   daysPerWeek: number;
-  onMinIncomeChange: (value: number) => void;
+  currentHouseholdIncome: number; // Calculated based on current plan
+  onHouseholdIncomeChange: (value: number) => void;
   onDistributionChange: (parent1Months: number) => void;
   onDaysPerWeekChange: (days: number) => void;
 }
 
 export function InteractiveSliders({
-  minHouseholdIncome,
+  householdIncome,
   maxHouseholdIncome,
   totalMonths,
   parent1Months,
   daysPerWeek,
-  onMinIncomeChange,
+  currentHouseholdIncome,
+  onHouseholdIncomeChange,
   onDistributionChange,
   onDaysPerWeekChange,
 }: InteractiveSlidersProps) {
@@ -43,24 +45,27 @@ export function InteractiveSliders({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-primary" />
-            <Label className="text-sm font-medium">Hushållets minimiinkomst</Label>
+            <Label className="text-sm font-medium">Hushållets inkomst</Label>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-1">
             <span className="text-xl font-bold text-primary">
-              {formatCurrency(minHouseholdIncome)}
+              {formatCurrency(householdIncome)}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Nuvarande: {formatCurrency(currentHouseholdIncome)}
             </span>
           </div>
         </div>
         <Slider
-          value={[minHouseholdIncome]}
-          onValueChange={(values) => onMinIncomeChange(values[0])}
-          min={10000}
+          value={[householdIncome]}
+          onValueChange={(values) => onHouseholdIncomeChange(values[0])}
+          min={0}
           max={maxHouseholdIncome}
           step={1000}
           className="py-4"
         />
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>10 000 kr</span>
+          <span>0 kr</span>
           <span>{formatCurrency(maxHouseholdIncome)}</span>
         </div>
       </div>

@@ -19,7 +19,7 @@ const Index = () => {
   const [taxRate, setTaxRate] = useState(30.2);
   const [totalMonths, setTotalMonths] = useState(12);
   const [parent1Months, setParent1Months] = useState(6);
-  const [minHouseholdIncome, setMinHouseholdIncome] = useState(30000);
+  const [householdIncome, setHouseholdIncome] = useState(30000);
   const [simultaneousLeave, setSimultaneousLeave] = useState(false);
   const [simultaneousMonths, setSimultaneousMonths] = useState(0);
   const [daysPerWeek, setDaysPerWeek] = useState(5);
@@ -60,7 +60,7 @@ const Index = () => {
       totalMonths,
       parent1Months,
       parent2Months,
-      minHouseholdIncome,
+      householdIncome,
       simultaneousLeave ? simultaneousMonths : 0
     );
 
@@ -131,11 +131,11 @@ const Index = () => {
           totalMonths={totalMonths}
           parent1Months={parent1Months}
           parent2Months={parent2Months}
-          minHouseholdIncome={minHouseholdIncome}
+          minHouseholdIncome={householdIncome}
           maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
           onTotalMonthsChange={setTotalMonths}
           onDistributionChange={setParent1Months}
-          onMinIncomeChange={setMinHouseholdIncome}
+          onMinIncomeChange={setHouseholdIncome}
           simultaneousLeave={simultaneousLeave}
           simultaneousMonths={simultaneousMonths}
           onSimultaneousLeaveChange={setSimultaneousLeave}
@@ -157,18 +157,19 @@ const Index = () => {
           <div id="results" className="pt-12">
             <OptimizationResults 
               results={optimizationResults} 
-              minHouseholdIncome={minHouseholdIncome}
+              minHouseholdIncome={householdIncome}
             />
           </div>
         )}
 
         <InteractiveSliders
-          minHouseholdIncome={minHouseholdIncome}
+          householdIncome={householdIncome}
           maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
           totalMonths={totalMonths}
           parent1Months={parent1Months}
           daysPerWeek={daysPerWeek}
-          onMinIncomeChange={setMinHouseholdIncome}
+          currentHouseholdIncome={optimizationResults?.[0]?.averageMonthlyIncome || 0}
+          onHouseholdIncomeChange={setHouseholdIncome}
           onDistributionChange={setParent1Months}
           onDaysPerWeekChange={setDaysPerWeek}
         />
