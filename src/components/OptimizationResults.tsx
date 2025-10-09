@@ -93,12 +93,12 @@ export function OptimizationResults({ results, minHouseholdIncome }: Optimizatio
                     return (
                       <div
                         key={periodIndex}
-                        className={`p-4 rounded-lg border-l-4 border-${parentColor} bg-${parentColor}/5`}
+                        className={`p-4 rounded-lg border-l-4 ${parentColor === 'accent' ? 'border-accent bg-accent/5' : parentColor === 'parent1' ? 'border-parent1 bg-parent1/5' : 'border-parent2 bg-parent2/5'}`}
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
-                            <span className={`font-semibold text-${parentColor}`}>
+                            <span className={`font-semibold ${parentColor === 'accent' ? 'text-accent' : parentColor === 'parent1' ? 'text-parent1' : 'text-parent2'}`}>
                               {parentLabel}
                             </span>
                           </div>

@@ -370,41 +370,47 @@ function generateMaxIncomeStrategy(
   
   // Use parental salary days first (highest income)
   if (parent1SalaryDaysLeft > 0) {
-    const daysToUse = Math.min(parent1SalaryDaysLeft, parent1RemainingDays);
-    const periodEnd = addDays(currentDate, daysToUse - 1);
-    const periodIncome = (calc1.parentalSalaryPerDay + calc2.netIncome / 30) * daysToUse;
-    periods.push({
-      parent: 'parent1',
-      startDate: new Date(currentDate),
-      endDate: periodEnd,
-      daysCount: daysToUse,
-      dailyBenefit: calc1.parentalSalaryPerDay,
-      dailyIncome: periodIncome / daysToUse,
-      benefitLevel: 'parental-salary'
-    });
-    totalIncome += periodIncome;
-    parent1RemainingDays -= daysToUse;
-    parent1SalaryDaysLeft -= daysToUse;
-    currentDate = addDays(periodEnd, 1);
+    const daysToUse = Math.min(parent1SalaryDaysLeft, parent1RemainingDays, highBenefitDaysLeft);
+    if (daysToUse > 0) {
+      const periodEnd = addDays(currentDate, daysToUse - 1);
+      const periodIncome = (calc1.parentalSalaryPerDay + calc2.netIncome / 30) * daysToUse;
+      periods.push({
+        parent: 'parent1',
+        startDate: new Date(currentDate),
+        endDate: periodEnd,
+        daysCount: daysToUse,
+        dailyBenefit: calc1.parentalSalaryPerDay,
+        dailyIncome: periodIncome / daysToUse,
+        benefitLevel: 'parental-salary'
+      });
+      totalIncome += periodIncome;
+      parent1RemainingDays -= daysToUse;
+      parent1SalaryDaysLeft -= daysToUse;
+      highBenefitDaysLeft -= daysToUse; // salary days consume high-benefit quota
+      currentDate = addDays(periodEnd, 1);
+    }
   }
   
   if (parent2SalaryDaysLeft > 0 && parent2RemainingDays > 0) {
-    const daysToUse = Math.min(parent2SalaryDaysLeft, parent2RemainingDays);
-    const periodEnd = addDays(currentDate, daysToUse - 1);
-    const periodIncome = (calc2.parentalSalaryPerDay + calc1.netIncome / 30) * daysToUse;
-    periods.push({
-      parent: 'parent2',
-      startDate: new Date(currentDate),
-      endDate: periodEnd,
-      daysCount: daysToUse,
-      dailyBenefit: calc2.parentalSalaryPerDay,
-      dailyIncome: periodIncome / daysToUse,
-      benefitLevel: 'parental-salary'
-    });
-    totalIncome += periodIncome;
-    parent2RemainingDays -= daysToUse;
-    parent2SalaryDaysLeft -= daysToUse;
-    currentDate = addDays(periodEnd, 1);
+    const daysToUse = Math.min(parent2SalaryDaysLeft, parent2RemainingDays, highBenefitDaysLeft);
+    if (daysToUse > 0) {
+      const periodEnd = addDays(currentDate, daysToUse - 1);
+      const periodIncome = (calc2.parentalSalaryPerDay + calc1.netIncome / 30) * daysToUse;
+      periods.push({
+        parent: 'parent2',
+        startDate: new Date(currentDate),
+        endDate: periodEnd,
+        daysCount: daysToUse,
+        dailyBenefit: calc2.parentalSalaryPerDay,
+        dailyIncome: periodIncome / daysToUse,
+        benefitLevel: 'parental-salary'
+      });
+      totalIncome += periodIncome;
+      parent2RemainingDays -= daysToUse;
+      parent2SalaryDaysLeft -= daysToUse;
+      highBenefitDaysLeft -= daysToUse; // salary days consume high-benefit quota
+      currentDate = addDays(periodEnd, 1);
+    }
   }
   
   // Use remaining high benefit days
