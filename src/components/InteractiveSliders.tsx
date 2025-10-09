@@ -37,8 +37,18 @@ export function InteractiveSliders({
           Justera plan
         </h3>
         <p className="text-sm text-muted-foreground">
-          Justera en parameter så anpassas de andra automatiskt för att optimera er ekonomi
+          Justera parametrarna nedan för att se hur de påverkar er ekonomi
         </p>
+      </div>
+
+      {/* Current Average Monthly Income Display */}
+      <div className="flex justify-center">
+        <div className="bg-primary/10 border-2 border-primary rounded-lg px-8 py-4 text-center">
+          <p className="text-sm text-muted-foreground mb-1">Snitt månadsinkomst</p>
+          <p className="text-3xl font-bold text-primary">
+            {formatCurrency(currentHouseholdIncome)}
+          </p>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -50,9 +60,6 @@ export function InteractiveSliders({
           <div className="flex flex-col items-end gap-1">
             <span className="text-xl font-bold text-primary">
               {formatCurrency(householdIncome)}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Nuvarande: {formatCurrency(currentHouseholdIncome)}
             </span>
           </div>
         </div>
@@ -115,14 +122,14 @@ export function InteractiveSliders({
         <Slider
           value={[daysPerWeek]}
           onValueChange={(values) => onDaysPerWeekChange(values[0])}
-          min={0}
+          min={1}
           max={7}
           step={1}
           className="py-4"
         />
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Inga dagar</span>
-          <span>Alla dagar</span>
+          <span>1 dag/vecka</span>
+          <span>7 dagar/vecka</span>
         </div>
       </div>
     </Card>

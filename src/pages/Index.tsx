@@ -43,14 +43,14 @@ const Index = () => {
   const calc1 = calculateAvailableIncome(parent1Data);
   const calc2 = calculateAvailableIncome(parent2Data);
 
-  const handleOptimize = () => {
+  const handleOptimize = (silent = false) => {
     if (!municipality) {
-      toast.error("Vänligen välj kommun");
+      if (!silent) toast.error("Vänligen välj kommun");
       return;
     }
 
     if (totalMonths <= 0) {
-      toast.error("Vänligen ange antal månader lediga");
+      if (!silent) toast.error("Vänligen ange antal månader lediga");
       return;
     }
 
@@ -65,12 +65,35 @@ const Index = () => {
     );
 
     setOptimizationResults(results);
-    toast.success("Optimering klar!");
-    
-    // Scroll to results
-    setTimeout(() => {
-      document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
+    if (!silent) {
+      toast.success("Optimering klar!");
+      
+      // Scroll to results
+      setTimeout(() => {
+        document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  };
+
+  const handleHouseholdIncomeChange = (value: number) => {
+    setHouseholdIncome(value);
+    if (optimizationResults) {
+      setTimeout(() => handleOptimize(true), 100);
+    }
+  };
+
+  const handleDistributionChange = (value: number) => {
+    setParent1Months(value);
+    if (optimizationResults) {
+      setTimeout(() => handleOptimize(true), 100);
+    }
+  };
+
+  const handleDaysPerWeekChange = (value: number) => {
+    setDaysPerWeek(value);
+    if (optimizationResults) {
+      setTimeout(() => handleOptimize(true), 100);
+    }
   };
 
   return (
@@ -144,7 +167,7 @@ const Index = () => {
 
         <div className="flex justify-center pt-6">
           <Button
-            onClick={handleOptimize}
+            onClick={() => handleOptimize()}
             size="lg"
             className="text-lg px-8 py-6 shadow-soft bg-gradient-hero hover:opacity-90 transition-opacity"
           >
@@ -162,17 +185,19 @@ const Index = () => {
           </div>
         )}
 
-        <InteractiveSliders
-          householdIncome={householdIncome}
-          maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
-          totalMonths={totalMonths}
-          parent1Months={parent1Months}
-          daysPerWeek={daysPerWeek}
-          currentHouseholdIncome={optimizationResults?.[0]?.averageMonthlyIncome || 0}
-          onHouseholdIncomeChange={setHouseholdIncome}
-          onDistributionChange={setParent1Months}
-          onDaysPerWeekChange={setDaysPerWeek}
-        />
+        {optimizationResults && (
+          <InteractiveSliders
+            householdIncome={householdIncome}
+            maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
+            totalMonths={totalMonths}
+            parent1Months={parent1Months}
+            daysPerWeek={daysPerWeek}
+            currentHouseholdIncome={optimizationResults[0]?.averageMonthlyIncome || 0}
+            onHouseholdIncomeChange={handleHouseholdIncomeChange}
+            onDistributionChange={handleDistributionChange}
+            onDaysPerWeekChange={handleDaysPerWeekChange}
+          />
+        )}
       </main>
 
       <footer className="bg-muted py-8 mt-20">
