@@ -395,7 +395,8 @@ function generateMaxIncomeStrategy(
   const orderSalary: ('parent1' | 'parent2')[] = [];
   if (parent1HasSalary) orderSalary.push('parent1');
   if (parent2HasSalary) orderSalary.push('parent2');
-  orderSalary.sort((a,b) => (a==='parent1'?calc1.netIncome:calc2.netIncome) - (b==='parent1'?calc1.netIncome:calc2.netIncome));
+  const salaryCalc = (who: 'parent1' | 'parent2') => who === 'parent1' ? calc1.netIncome : calc2.netIncome;
+  orderSalary.sort((a,b) => salaryCalc(a) - salaryCalc(b));
 
   for (const who of orderSalary) {
     const hasLeft = who === 'parent1' ? parent1SalaryDaysLeft : parent2SalaryDaysLeft;
@@ -429,7 +430,7 @@ function generateMaxIncomeStrategy(
   }
   
   // Use remaining high benefit days: lower earner first to maximize household income
-  const orderHigh: ('parent1' | 'parent2')[] = ['parent1','parent2'].sort((a,b) => (a==='parent1'?calc1.netIncome:calc2.netIncome) - (b==='parent1'?calc1.netIncome:calc2.netIncome));
+  const orderHigh = (['parent1','parent2'] as ('parent1' | 'parent2')[]).sort((a,b) => (a==='parent1'?calc1.netIncome:calc2.netIncome) - (b==='parent1'?calc1.netIncome:calc2.netIncome));
   for (const who of orderHigh) {
     if ((who === 'parent1' ? parent1RemainingDays : parent2RemainingDays) > 0 && highBenefitDaysLeft > 0) {
       const daysToUse = Math.min(highBenefitDaysLeft, who === 'parent1' ? parent1RemainingDays : parent2RemainingDays);
