@@ -241,50 +241,73 @@ function generateSaveDaysStrategy(
     currentDate = addDays(simultaneousPeriodEnd, 1);
   }
   
-  // Strategy: Take turns to minimize days while meeting requirements
-  // Prioritize lower earning parent first (maximize household income)
-  const betterIncomeParent = calc1.netIncome > calc2.netIncome ? 'parent1' : 'parent2';
-  const worseIncomeParent = betterIncomeParent === 'parent1' ? 'parent2' : 'parent1';
-  
-  const worseParentDays = worseIncomeParent === 'parent1' ? parent1Days : parent2Days;
-  const worseCalc = worseIncomeParent === 'parent1' ? calc1 : calc2;
-  const worseParentData = worseIncomeParent === 'parent1' ? parent1 : parent2;
-  const betterCalc = betterIncomeParent === 'parent1' ? calc1 : calc2;
-  
-  // Use only high benefit days for worse income parent (skip parental salary to save days)
-  const worseHighBenefitDays = Math.min(HIGH_BENEFIT_DAYS, worseParentDays);
-  
-  if (worseHighBenefitDays > 0) {
-    const periodEnd = addDays(currentDate, worseHighBenefitDays - 1);
-    const periodIncome = (worseCalc.parentalBenefitPerDay + betterCalc.netIncome / 30) * worseHighBenefitDays;
+  // Apply contiguous parental salary for 6 months if available (choose lower earner with agreement)
+  const p1HasCA = parent1.hasCollectiveAgreement;
+  const p2HasCA = parent2.hasCollectiveAgreement;
+  const lowerEarner: 'parent1' | 'parent2' = calc1.netIncome <= calc2.netIncome ? 'parent1' : 'parent2';
+  const higherEarner: 'parent1' | 'parent2' = lowerEarner === 'parent1' ? 'parent2' : 'parent1';
+
+  const scheduleSalaryBlock = (who: 'parent1' | 'parent2') => {
+    const daysToUse = 180; // 6 months contiguous
+    const periodEnd = addDays(currentDate, daysToUse - 1);
+    const whoCalc = who === 'parent1' ? calc1 : calc2;
+    const otherCalc = who === 'parent1' ? calc2 : calc1;
+    const periodIncome = (whoCalc.parentalSalaryPerDay + otherCalc.netIncome / 30) * daysToUse;
     periods.push({
-      parent: worseIncomeParent,
+      parent: who,
       startDate: new Date(currentDate),
       endDate: periodEnd,
-      daysCount: worseHighBenefitDays,
-      dailyBenefit: worseCalc.parentalBenefitPerDay,
-      dailyIncome: periodIncome / worseHighBenefitDays,
+      daysCount: daysToUse,
+      dailyBenefit: whoCalc.parentalSalaryPerDay,
+      dailyIncome: periodIncome / daysToUse,
+      benefitLevel: 'parental-salary'
+    });
+    totalIncome += periodIncome;
+    currentDate = addDays(periodEnd, 1);
+  };
+
+  if (p1HasCA || p2HasCA) {
+    const salaryFirst = p1HasCA && p2HasCA ? lowerEarner : (p1HasCA ? 'parent1' : 'parent2');
+    scheduleSalaryBlock(salaryFirst);
+  }
+  
+  // High benefit days afterwards: lower earner first to keep higher earner working
+  const firstHigh = lowerEarner;
+  const secondHigh = higherEarner;
+  const firstHighCalc = firstHigh === 'parent1' ? calc1 : calc2;
+  const secondHighCalc = secondHigh === 'parent1' ? calc1 : calc2;
+
+  const firstHighDays = Math.min(HIGH_BENEFIT_DAYS, firstHigh === 'parent1' ? parent1Days : parent2Days);
+  if (firstHighDays > 0) {
+    const periodEnd = addDays(currentDate, firstHighDays - 1);
+    const otherCalc = firstHigh === 'parent1' ? calc2 : calc1;
+    const periodIncome = (firstHighCalc.parentalBenefitPerDay + otherCalc.netIncome / 30) * firstHighDays;
+    periods.push({
+      parent: firstHigh,
+      startDate: new Date(currentDate),
+      endDate: periodEnd,
+      daysCount: firstHighDays,
+      dailyBenefit: firstHighCalc.parentalBenefitPerDay,
+      dailyIncome: periodIncome / firstHighDays,
       benefitLevel: 'high'
     });
     totalIncome += periodIncome;
     currentDate = addDays(periodEnd, 1);
   }
-  
-  // Better income parent takes their turn with high benefit only
-  const betterParentDays = betterIncomeParent === 'parent1' ? parent1Days : parent2Days;
-  const remainingHighBenefitDays = HIGH_BENEFIT_DAYS - worseHighBenefitDays;
-  const betterHighBenefitDays = Math.min(remainingHighBenefitDays, betterParentDays);
-  
-  if (betterHighBenefitDays > 0) {
-    const periodEnd = addDays(currentDate, betterHighBenefitDays - 1);
-    const periodIncome = (betterCalc.parentalBenefitPerDay + worseCalc.netIncome / 30) * betterHighBenefitDays;
+
+  const remainingHigh = HIGH_BENEFIT_DAYS - Math.min(HIGH_BENEFIT_DAYS, firstHighDays);
+  const secondHighDays = Math.min(remainingHigh, secondHigh === 'parent1' ? parent1Days : parent2Days);
+  if (secondHighDays > 0) {
+    const periodEnd = addDays(currentDate, secondHighDays - 1);
+    const otherCalc = secondHigh === 'parent1' ? calc2 : calc1;
+    const periodIncome = (secondHighCalc.parentalBenefitPerDay + otherCalc.netIncome / 30) * secondHighDays;
     periods.push({
-      parent: betterIncomeParent,
+      parent: secondHigh,
       startDate: new Date(currentDate),
       endDate: periodEnd,
-      daysCount: betterHighBenefitDays,
-      dailyBenefit: betterCalc.parentalBenefitPerDay,
-      dailyIncome: periodIncome / betterHighBenefitDays,
+      daysCount: secondHighDays,
+      dailyBenefit: secondHighCalc.parentalBenefitPerDay,
+      dailyIncome: periodIncome / secondHighDays,
       benefitLevel: 'high'
     });
     totalIncome += periodIncome;
@@ -298,7 +321,7 @@ const averageMonthlyIncome = totalDaysInPeriods > 0 ? (totalIncome / totalDaysIn
   return {
     strategy: 'save-days',
     title: 'Spara dagar',
-    description: 'Använder endast höga föräldrapenningdagar för att maximera sparade dagar',
+    description: 'Minimera användning av dagar; första 6 månader med föräldralön om möjligt',
     periods,
     totalIncome,
     daysUsed,
@@ -368,87 +391,70 @@ function generateMaxIncomeStrategy(
   let parent2SalaryDaysLeft = parent2HasSalary ? 180 : 0;
   let highBenefitDaysLeft = HIGH_BENEFIT_DAYS;
   
-  // Use parental salary days first (highest income)
-  if (parent1SalaryDaysLeft > 0) {
-    const daysToUse = Math.min(parent1SalaryDaysLeft, parent1RemainingDays, highBenefitDaysLeft);
+  // Use parental salary days first (highest income), 6 months contiguous, lower earner first
+  const orderSalary: ('parent1' | 'parent2')[] = [];
+  if (parent1HasSalary) orderSalary.push('parent1');
+  if (parent2HasSalary) orderSalary.push('parent2');
+  orderSalary.sort((a,b) => (a==='parent1'?calc1.netIncome:calc2.netIncome) - (b==='parent1'?calc1.netIncome:calc2.netIncome));
+
+  for (const who of orderSalary) {
+    const hasLeft = who === 'parent1' ? parent1SalaryDaysLeft : parent2SalaryDaysLeft;
+    const remaining = who === 'parent1' ? parent1RemainingDays : parent2RemainingDays;
+    const daysToUse = Math.min(180, hasLeft, remaining, highBenefitDaysLeft); // max 6 months contiguous
     if (daysToUse > 0) {
       const periodEnd = addDays(currentDate, daysToUse - 1);
-      const periodIncome = (calc1.parentalSalaryPerDay + calc2.netIncome / 30) * daysToUse;
+      const whoCalc = who === 'parent1' ? calc1 : calc2;
+      const otherCalc = who === 'parent1' ? calc2 : calc1;
+      const periodIncome = (whoCalc.parentalSalaryPerDay + otherCalc.netIncome / 30) * daysToUse;
       periods.push({
-        parent: 'parent1',
+        parent: who,
         startDate: new Date(currentDate),
         endDate: periodEnd,
         daysCount: daysToUse,
-        dailyBenefit: calc1.parentalSalaryPerDay,
+        dailyBenefit: whoCalc.parentalSalaryPerDay,
         dailyIncome: periodIncome / daysToUse,
         benefitLevel: 'parental-salary'
       });
       totalIncome += periodIncome;
-      parent1RemainingDays -= daysToUse;
-      parent1SalaryDaysLeft -= daysToUse;
-      highBenefitDaysLeft -= daysToUse; // salary days consume high-benefit quota
+      if (who === 'parent1') {
+        parent1RemainingDays -= daysToUse;
+        parent1SalaryDaysLeft -= daysToUse;
+      } else {
+        parent2RemainingDays -= daysToUse;
+        parent2SalaryDaysLeft -= daysToUse;
+      }
+      highBenefitDaysLeft -= daysToUse;
       currentDate = addDays(periodEnd, 1);
     }
   }
   
-  if (parent2SalaryDaysLeft > 0 && parent2RemainingDays > 0) {
-    const daysToUse = Math.min(parent2SalaryDaysLeft, parent2RemainingDays, highBenefitDaysLeft);
-    if (daysToUse > 0) {
+  // Use remaining high benefit days: lower earner first to maximize household income
+  const orderHigh: ('parent1' | 'parent2')[] = ['parent1','parent2'].sort((a,b) => (a==='parent1'?calc1.netIncome:calc2.netIncome) - (b==='parent1'?calc1.netIncome:calc2.netIncome));
+  for (const who of orderHigh) {
+    if ((who === 'parent1' ? parent1RemainingDays : parent2RemainingDays) > 0 && highBenefitDaysLeft > 0) {
+      const daysToUse = Math.min(highBenefitDaysLeft, who === 'parent1' ? parent1RemainingDays : parent2RemainingDays);
       const periodEnd = addDays(currentDate, daysToUse - 1);
-      const periodIncome = (calc2.parentalSalaryPerDay + calc1.netIncome / 30) * daysToUse;
+      const whoCalc = who === 'parent1' ? calc1 : calc2;
+      const otherCalc = who === 'parent1' ? calc2 : calc1;
+      const periodIncome = (whoCalc.parentalBenefitPerDay + otherCalc.netIncome / 30) * daysToUse;
       periods.push({
-        parent: 'parent2',
+        parent: who,
         startDate: new Date(currentDate),
         endDate: periodEnd,
         daysCount: daysToUse,
-        dailyBenefit: calc2.parentalSalaryPerDay,
+        dailyBenefit: whoCalc.parentalBenefitPerDay,
         dailyIncome: periodIncome / daysToUse,
-        benefitLevel: 'parental-salary'
+        benefitLevel: 'high'
       });
       totalIncome += periodIncome;
-      parent2RemainingDays -= daysToUse;
-      parent2SalaryDaysLeft -= daysToUse;
-      highBenefitDaysLeft -= daysToUse; // salary days consume high-benefit quota
+      if (who === 'parent1') {
+        parent1RemainingDays -= daysToUse;
+      } else {
+        parent2RemainingDays -= daysToUse;
+      }
+      highBenefitDaysLeft -= daysToUse;
       currentDate = addDays(periodEnd, 1);
     }
-  }
-  
-  // Use remaining high benefit days
-  if (parent1RemainingDays > 0 && highBenefitDaysLeft > 0) {
-    const daysToUse = Math.min(highBenefitDaysLeft, parent1RemainingDays);
-    const periodEnd = addDays(currentDate, daysToUse - 1);
-    const periodIncome = (calc1.parentalBenefitPerDay + calc2.netIncome / 30) * daysToUse;
-    periods.push({
-      parent: 'parent1',
-      startDate: new Date(currentDate),
-      endDate: periodEnd,
-      daysCount: daysToUse,
-      dailyBenefit: calc1.parentalBenefitPerDay,
-      dailyIncome: periodIncome / daysToUse,
-      benefitLevel: 'high'
-    });
-    totalIncome += periodIncome;
-    parent1RemainingDays -= daysToUse;
-    highBenefitDaysLeft -= daysToUse;
-    currentDate = addDays(periodEnd, 1);
-  }
-  
-  if (parent2RemainingDays > 0 && highBenefitDaysLeft > 0) {
-    const daysToUse = Math.min(highBenefitDaysLeft, parent2RemainingDays);
-    const periodEnd = addDays(currentDate, daysToUse - 1);
-    const periodIncome = (calc2.parentalBenefitPerDay + calc1.netIncome / 30) * daysToUse;
-    periods.push({
-      parent: 'parent2',
-      startDate: new Date(currentDate),
-      endDate: periodEnd,
-      daysCount: daysToUse,
-      dailyBenefit: calc2.parentalBenefitPerDay,
-      dailyIncome: periodIncome / daysToUse,
-      benefitLevel: 'high'
-    });
-    totalIncome += periodIncome;
-    parent2RemainingDays -= daysToUse;
-    highBenefitDaysLeft -= daysToUse;
   }
   
 const daysUsed = periods.reduce((sum, p) => sum + (p.parent === 'both' ? p.daysCount * 2 : p.daysCount), 0);

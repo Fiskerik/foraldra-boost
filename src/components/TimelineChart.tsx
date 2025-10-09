@@ -48,12 +48,17 @@ const monthlyData = months.map((month) => {
 });
   
   const maxIncome = Math.max(1, Math.max(...monthlyData.map(d => d.income), minHouseholdIncome));
+  if (import.meta.env.DEV) {
+    // Debug: verify data passed to chart
+    // eslint-disable-next-line no-console
+    console.table(monthlyData);
+  }
   
   return (
     <div className="space-y-4">
       <h3 className="text-xl font-semibold">Inkomsttidslinje</h3>
       
-      <div className="relative h-64 bg-muted/30 rounded-lg p-4">
+      <div className="relative h-64 bg-muted/30 rounded-lg p-4" aria-label="Inkomsttidslinje diagram">
         {/* Y-axis labels */}
         <div className="absolute left-0 top-0 bottom-0 w-20 flex flex-col justify-between text-xs text-muted-foreground">
           <span>{formatCurrency(maxIncome)}</span>
@@ -91,7 +96,7 @@ const monthlyData = months.map((month) => {
               <div key={index} className="flex-1 min-w-[4px] flex flex-col items-center group relative">
                 <div 
                   className={`w-full ${barColor} rounded-t transition-all hover:opacity-80`}
-                  style={{ height: `${height}%` }}
+                  style={{ height: `${height}%`, minHeight: height > 0 ? '2px' : '0' }}
                 >
                   <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block bg-popover text-popover-foreground text-xs p-2 rounded shadow-lg whitespace-nowrap z-20">
                     {formatCurrency(data.income)}
