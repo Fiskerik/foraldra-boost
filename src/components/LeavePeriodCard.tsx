@@ -1,8 +1,9 @@
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Calendar, Users, DollarSign } from "lucide-react";
 
 interface LeavePeriodCardProps {
   totalMonths: number;
@@ -13,6 +14,10 @@ interface LeavePeriodCardProps {
   onTotalMonthsChange: (months: number) => void;
   onDistributionChange: (parent1Months: number) => void;
   onMinIncomeChange: (income: number) => void;
+  simultaneousLeave: boolean;
+  simultaneousMonths: number;
+  onSimultaneousLeaveChange: (value: boolean) => void;
+  onSimultaneousMonthsChange: (months: number) => void;
 }
 
 export function LeavePeriodCard({
@@ -24,11 +29,12 @@ export function LeavePeriodCard({
   onTotalMonthsChange,
   onDistributionChange,
   onMinIncomeChange,
+  simultaneousLeave,
+  simultaneousMonths,
+  onSimultaneousLeaveChange,
+  onSimultaneousMonthsChange,
 }: LeavePeriodCardProps) {
-  const [monthsInput, setMonthsInput] = useState(totalMonths.toString());
-
   const handleMonthsInputChange = (value: string) => {
-    setMonthsInput(value);
     const parsed = parseInt(value);
     if (!isNaN(parsed) && parsed >= 1 && parsed <= 16) {
       onTotalMonthsChange(parsed);
@@ -42,7 +48,8 @@ export function LeavePeriodCard({
       </CardHeader>
       <CardContent className="space-y-8">
         <div className="space-y-3">
-          <Label htmlFor="total-months" className="text-base font-medium">
+          <Label htmlFor="total-months" className="text-base font-medium flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
             Hur länge vill ni vara lediga?
           </Label>
           <Input
@@ -50,7 +57,7 @@ export function LeavePeriodCard({
             type="number"
             min="1"
             max="16"
-            value={monthsInput}
+            value={totalMonths}
             onChange={(e) => handleMonthsInputChange(e.target.value)}
             className="text-lg font-semibold"
           />
@@ -62,7 +69,8 @@ export function LeavePeriodCard({
         {totalMonths > 0 && (
           <>
             <div className="space-y-4">
-              <Label className="text-base font-medium">
+              <Label className="text-base font-medium flex items-center gap-2">
+                <Users className="h-4 w-4" />
                 Hur vill ni dela upp ledigheten?
               </Label>
               <div className="space-y-3">
@@ -97,9 +105,39 @@ export function LeavePeriodCard({
               </div>
             </div>
 
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2 text-base">
+                  <Users className="h-4 w-4" />
+                  Vill ni vara hemma samtidigt?
+                </Label>
+                <Switch
+                  checked={simultaneousLeave}
+                  onCheckedChange={onSimultaneousLeaveChange}
+                />
+              </div>
+              
+              {simultaneousLeave && (
+                <div className="space-y-2 pl-6 animate-fade-in">
+                  <Label>Antal månader samtidigt</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={Math.floor(totalMonths / 2)}
+                    value={simultaneousMonths}
+                    onChange={(e) => onSimultaneousMonthsChange(Number(e.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Utöver de 10 obligatoriska dagarna
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-3">
-              <Label htmlFor="min-income" className="text-base font-medium">
-                Hushållets minimum inkomst per månad
+              <Label htmlFor="min-income" className="text-base font-medium flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Hushållets minimum inkomst per månad (netto)
               </Label>
               <div className="space-y-2">
                 <Slider
@@ -109,7 +147,7 @@ export function LeavePeriodCard({
                   step={1000}
                   value={[minHouseholdIncome]}
                   onValueChange={(values) => onMinIncomeChange(values[0])}
-                  className="[&_[role=slider]]:bg-accent [&_[role=slider]]:border-accent"
+                  className="slider-single"
                 />
                 <div className="text-right">
                   <span className="text-xl font-bold text-accent">

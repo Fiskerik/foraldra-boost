@@ -92,4 +92,21 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
+  
+  .shadow-soft {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  
+  /* Slider color overrides */
+  .slider-single [role="slider"] {
+    @apply bg-primary border-primary;
+  }
+  
+  .slider-single [data-orientation="horizontal"] {
+    @apply bg-primary/20;
+  }
+  
+  .slider-single [data-orientation="horizontal"] > span {
+    @apply bg-primary;
+  }
 }

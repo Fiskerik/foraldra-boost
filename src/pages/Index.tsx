@@ -14,13 +14,13 @@ const Index = () => {
   const [parent2Income, setParent2Income] = useState(30000);
   const [parent1HasAgreement, setParent1HasAgreement] = useState(false);
   const [parent2HasAgreement, setParent2HasAgreement] = useState(false);
-  const [parent1Municipality, setParent1Municipality] = useState("");
-  const [parent2Municipality, setParent2Municipality] = useState("");
-  const [parent1TaxRate, setParent1TaxRate] = useState(32);
-  const [parent2TaxRate, setParent2TaxRate] = useState(32);
+  const [municipality, setMunicipality] = useState("");
+  const [taxRate, setTaxRate] = useState(32);
   const [totalMonths, setTotalMonths] = useState(12);
   const [parent1Months, setParent1Months] = useState(6);
   const [minHouseholdIncome, setMinHouseholdIncome] = useState(30000);
+  const [simultaneousLeave, setSimultaneousLeave] = useState(false);
+  const [simultaneousMonths, setSimultaneousMonths] = useState(0);
   const [optimizationResults, setOptimizationResults] = useState<OptimizationResult[] | null>(null);
 
   const parent2Months = totalMonths - parent1Months;
@@ -29,21 +29,21 @@ const Index = () => {
   const parent1Data: ParentData = {
     income: parent1Income,
     hasCollectiveAgreement: parent1HasAgreement,
-    taxRate: parent1TaxRate,
+    taxRate: taxRate,
   };
 
   const parent2Data: ParentData = {
     income: parent2Income,
     hasCollectiveAgreement: parent2HasAgreement,
-    taxRate: parent2TaxRate,
+    taxRate: taxRate,
   };
 
   const calc1 = calculateAvailableIncome(parent1Data);
   const calc2 = calculateAvailableIncome(parent2Data);
 
   const handleOptimize = () => {
-    if (!parent1Municipality || !parent2Municipality) {
-      toast.error("Vänligen välj kommun för båda föräldrarna");
+    if (!municipality) {
+      toast.error("Vänligen välj kommun");
       return;
     }
 
@@ -58,7 +58,8 @@ const Index = () => {
       totalMonths,
       parent1Months,
       parent2Months,
-      minHouseholdIncome
+      minHouseholdIncome,
+      simultaneousLeave ? simultaneousMonths : 0
     );
 
     setOptimizationResults(results);
@@ -104,26 +105,18 @@ const Index = () => {
           />
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <section>
           <MunicipalitySelect
-            parentNumber={1}
-            selectedMunicipality={parent1Municipality}
+            parentNumber={0}
+            selectedMunicipality={municipality}
             onMunicipalityChange={(name, rate) => {
-              setParent1Municipality(name);
-              setParent1TaxRate(rate);
-            }}
-          />
-          <MunicipalitySelect
-            parentNumber={2}
-            selectedMunicipality={parent2Municipality}
-            onMunicipalityChange={(name, rate) => {
-              setParent2Municipality(name);
-              setParent2TaxRate(rate);
+              setMunicipality(name);
+              setTaxRate(rate);
             }}
           />
         </section>
 
-        {parent1Municipality && parent2Municipality && (
+        {municipality && (
           <AvailableIncomeDisplay
             parent1NetIncome={calc1.netIncome}
             parent2NetIncome={calc2.netIncome}
@@ -137,10 +130,14 @@ const Index = () => {
           parent1Months={parent1Months}
           parent2Months={parent2Months}
           minHouseholdIncome={minHouseholdIncome}
-          maxHouseholdIncome={maxHouseholdIncome}
+          maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
           onTotalMonthsChange={setTotalMonths}
           onDistributionChange={setParent1Months}
           onMinIncomeChange={setMinHouseholdIncome}
+          simultaneousLeave={simultaneousLeave}
+          simultaneousMonths={simultaneousMonths}
+          onSimultaneousLeaveChange={setSimultaneousLeave}
+          onSimultaneousMonthsChange={setSimultaneousMonths}
         />
 
         <div className="flex justify-center pt-6">
@@ -156,7 +153,10 @@ const Index = () => {
 
         {optimizationResults && (
           <div id="results" className="pt-12">
-            <OptimizationResults results={optimizationResults} />
+            <OptimizationResults 
+              results={optimizationResults} 
+              minHouseholdIncome={minHouseholdIncome}
+            />
           </div>
         )}
       </main>

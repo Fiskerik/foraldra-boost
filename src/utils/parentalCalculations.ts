@@ -22,6 +22,7 @@ export interface OptimizationResult {
   totalIncome: number;
   daysUsed: number;
   daysSaved: number;
+  averageMonthlyIncome: number;
 }
 
 export interface LeavePeriod {
@@ -40,6 +41,8 @@ const LOW_BENEFIT_DAYS = 90;
 const TOTAL_DAYS = 480;
 const LOW_BENEFIT_AMOUNT = 180; // SEK per day
 const HIGH_BENEFIT_RATE = 0.80; // 80% of income
+const PRISBASBELOPP_2025 = 58800; // SEK per year
+const PARENTAL_SALARY_THRESHOLD = (10 * PRISBASBELOPP_2025) / 12; // 49,000 kr/month
 
 export function calculateNetIncome(grossIncome: number, taxRate: number): number {
   return grossIncome * (1 - taxRate / 100);
@@ -51,8 +54,16 @@ export function calculateDailyParentalBenefit(monthlyIncome: number): number {
 }
 
 export function calculateParentalSalary(monthlyIncome: number): number {
-  // Generell kollektivavtalslön: 90% av lön i 180 dagar (6 månader)
-  return (monthlyIncome * 0.90) / 30;
+  // Kollektivavtalslön enligt svenska regler 2025
+  if (monthlyIncome <= PARENTAL_SALARY_THRESHOLD) {
+    // 10% av lön upp till 10 prisbasbelopp/12
+    return (monthlyIncome * 0.10) / 30;
+  } else {
+    // 10% upp till gränsen + 90% på delen över gränsen
+    const basePart = PARENTAL_SALARY_THRESHOLD * 0.10;
+    const excessPart = (monthlyIncome - PARENTAL_SALARY_THRESHOLD) * 0.90;
+    return (basePart + excessPart) / 30;
+  }
 }
 
 export function calculateAvailableIncome(
@@ -88,7 +99,8 @@ export function optimizeLeave(
   totalMonths: number,
   parent1Months: number,
   parent2Months: number,
-  minHouseholdIncome: number
+  minHouseholdIncome: number,
+  simultaneousMonths: number = 0
 ): OptimizationResult[] {
   const calc1 = calculateAvailableIncome(parent1);
   const calc2 = calculateAvailableIncome(parent2);
@@ -108,7 +120,8 @@ export function optimizeLeave(
     parent1Days,
     parent2Days,
     minHouseholdIncome,
-    birthDate
+    birthDate,
+    simultaneousMonths
   );
   
   // Strategy 2: Maximize income (use more days but optimize income)
@@ -120,7 +133,8 @@ export function optimizeLeave(
     parent1Days,
     parent2Days,
     minHouseholdIncome,
-    birthDate
+    birthDate,
+    simultaneousMonths
   );
   
   return [saveDaysResult, maxIncomeResult];
@@ -134,7 +148,8 @@ function generateSaveDaysStrategy(
   parent1Days: number,
   parent2Days: number,
   minHouseholdIncome: number,
-  birthDate: Date
+  birthDate: Date,
+  simultaneousMonths: number = 0
 ): OptimizationResult {
   const periods: LeavePeriod[] = [];
   let currentDate = new Date(birthDate);
@@ -154,6 +169,24 @@ function generateSaveDaysStrategy(
   });
   totalIncome += bothPeriodIncome;
   currentDate = addDays(bothPeriodEnd, 1);
+  
+  // Add additional simultaneous period if requested
+  if (simultaneousMonths > 0) {
+    const simultaneousDays = simultaneousMonths * 30;
+    const simultaneousPeriodEnd = addDays(currentDate, simultaneousDays - 1);
+    const simultaneousIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * simultaneousDays;
+    periods.push({
+      parent: 'both',
+      startDate: new Date(currentDate),
+      endDate: simultaneousPeriodEnd,
+      daysCount: simultaneousDays,
+      dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
+      dailyIncome: simultaneousIncome / simultaneousDays,
+      benefitLevel: 'high'
+    });
+    totalIncome += simultaneousIncome;
+    currentDate = addDays(simultaneousPeriodEnd, 1);
+  }
   
   // Determine who has better income to stay working
   const betterIncomeParent = calc1.netIncome > calc2.netIncome ? 'parent1' : 'parent2';
@@ -238,8 +271,10 @@ function generateSaveDaysStrategy(
     totalIncome += periodIncome;
   }
   
-  const daysUsed = parent1Days + parent2Days;
+  const daysUsed = parent1Days + parent2Days + (simultaneousMonths * 30);
   const daysSaved = TOTAL_DAYS - daysUsed;
+  const totalDaysInPeriods = periods.reduce((sum, p) => sum + p.daysCount, 0);
+  const averageMonthlyIncome = totalDaysInPeriods > 0 ? (totalIncome / totalDaysInPeriods) * 30 : 0;
   
   return {
     strategy: 'save-days',
@@ -248,7 +283,8 @@ function generateSaveDaysStrategy(
     periods,
     totalIncome,
     daysUsed,
-    daysSaved
+    daysSaved,
+    averageMonthlyIncome
   };
 }
 
@@ -260,7 +296,8 @@ function generateMaxIncomeStrategy(
   parent1Days: number,
   parent2Days: number,
   minHouseholdIncome: number,
-  birthDate: Date
+  birthDate: Date,
+  simultaneousMonths: number = 0
 ): OptimizationResult {
   const periods: LeavePeriod[] = [];
   let currentDate = new Date(birthDate);
@@ -280,6 +317,24 @@ function generateMaxIncomeStrategy(
   });
   totalIncome += bothPeriodIncome;
   currentDate = addDays(bothPeriodEnd, 1);
+  
+  // Add additional simultaneous period if requested
+  if (simultaneousMonths > 0) {
+    const simultaneousDays = simultaneousMonths * 30;
+    const simultaneousPeriodEnd = addDays(currentDate, simultaneousDays - 1);
+    const simultaneousIncome = (calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay) * simultaneousDays;
+    periods.push({
+      parent: 'both',
+      startDate: new Date(currentDate),
+      endDate: simultaneousPeriodEnd,
+      daysCount: simultaneousDays,
+      dailyBenefit: calc1.parentalBenefitPerDay + calc2.parentalBenefitPerDay,
+      dailyIncome: simultaneousIncome / simultaneousDays,
+      benefitLevel: 'high'
+    });
+    totalIncome += simultaneousIncome;
+    currentDate = addDays(simultaneousPeriodEnd, 1);
+  }
   
   // Prioritize using parental salary days first (highest income)
   // Then use high benefit days
@@ -371,8 +426,10 @@ function generateMaxIncomeStrategy(
     highBenefitDaysLeft -= daysToUse;
   }
   
-  const daysUsed = parent1Days + parent2Days;
+  const daysUsed = parent1Days + parent2Days + (simultaneousMonths * 30);
   const daysSaved = TOTAL_DAYS - daysUsed;
+  const totalDaysInPeriods = periods.reduce((sum, p) => sum + p.daysCount, 0);
+  const averageMonthlyIncome = totalDaysInPeriods > 0 ? (totalIncome / totalDaysInPeriods) * 30 : 0;
   
   return {
     strategy: 'maximize-income',
@@ -381,7 +438,8 @@ function generateMaxIncomeStrategy(
     periods,
     totalIncome,
     daysUsed,
-    daysSaved
+    daysSaved,
+    averageMonthlyIncome
   };
 }
 

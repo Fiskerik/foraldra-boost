@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { municipalities } from "@/data/municipalities";
 
 interface MunicipalitySelectProps {
-  parentNumber: 1 | 2;
+  parentNumber: 0 | 1 | 2;
   selectedMunicipality: string;
   onMunicipalityChange: (municipality: string, taxRate: number) => void;
 }
@@ -31,7 +31,9 @@ export function MunicipalitySelect({
   onMunicipalityChange,
 }: MunicipalitySelectProps) {
   const [open, setOpen] = useState(false);
-  const parentClass = parentNumber === 1 ? "parent1" : "parent2";
+  const parentClass = parentNumber === 1 ? "parent1" : parentNumber === 2 ? "parent2" : "accent";
+  const headerClass = parentNumber === 0 ? 'bg-accent/10' : parentNumber === 1 ? 'bg-parent1/10' : 'bg-parent2/10';
+  const titleText = parentNumber === 0 ? 'Kommun (samma för båda föräldrarna)' : `Kommun - Förälder ${parentNumber}`;
   
   const currentMunicipality = municipalities.find(
     (m) => m.name === selectedMunicipality
@@ -39,9 +41,9 @@ export function MunicipalitySelect({
 
   return (
     <Card className="shadow-card">
-      <CardHeader>
+      <CardHeader className={headerClass}>
         <CardTitle className={`text-${parentClass}`}>
-          Kommun - Förälder {parentNumber}
+          {titleText}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
