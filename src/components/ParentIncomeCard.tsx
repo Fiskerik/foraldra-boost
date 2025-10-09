@@ -58,7 +58,9 @@ export function ParentIncomeCard({
             onCheckedChange={(checked) =>
               onCollectiveAgreementChange(checked === true)
             }
-            className={`data-[state=checked]:bg-${parentClass} data-[state=checked]:border-${parentClass}`}
+            className={parentNumber === 1 
+              ? "data-[state=checked]:bg-parent1 data-[state=checked]:border-parent1" 
+              : "data-[state=checked]:bg-parent2 data-[state=checked]:border-parent2"}
           />
           <Label
             htmlFor={`collective-${parentNumber}`}

@@ -26,7 +26,7 @@ export function TimelineChart({ periods, minHouseholdIncome }: TimelineChartProp
     periods.forEach(period => {
       if (period.startDate <= month && period.endDate >= month) {
         const daysInMonth = 30; // Simplified
-        income = period.dailyIncome;
+        income = period.dailyIncome * daysInMonth;
         
         if (period.parent === 'parent1') parent1Days = daysInMonth;
         else if (period.parent === 'parent2') parent2Days = daysInMonth;

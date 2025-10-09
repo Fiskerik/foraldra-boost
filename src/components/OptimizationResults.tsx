@@ -12,7 +12,12 @@ interface OptimizationResultsProps {
 export function OptimizationResults({ results, minHouseholdIncome }: OptimizationResultsProps) {
   return (
     <div className="space-y-8">
-      <h2 className="text-3xl font-bold text-center">Optimeringsförslag</h2>
+      <div className="text-center space-y-2">
+        <h2 className="text-3xl font-bold">Optimeringsförslag</h2>
+        <p className="text-sm text-muted-foreground">
+          * Föräldrapenning baseras på 7 dagar per vecka
+        </p>
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {results.map((result, index) => (
@@ -33,28 +38,32 @@ export function OptimizationResults({ results, minHouseholdIncome }: Optimizatio
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground mb-1">Total inkomst</div>
-                  <div className="text-xl font-bold">{formatCurrency(result.totalIncome)}</div>
-                </div>
-                <div className="p-4 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground mb-1">Genomsnitt/mån</div>
-                  <div className="text-xl font-bold">{formatCurrency(result.averageMonthlyIncome)}</div>
-                </div>
-                <div className="p-4 bg-accent/10 rounded-lg border border-accent/20">
-                  <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    Dagar använda
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-muted rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">Total inkomst</div>
+                    <div className="text-xl font-bold">{formatCurrency(result.totalIncome)}</div>
                   </div>
-                  <div className="text-xl font-bold">{result.daysUsed}</div>
-                </div>
-                <div className="p-4 bg-accent/10 rounded-lg border border-accent/20">
-                  <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                    <PiggyBank className="h-3 w-3" />
-                    Dagar sparade
+                  <div className="p-4 bg-muted rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">Genomsnitt/mån</div>
+                    <div className="text-xl font-bold">{formatCurrency(result.averageMonthlyIncome)}</div>
                   </div>
-                  <div className="text-xl font-bold text-accent">{result.daysSaved}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-accent/10 rounded-lg border border-accent/20">
+                    <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Dagar använda
+                    </div>
+                    <div className="text-xl font-bold">{result.daysUsed}</div>
+                  </div>
+                  <div className="p-4 bg-accent/10 rounded-lg border border-accent/20">
+                    <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                      <PiggyBank className="h-3 w-3" />
+                      Dagar sparade
+                    </div>
+                    <div className="text-xl font-bold text-accent">{result.daysSaved}</div>
+                  </div>
                 </div>
               </div>
               
