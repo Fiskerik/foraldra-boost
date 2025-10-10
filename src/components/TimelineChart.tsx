@@ -218,7 +218,7 @@ const monthlyData = months.map((month) => {
         </div>
         <div className="flex items-center gap-2">
           <div className="w-8 h-0.5 border-t-2 border-destructive border-dashed"></div>
-          <span>Min. hushållsinkomst</span>
+          <span>Min. hushållsinkomst ({formatCurrency(minHouseholdIncome)})</span>
         </div>
       </div>
     </div>

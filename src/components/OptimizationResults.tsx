@@ -109,6 +109,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                     const otherParentMonthlyIncome = (period.otherParentDailyIncome || 0) * 30;
                     const leaveBenefitMonthly = period.dailyBenefit * 30;
                     const householdMonthlyIncome = period.dailyIncome * 30;
+                    const leaveParentMonthlyIncome = householdMonthlyIncome - otherParentMonthlyIncome;
                     const periodTotalIncome = period.dailyIncome * period.daysCount;
                     
                     return (
@@ -140,9 +141,20 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           </div>
                           {period.parent !== 'both' && period.benefitLevel !== 'none' && (
                             <div className="mt-2 p-2 bg-muted/50 rounded space-y-1">
-                              <div className="text-xs text-muted-foreground">
-                                Lediga förälderns ersättning: {formatCurrency(leaveBenefitMonthly)}/mån
-                              </div>
+                              {period.daysPerWeek && period.daysPerWeek < 7 ? (
+                                <>
+                                  <div className="text-xs text-muted-foreground">
+                                    Lediga förälderns totala inkomst: {formatCurrency(leaveParentMonthlyIncome)}/mån
+                                  </div>
+                                  <div className="text-xs text-muted-foreground italic pl-2">
+                                    (varav {formatCurrency(leaveBenefitMonthly)}/mån föräldrapenning)
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-muted-foreground">
+                                  Lediga förälderns ersättning: {formatCurrency(leaveBenefitMonthly)}/mån
+                                </div>
+                              )}
                               <div className="text-xs text-muted-foreground">
                                 Arbetande förälderns lön (netto): {formatCurrency(otherParentMonthlyIncome)}/mån
                               </div>
