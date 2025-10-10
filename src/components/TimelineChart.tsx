@@ -62,6 +62,14 @@ const monthlyData = months.map((month) => {
   
   const yMax = roundToNice(yAxisMax);
   
+  const getColorForData = (d: typeof monthlyData[number]) => {
+    const maxDays = Math.max(d.parent1Days, d.parent2Days, d.bothDays);
+    if (maxDays <= 0) return 'hsl(var(--muted-foreground))';
+    if (d.bothDays === maxDays) return 'hsl(var(--accent))';
+    if (d.parent1Days === maxDays) return 'hsl(var(--parent1))';
+    return 'hsl(var(--parent2))';
+  };
+  
   if (import.meta.env.DEV) {
     // Debug: verify data passed to chart
     // eslint-disable-next-line no-console
@@ -105,7 +113,7 @@ const monthlyData = months.map((month) => {
         {/* Line chart */}
         <div className="absolute left-20 right-0 top-0 bottom-8">
           <svg className="w-full h-full" preserveAspectRatio="none">
-            {/* Draw lines between points */}
+            {/* Draw lines between points (black baseline + colored overlay) */}
             {monthlyData.map((data, index) => {
               if (index === monthlyData.length - 1) return null;
               
@@ -113,53 +121,60 @@ const monthlyData = months.map((month) => {
               const x2 = ((index + 1) / (monthlyData.length - 1)) * 100;
               const y1 = 100 - (data.income / yMax) * 100;
               const y2 = 100 - (monthlyData[index + 1].income / yMax) * 100;
-              
-              let strokeColor = 'hsl(0 0% 0%)'; // Black baseline
-              if (data.parent1Days > 0 && data.parent2Days === 0 && data.bothDays === 0) {
-                strokeColor = 'hsl(var(--parent1))';
-              } else if (data.parent2Days > 0 && data.parent1Days === 0 && data.bothDays === 0) {
-                strokeColor = 'hsl(var(--parent2))';
-              } else if (data.bothDays > 0) {
-                strokeColor = 'hsl(var(--accent))';
-              }
+              const color = getColorForData(data);
               
               return (
-                <line
-                  key={index}
-                  x1={`${x1}%`}
-                  y1={`${y1}%`}
-                  x2={`${x2}%`}
-                  y2={`${y2}%`}
-                  stroke={strokeColor}
-                  strokeWidth="2"
-                />
+                <g key={index}>
+                  <line
+                    x1={`${x1}%`}
+                    y1={`${y1}%`}
+                    x2={`${x2}%`}
+                    y2={`${y2}%`}
+                    stroke={'hsl(0 0% 0%)'}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    opacity="0.7"
+                  />
+                  <line
+                    x1={`${x1}%`}
+                    y1={`${y1}%`}
+                    x2={`${x2}%`}
+                    y2={`${y2}%`}
+                    stroke={color}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </g>
               );
             })}
             
-            {/* Draw points */}
+            {/* Draw points (colored only, no black dot) */}
             {monthlyData.map((data, index) => {
               const x = (index / (monthlyData.length - 1)) * 100;
               const y = 100 - (data.income / yMax) * 100;
-              
-              let fillColor = 'hsl(0 0% 0%)'; // Black baseline
-              if (data.parent1Days > 0 && data.parent2Days === 0 && data.bothDays === 0) {
-                fillColor = 'hsl(var(--parent1))';
-              } else if (data.parent2Days > 0 && data.parent1Days === 0 && data.bothDays === 0) {
-                fillColor = 'hsl(var(--parent2))';
-              } else if (data.bothDays > 0) {
-                fillColor = 'hsl(var(--accent))';
-              }
-              
+              const color = getColorForData(data);
+
               return (
                 <g key={index} className="group">
+                  {/* Larger invisible hover area for accessibility */}
+                  <circle
+                    cx={`${x}%`}
+                    cy={`${y}%`}
+                    r="10"
+                    fill="transparent"
+                    onMouseEnter={() => setHoveredPoint({ income: data.income, month: data.month })}
+                    onMouseLeave={() => setHoveredPoint(null)}
+                  />
+                  {/* Visible colored point */}
                   <circle
                     cx={`${x}%`}
                     cy={`${y}%`}
                     r="4"
-                    fill={fillColor}
-                    className="transition-all cursor-pointer"
-                    onMouseEnter={() => setHoveredPoint({ income: data.income, month: data.month })}
-                    onMouseLeave={() => setHoveredPoint(null)}
+                    fill={color}
+                    stroke={color}
+                    strokeWidth="1"
+                    className="transition-all"
+                    aria-label={`${data.month}: ${formatCurrency(data.income)}`}
                   />
                 </g>
               );

@@ -138,6 +138,7 @@ export function optimizeLeave(
   parent1Months: number,
   parent2Months: number,
   minHouseholdIncome: number,
+  daysPerWeek: number,
   simultaneousMonths: number = 0
 ): OptimizationResult[] {
   const calc1 = calculateAvailableIncome(parent1);
@@ -159,6 +160,7 @@ export function optimizeLeave(
     parent1Days,
     parent2Days,
     minHouseholdIncome,
+    daysPerWeek,
     birthDate,
     fixedEndDate,
     simultaneousMonths
@@ -173,6 +175,7 @@ export function optimizeLeave(
     parent1Days,
     parent2Days,
     minHouseholdIncome,
+    daysPerWeek,
     birthDate,
     fixedEndDate,
     simultaneousMonths
@@ -228,6 +231,7 @@ function generateSaveDaysStrategy(
   parent1Days: number,
   parent2Days: number,
   minHouseholdIncome: number,
+  daysPerWeek: number,
   birthDate: Date,
   endDate: Date,
   simultaneousMonths: number = 0
@@ -314,30 +318,20 @@ function generateSaveDaysStrategy(
     const otherCalc = chosenParent === 'parent1' ? calc2 : calc1;
     const remaining = chosenParent === 'parent1' ? p1Remaining : p2Remaining;
 
-    // Find minimum days per week needed to meet income requirement
-    let bestDaysPerWeek = 0;
-    let bestLeaveDays = 0;
-    let bestMonthlyIncome = 0;
+    // Use user-selected daysPerWeek to determine leave/work mix for the whole month
+    const includeSalary =
+      (chosenParent === 'parent1' ? parent1.hasCollectiveAgreement : parent2.hasCollectiveAgreement);
 
-    for (let dpw = 1; dpw <= 7; dpw++) {
-      const leaveDays = Math.min(Math.floor((dpw * monthDays) / 7), remaining);
-      const workDays = monthDays - leaveDays;
-      const includeSalary =
-        (chosenParent === 'parent1' ? parent1.hasCollectiveAgreement : parent2.hasCollectiveAgreement) &&
-        leaveDays > 0;
-      const parentLeaveDaily =
-        whoCalc.parentalBenefitPerDay + (includeSalary ? whoCalc.parentalSalaryPerDay : 0);
-      const leaveIncome = leaveDays * (parentLeaveDaily + otherCalc.netIncome / 30);
-      const workIncome = workDays * bothWorkDaily;
-      const monthlyIncome = leaveIncome + workIncome;
+    const bestDaysPerWeek = Math.max(1, Math.min(7, daysPerWeek));
+    const bestLeaveDays = Math.min(Math.floor((bestDaysPerWeek * monthDays) / 7), remaining);
+    const workDays = monthDays - bestLeaveDays;
 
-      bestDaysPerWeek = dpw;
-      bestLeaveDays = leaveDays;
-      bestMonthlyIncome = monthlyIncome;
+    const parentLeaveDaily =
+      whoCalc.parentalBenefitPerDay + (includeSalary ? whoCalc.parentalSalaryPerDay : 0);
 
-      // Stop at first dpw that meets requirement (minimize days/week)
-      if (monthlyIncome >= minHouseholdIncome) break;
-    }
+    const leaveIncome = bestLeaveDays * (parentLeaveDaily + otherCalc.netIncome / 30);
+    const workIncome = workDays * bothWorkDaily;
+    const bestMonthlyIncome = leaveIncome + workIncome;
 
     // Create single-parent leave period
     if (bestLeaveDays > 0) {
@@ -436,6 +430,7 @@ function generateMaxIncomeStrategy(
   parent1Days: number,
   parent2Days: number,
   minHouseholdIncome: number,
+  daysPerWeek: number,
   birthDate: Date,
   endDate: Date,
   simultaneousMonths: number = 0
