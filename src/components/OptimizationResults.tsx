@@ -108,6 +108,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                     
                     const otherParentMonthlyIncome = (period.otherParentDailyIncome || 0) * 30;
                     const leaveBenefitMonthly = period.dailyBenefit * 30;
+                    const householdMonthlyIncome = period.dailyIncome * 30;
                     const periodTotalIncome = period.dailyIncome * period.daysCount;
                     
                     return (
@@ -146,7 +147,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                 Arbetande förälderns lön (netto): {formatCurrency(otherParentMonthlyIncome)}/mån
                               </div>
                               <div className="text-xs font-semibold border-t border-border pt-1 mt-1">
-                                Hushållets månadsinkomst: {formatCurrency(leaveBenefitMonthly + otherParentMonthlyIncome)}
+                                Hushållets månadsinkomst: {formatCurrency(householdMonthlyIncome)}
                               </div>
                             </div>
                           )}

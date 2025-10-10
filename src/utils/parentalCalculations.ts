@@ -95,14 +95,20 @@ function calculateParentMonthlyIncomeDuringLeave(
     return calc.netIncome;
   }
 
-  const leaveDaysPerMonth = Math.min(30, Math.max(0, daysPerWeek * WEEKS_PER_MONTH));
-  const leaveDailyNet = calc.parentalBenefitPerDay + (includeParentalSalary ? calc.parentalSalaryPerDay : 0);
-  const leaveIncome = leaveDailyNet * leaveDaysPerMonth;
-  const workDays = Math.max(0, 30 - leaveDaysPerMonth);
-  const workDailyNet = calc.netIncome / 30;
-  const workIncome = workDailyNet * workDays;
+  if (daysPerWeek >= 7) {
+    // Full-time leave: only parental benefit + parental salary
+    const leaveDailyNet = calc.parentalBenefitPerDay + (includeParentalSalary ? calc.parentalSalaryPerDay : 0);
+    return leaveDailyNet * 30;
+  }
 
-  return leaveIncome + workIncome;
+  // Partial leave: combine leave benefits with partial work income
+  const leaveDaysPerMonth = daysPerWeek * WEEKS_PER_MONTH;
+  const workDaysPerMonth = 30 - leaveDaysPerMonth;
+  
+  const leaveDailyNet = calc.parentalBenefitPerDay + (includeParentalSalary ? calc.parentalSalaryPerDay : 0);
+  const workDailyNet = calc.netIncome / 30;
+  
+  return (leaveDailyNet * leaveDaysPerMonth) + (workDailyNet * workDaysPerMonth);
 }
 
 export function calculateAvailableIncome(parent: ParentData): CalculationResult {
