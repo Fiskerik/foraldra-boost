@@ -33,6 +33,8 @@ export interface LeavePeriod {
   dailyBenefit: number;
   dailyIncome: number;
   benefitLevel: 'parental-salary' | 'high' | 'low' | 'none';
+  daysPerWeek?: number;
+  otherParentDailyIncome?: number;
 }
 
 const PARENTAL_BENEFIT_CEILING = 49000; // SEK per month before tax
@@ -200,7 +202,9 @@ export function optimizeLeave(
           daysCount: remainingDays,
           dailyBenefit: 0,
           dailyIncome: (calc1.netIncome + calc2.netIncome) / 30,
-          benefitLevel: 'none'
+          benefitLevel: 'none',
+          daysPerWeek: 0,
+          otherParentDailyIncome: calc2.netIncome / 30
         });
       }
     }
@@ -253,7 +257,9 @@ function generateSaveDaysStrategy(
     daysCount: 10,
     dailyBenefit: bothDailyBenefit,
     dailyIncome: bothPeriodIncome / 10,
-    benefitLevel: 'high'
+    benefitLevel: 'high',
+    daysPerWeek: 7,
+    otherParentDailyIncome: 0
   });
   totalIncome += bothPeriodIncome;
   currentDate = addDays(bothPeriodEnd, 1);
@@ -291,7 +297,9 @@ function generateSaveDaysStrategy(
         daysCount: monthDays,
         dailyBenefit: 0,
         dailyIncome: bothWorkDaily,
-        benefitLevel: 'none'
+        benefitLevel: 'none',
+        daysPerWeek: 0,
+        otherParentDailyIncome: calc2.netIncome / 30
       });
       totalIncome += monthDays * bothWorkDaily;
       currentDate = addDays(currentDate, monthDays);
@@ -318,12 +326,23 @@ function generateSaveDaysStrategy(
     const otherCalc = chosenParent === 'parent1' ? calc2 : calc1;
     const remaining = chosenParent === 'parent1' ? p1Remaining : p2Remaining;
 
-    // Use user-selected daysPerWeek to determine leave/work mix for the whole month
+    // Prioritize continuous full-time leave blocks for parental salary eligibility
     const includeSalary =
       (chosenParent === 'parent1' ? parent1.hasCollectiveAgreement : parent2.hasCollectiveAgreement);
 
-    const bestDaysPerWeek = Math.max(1, Math.min(7, daysPerWeek));
-    const bestLeaveDays = Math.min(Math.floor((bestDaysPerWeek * monthDays) / 7), remaining);
+    // Prefer full months (7 days/week) when possible, especially for parental salary
+    let bestDaysPerWeek = 7;
+    let bestLeaveDays = Math.min(monthDays, remaining);
+    
+    // Only reduce to partial weeks if we can't afford full month
+    if (bestLeaveDays >= monthDays) {
+      bestDaysPerWeek = 7;
+    } else {
+      // Use user-selected daysPerWeek only if we can't do full month
+      bestDaysPerWeek = Math.max(1, Math.min(7, daysPerWeek));
+      bestLeaveDays = Math.min(Math.floor((bestDaysPerWeek * monthDays) / 7), remaining);
+    }
+
     const workDays = monthDays - bestLeaveDays;
 
     const parentLeaveDaily =
@@ -352,7 +371,9 @@ function generateSaveDaysStrategy(
         dailyBenefit:
           whoCalc.parentalBenefitPerDay + (includeSalary ? whoCalc.parentalSalaryPerDay : 0),
         dailyIncome: leaveDailyIncome,
-        benefitLevel: includeSalary ? 'parental-salary' : 'high'
+        benefitLevel: includeSalary ? 'parental-salary' : 'high',
+        daysPerWeek: bestDaysPerWeek,
+        otherParentDailyIncome: otherCalc.netIncome / 30
       });
       totalIncome += bestLeaveDays * leaveDailyIncome;
 
@@ -374,7 +395,9 @@ function generateSaveDaysStrategy(
           daysCount: workDays,
           dailyBenefit: 0,
           dailyIncome: bothWorkDaily,
-          benefitLevel: 'none'
+          benefitLevel: 'none',
+          daysPerWeek: 0,
+          otherParentDailyIncome: calc2.netIncome / 30
         });
         totalIncome += workDays * bothWorkDaily;
       }
@@ -387,7 +410,9 @@ function generateSaveDaysStrategy(
         daysCount: monthDays,
         dailyBenefit: 0,
         dailyIncome: bothWorkDaily,
-        benefitLevel: 'none'
+        benefitLevel: 'none',
+        daysPerWeek: 0,
+        otherParentDailyIncome: calc2.netIncome / 30
       });
       totalIncome += monthDays * bothWorkDaily;
     }
@@ -452,7 +477,9 @@ function generateMaxIncomeStrategy(
     daysCount: 10,
     dailyBenefit: bothDailyBenefit,
     dailyIncome: bothPeriodIncome / 10,
-    benefitLevel: 'high'
+    benefitLevel: 'high',
+    daysPerWeek: 7,
+    otherParentDailyIncome: 0
   });
   totalIncome += bothPeriodIncome;
   currentDate = addDays(bothPeriodEnd, 1);
@@ -477,7 +504,9 @@ function generateMaxIncomeStrategy(
         daysCount: allowedSimultaneousDays,
         dailyBenefit: simultaneousDailyBenefit,
         dailyIncome: simultaneousIncome / allowedSimultaneousDays,
-        benefitLevel: 'high'
+        benefitLevel: 'high',
+        daysPerWeek: 7,
+        otherParentDailyIncome: 0
       });
       totalIncome += simultaneousIncome;
       currentDate = addDays(simultaneousPeriodEnd, 1);
@@ -521,7 +550,9 @@ function generateMaxIncomeStrategy(
         daysCount: daysToUse,
         dailyBenefit: whoCalc.parentalBenefitPerDay + whoCalc.parentalSalaryPerDay,
         dailyIncome: dailyLeaveIncome,
-        benefitLevel: 'parental-salary'
+        benefitLevel: 'parental-salary',
+        daysPerWeek: 7,
+        otherParentDailyIncome: otherCalc.netIncome / 30
       });
       totalIncome += periodIncome;
       if (who === 'parent1') {
@@ -552,7 +583,9 @@ function generateMaxIncomeStrategy(
         daysCount: daysToUse,
         dailyBenefit: whoCalc.parentalBenefitPerDay,
         dailyIncome: periodIncome / daysToUse,
-        benefitLevel: 'high'
+        benefitLevel: 'high',
+        daysPerWeek: 7,
+        otherParentDailyIncome: otherCalc.netIncome / 30
       });
       totalIncome += periodIncome;
       if (who === 'parent1') {

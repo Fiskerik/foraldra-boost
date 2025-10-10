@@ -13,17 +13,18 @@ import { toast } from "sonner";
 const Index = () => {
   const [parent1Income, setParent1Income] = useState(30000);
   const [parent2Income, setParent2Income] = useState(55000);
-  const [parent1HasAgreement, setParent1HasAgreement] = useState(false);
+  const [parent1HasAgreement, setParent1HasAgreement] = useState(true);
   const [parent2HasAgreement, setParent2HasAgreement] = useState(false);
   const [municipality, setMunicipality] = useState("Vallentuna");
   const [taxRate, setTaxRate] = useState(30.2);
-  const [totalMonths, setTotalMonths] = useState(12);
-  const [parent1Months, setParent1Months] = useState(6);
-  const [householdIncome, setHouseholdIncome] = useState(30000);
+  const [totalMonths, setTotalMonths] = useState(15);
+  const [parent1Months, setParent1Months] = useState(10);
+  const [householdIncome, setHouseholdIncome] = useState(45000);
   const [simultaneousLeave, setSimultaneousLeave] = useState(false);
   const [simultaneousMonths, setSimultaneousMonths] = useState(0);
   const [daysPerWeek, setDaysPerWeek] = useState(5);
   const [optimizationResults, setOptimizationResults] = useState<OptimizationResult[] | null>(null);
+  const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
 
   const parent2Months = totalMonths - parent1Months;
   const maxHouseholdIncome = parent1Income + parent2Income;
@@ -182,6 +183,8 @@ const Index = () => {
             <OptimizationResults 
               results={optimizationResults} 
               minHouseholdIncome={householdIncome}
+              selectedIndex={selectedStrategyIndex}
+              onSelectStrategy={setSelectedStrategyIndex}
             />
           </div>
         )}
@@ -193,10 +196,10 @@ const Index = () => {
             totalMonths={totalMonths}
             parent1Months={parent1Months}
             daysPerWeek={daysPerWeek}
-            currentHouseholdIncome={optimizationResults[0]?.averageMonthlyIncome || 0}
-            totalIncome={optimizationResults[0]?.totalIncome}
-            daysUsed={optimizationResults[0]?.daysUsed}
-            daysSaved={optimizationResults[0]?.daysSaved}
+            currentHouseholdIncome={optimizationResults[selectedStrategyIndex]?.averageMonthlyIncome || 0}
+            totalIncome={optimizationResults[selectedStrategyIndex]?.totalIncome}
+            daysUsed={optimizationResults[selectedStrategyIndex]?.daysUsed}
+            daysSaved={optimizationResults[selectedStrategyIndex]?.daysSaved}
             onHouseholdIncomeChange={handleHouseholdIncomeChange}
             onDistributionChange={handleDistributionChange}
             onDaysPerWeekChange={handleDaysPerWeekChange}

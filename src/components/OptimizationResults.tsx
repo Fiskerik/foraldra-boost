@@ -7,9 +7,11 @@ import { Calendar, TrendingUp, PiggyBank, Users, Clock } from "lucide-react";
 interface OptimizationResultsProps {
   results: OptimizationResult[];
   minHouseholdIncome: number;
+  selectedIndex: number;
+  onSelectStrategy: (index: number) => void;
 }
 
-export function OptimizationResults({ results, minHouseholdIncome }: OptimizationResultsProps) {
+export function OptimizationResults({ results, minHouseholdIncome, selectedIndex, onSelectStrategy }: OptimizationResultsProps) {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
@@ -21,7 +23,15 @@ export function OptimizationResults({ results, minHouseholdIncome }: Optimizatio
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {results.map((result, index) => (
-          <Card key={index} className="shadow-soft">
+          <Card 
+            key={index} 
+            className={`shadow-soft cursor-pointer transition-all ${
+              selectedIndex === index 
+                ? 'ring-4 ring-primary shadow-xl scale-[1.02]' 
+                : 'hover:shadow-lg'
+            }`}
+            onClick={() => onSelectStrategy(index)}
+          >
             <CardHeader className={`${result.strategy === 'save-days' ? 'bg-parent1/10' : 'bg-parent2/10'}`}>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
@@ -92,6 +102,14 @@ export function OptimizationResults({ results, minHouseholdIncome }: Optimizatio
                       period.benefitLevel === 'high' ? 'Hög föräldrapenning (80%)' :
                       period.benefitLevel === 'low' ? 'Låg föräldrapenning' : 'Ingen ersättning';
                     
+                    const daysPerWeekLabel = period.daysPerWeek 
+                      ? `${period.daysPerWeek} ${period.daysPerWeek === 1 ? 'dag' : 'dagar'}/vecka`
+                      : 'Heltid';
+                    
+                    const otherParentMonthlyIncome = (period.otherParentDailyIncome || 0) * 30;
+                    const leaveBenefitMonthly = period.dailyBenefit * 30;
+                    const periodTotalIncome = period.dailyIncome * period.daysCount;
+                    
                     return (
                       <div
                         key={periodIndex}
@@ -117,10 +135,23 @@ export function OptimizationResults({ results, minHouseholdIncome }: Optimizatio
                             {benefitLabel}
                           </div>
                           <div className="text-muted-foreground">
-                            Hushållets dagsinkomst: {formatCurrency(period.dailyIncome)}
+                            Uttag: {daysPerWeekLabel}
                           </div>
-                          <div className="font-semibold text-sm mt-2">
-                            Periodinkomst: {formatCurrency(period.dailyIncome * period.daysCount)}
+                          {period.parent !== 'both' && period.benefitLevel !== 'none' && (
+                            <div className="mt-2 p-2 bg-muted/50 rounded space-y-1">
+                              <div className="text-xs text-muted-foreground">
+                                Lediga förälderns ersättning: {formatCurrency(leaveBenefitMonthly)}/mån
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Arbetande förälderns lön (netto): {formatCurrency(otherParentMonthlyIncome)}/mån
+                              </div>
+                              <div className="text-xs font-semibold border-t border-border pt-1 mt-1">
+                                Hushållets månadsinkomst: {formatCurrency(leaveBenefitMonthly + otherParentMonthlyIncome)}
+                              </div>
+                            </div>
+                          )}
+                          <div className="font-semibold text-sm mt-2 pt-2 border-t border-border">
+                            Periodinkomst: {formatCurrency(periodTotalIncome)}
                           </div>
                         </div>
                       </div>
