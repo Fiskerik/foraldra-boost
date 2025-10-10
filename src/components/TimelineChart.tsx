@@ -22,7 +22,8 @@ const months = eachMonthOfInterval({ start: startDate, end: endDate });
 const monthlyData = months.map((month) => {
   const mStart = startOfMonth(month);
   const mEnd = endOfMonth(month);
-  let income = 0;
+  let incomeDaysSum = 0;
+  let daysCovered = 0;
   let parent1Days = 0;
   let parent2Days = 0;
   let bothDays = 0;
@@ -34,12 +35,16 @@ const monthlyData = months.map((month) => {
     if (!hasOverlap) return;
 
     const daysInOverlap = differenceInCalendarDays(overlapEnd, overlapStart) + 1;
-    income += period.dailyIncome * daysInOverlap;
+    incomeDaysSum += period.dailyIncome * daysInOverlap;
+    daysCovered += daysInOverlap;
 
     if (period.parent === 'parent1') parent1Days += daysInOverlap;
     else if (period.parent === 'parent2') parent2Days += daysInOverlap;
     else if (period.parent === 'both' && period.benefitLevel !== 'none') bothDays += daysInOverlap; // count only true double-leave
   });
+
+  const avgDaily = daysCovered > 0 ? incomeDaysSum / daysCovered : 0;
+  const income = avgDaily * 30; // normalize to 30-day month for a stable baseline
 
   return {
     month: format(month, 'MMM yyyy', { locale: sv }),

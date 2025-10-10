@@ -273,44 +273,56 @@ function generateSaveDaysStrategy(
   if (parent1SalaryMonths > 0 && parent1.hasCollectiveAgreement) {
     const salaryDays = parent1SalaryMonths * 30;
     const salaryPeriodEnd = addDays(currentDate, salaryDays - 1);
-    const dailyBenefitWithSalary = calc1.parentalBenefitPerDay + calc1.parentalSalaryPerDay;
-    const dailyIncomeWithSalary = dailyBenefitWithSalary + calc2.netIncome / 30;
-    
-    periods.push({
-      parent: 'parent1',
-      startDate: new Date(currentDate),
-      endDate: salaryPeriodEnd,
-      daysCount: salaryDays,
-      dailyBenefit: dailyBenefitWithSalary,
-      dailyIncome: dailyIncomeWithSalary,
-      benefitLevel: 'parental-salary',
-      daysPerWeek: 7,
-      otherParentDailyIncome: calc2.netIncome / 30
-    });
-    totalIncome += salaryDays * dailyIncomeWithSalary;
-    currentDate = addDays(salaryPeriodEnd, 1);
-    parent1RemainingDays -= salaryDays;
+const leaveDaysPerMonth = Math.min(30, Math.max(0, daysPerWeek * WEEKS_PER_MONTH));
+const leaveDailyNetWithSalary = calc1.parentalBenefitPerDay + calc1.parentalSalaryPerDay;
+const monthlyBenefit = leaveDailyNetWithSalary * leaveDaysPerMonth;
+const leaveParentMonthlyIncome = calculateParentMonthlyIncomeDuringLeave(calc1, daysPerWeek, true);
+const householdMonthlyIncome = leaveParentMonthlyIncome + calc2.netIncome;
+const dailyIncomeAvg = householdMonthlyIncome / 30;
+const dailyBenefitAvg = monthlyBenefit / 30;
+
+periods.push({
+  parent: 'parent1',
+  startDate: new Date(currentDate),
+  endDate: salaryPeriodEnd,
+  daysCount: salaryDays,
+  dailyBenefit: dailyBenefitAvg,
+  dailyIncome: dailyIncomeAvg,
+  benefitLevel: 'parental-salary',
+  daysPerWeek: daysPerWeek,
+  otherParentDailyIncome: calc2.netIncome / 30
+});
+
+totalIncome += salaryDays * dailyIncomeAvg;
+currentDate = addDays(salaryPeriodEnd, 1);
+parent1RemainingDays -= salaryDays;
   }
 
   // 3. Parent 1 continues without parental salary (if they have more months)
   if (parent1RemainingDays > 0) {
     const remainingPeriodEnd = addDays(currentDate, parent1RemainingDays - 1);
-    const dailyBenefitNoSalary = calc1.parentalBenefitPerDay;
-    const dailyIncomeNoSalary = dailyBenefitNoSalary + calc2.netIncome / 30;
-    
-    periods.push({
-      parent: 'parent1',
-      startDate: new Date(currentDate),
-      endDate: remainingPeriodEnd,
-      daysCount: parent1RemainingDays,
-      dailyBenefit: dailyBenefitNoSalary,
-      dailyIncome: dailyIncomeNoSalary,
-      benefitLevel: 'high',
-      daysPerWeek: 7,
-      otherParentDailyIncome: calc2.netIncome / 30
-    });
-    totalIncome += parent1RemainingDays * dailyIncomeNoSalary;
-    currentDate = addDays(remainingPeriodEnd, 1);
+const leaveDaysPerMonth = Math.min(30, Math.max(0, daysPerWeek * WEEKS_PER_MONTH));
+const leaveDailyNet = calc1.parentalBenefitPerDay;
+const monthlyBenefit = leaveDailyNet * leaveDaysPerMonth;
+const leaveParentMonthlyIncome = calculateParentMonthlyIncomeDuringLeave(calc1, daysPerWeek, false);
+const householdMonthlyIncome = leaveParentMonthlyIncome + calc2.netIncome;
+const dailyIncomeAvg = householdMonthlyIncome / 30;
+const dailyBenefitAvg = monthlyBenefit / 30;
+
+periods.push({
+  parent: 'parent1',
+  startDate: new Date(currentDate),
+  endDate: remainingPeriodEnd,
+  daysCount: parent1RemainingDays,
+  dailyBenefit: dailyBenefitAvg,
+  dailyIncome: dailyIncomeAvg,
+  benefitLevel: 'high',
+  daysPerWeek: daysPerWeek,
+  otherParentDailyIncome: calc2.netIncome / 30
+});
+
+totalIncome += parent1RemainingDays * dailyIncomeAvg;
+currentDate = addDays(remainingPeriodEnd, 1);
   }
 
   // 4. Parent 2 home for their allocated months
@@ -322,44 +334,56 @@ function generateSaveDaysStrategy(
   if (parent2SalaryMonths > 0 && parent2.hasCollectiveAgreement) {
     const salaryDays = parent2SalaryMonths * 30;
     const salaryPeriodEnd = addDays(currentDate, salaryDays - 1);
-    const dailyBenefitWithSalary = calc2.parentalBenefitPerDay + calc2.parentalSalaryPerDay;
-    const dailyIncomeWithSalary = dailyBenefitWithSalary + calc1.netIncome / 30;
-    
-    periods.push({
-      parent: 'parent2',
-      startDate: new Date(currentDate),
-      endDate: salaryPeriodEnd,
-      daysCount: salaryDays,
-      dailyBenefit: dailyBenefitWithSalary,
-      dailyIncome: dailyIncomeWithSalary,
-      benefitLevel: 'parental-salary',
-      daysPerWeek: 7,
-      otherParentDailyIncome: calc1.netIncome / 30
-    });
-    totalIncome += salaryDays * dailyIncomeWithSalary;
-    currentDate = addDays(salaryPeriodEnd, 1);
-    parent2RemainingDays -= salaryDays;
+const leaveDaysPerMonth = Math.min(30, Math.max(0, daysPerWeek * WEEKS_PER_MONTH));
+const leaveDailyNetWithSalary = calc2.parentalBenefitPerDay + calc2.parentalSalaryPerDay;
+const monthlyBenefit = leaveDailyNetWithSalary * leaveDaysPerMonth;
+const leaveParentMonthlyIncome = calculateParentMonthlyIncomeDuringLeave(calc2, daysPerWeek, true);
+const householdMonthlyIncome = leaveParentMonthlyIncome + calc1.netIncome;
+const dailyIncomeAvg = householdMonthlyIncome / 30;
+const dailyBenefitAvg = monthlyBenefit / 30;
+
+periods.push({
+  parent: 'parent2',
+  startDate: new Date(currentDate),
+  endDate: salaryPeriodEnd,
+  daysCount: salaryDays,
+  dailyBenefit: dailyBenefitAvg,
+  dailyIncome: dailyIncomeAvg,
+  benefitLevel: 'parental-salary',
+  daysPerWeek: daysPerWeek,
+  otherParentDailyIncome: calc1.netIncome / 30
+});
+
+totalIncome += salaryDays * dailyIncomeAvg;
+currentDate = addDays(salaryPeriodEnd, 1);
+parent2RemainingDays -= salaryDays;
   }
 
   // Parent 2 continues without parental salary (if they have more months)
   if (parent2RemainingDays > 0) {
     const remainingPeriodEnd = addDays(currentDate, parent2RemainingDays - 1);
-    const dailyBenefitNoSalary = calc2.parentalBenefitPerDay;
-    const dailyIncomeNoSalary = dailyBenefitNoSalary + calc1.netIncome / 30;
-    
-    periods.push({
-      parent: 'parent2',
-      startDate: new Date(currentDate),
-      endDate: remainingPeriodEnd,
-      daysCount: parent2RemainingDays,
-      dailyBenefit: dailyBenefitNoSalary,
-      dailyIncome: dailyIncomeNoSalary,
-      benefitLevel: 'high',
-      daysPerWeek: 7,
-      otherParentDailyIncome: calc1.netIncome / 30
-    });
-    totalIncome += parent2RemainingDays * dailyIncomeNoSalary;
-    currentDate = addDays(remainingPeriodEnd, 1);
+const leaveDaysPerMonth = Math.min(30, Math.max(0, daysPerWeek * WEEKS_PER_MONTH));
+const leaveDailyNet = calc2.parentalBenefitPerDay;
+const monthlyBenefit = leaveDailyNet * leaveDaysPerMonth;
+const leaveParentMonthlyIncome = calculateParentMonthlyIncomeDuringLeave(calc2, daysPerWeek, false);
+const householdMonthlyIncome = leaveParentMonthlyIncome + calc1.netIncome;
+const dailyIncomeAvg = householdMonthlyIncome / 30;
+const dailyBenefitAvg = monthlyBenefit / 30;
+
+periods.push({
+  parent: 'parent2',
+  startDate: new Date(currentDate),
+  endDate: remainingPeriodEnd,
+  daysCount: parent2RemainingDays,
+  dailyBenefit: dailyBenefitAvg,
+  dailyIncome: dailyIncomeAvg,
+  benefitLevel: 'high',
+  daysPerWeek: daysPerWeek,
+  otherParentDailyIncome: calc1.netIncome / 30
+});
+
+totalIncome += parent2RemainingDays * dailyIncomeAvg;
+currentDate = addDays(remainingPeriodEnd, 1);
   }
 
   // If there's remaining time until endDate, both work
@@ -455,44 +479,57 @@ function generateMaxIncomeStrategy(
   if (parent1SalaryMonths > 0 && parent1.hasCollectiveAgreement) {
     const salaryDays = parent1SalaryMonths * 30;
     const salaryPeriodEnd = addDays(currentDate, salaryDays - 1);
-    const dailyBenefitWithSalary = calc1.parentalBenefitPerDay + calc1.parentalSalaryPerDay;
-    const dailyIncomeWithSalary = dailyBenefitWithSalary + calc2.netIncome / 30;
-    
-    periods.push({
-      parent: 'parent1',
-      startDate: new Date(currentDate),
-      endDate: salaryPeriodEnd,
-      daysCount: salaryDays,
-      dailyBenefit: dailyBenefitWithSalary,
-      dailyIncome: dailyIncomeWithSalary,
-      benefitLevel: 'parental-salary',
-      daysPerWeek: 7,
-      otherParentDailyIncome: calc2.netIncome / 30
-    });
-    totalIncome += salaryDays * dailyIncomeWithSalary;
-    currentDate = addDays(salaryPeriodEnd, 1);
-    parent1RemainingDays -= salaryDays;
+const daysPw = 7;
+const leaveDaysPerMonth = 30;
+const leaveDailyNetWithSalary = calc1.parentalBenefitPerDay + calc1.parentalSalaryPerDay;
+const monthlyBenefit = leaveDailyNetWithSalary * leaveDaysPerMonth;
+const leaveParentMonthlyIncome = calculateParentMonthlyIncomeDuringLeave(calc1, daysPw, true);
+const householdMonthlyIncome = leaveParentMonthlyIncome + calc2.netIncome;
+const dailyIncomeAvg = householdMonthlyIncome / 30;
+const dailyBenefitAvg = monthlyBenefit / 30;
+
+periods.push({
+  parent: 'parent1',
+  startDate: new Date(currentDate),
+  endDate: salaryPeriodEnd,
+  daysCount: salaryDays,
+  dailyBenefit: dailyBenefitAvg,
+  dailyIncome: dailyIncomeAvg,
+  benefitLevel: 'parental-salary',
+  daysPerWeek: daysPw,
+  otherParentDailyIncome: calc2.netIncome / 30
+});
+
+totalIncome += salaryDays * dailyIncomeAvg;
+currentDate = addDays(salaryPeriodEnd, 1);
+parent1RemainingDays -= salaryDays;
   }
 
   // 3. Parent 1 continues without parental salary (if they have more months)
   if (parent1RemainingDays > 0) {
     const remainingPeriodEnd = addDays(currentDate, parent1RemainingDays - 1);
-    const dailyBenefitNoSalary = calc1.parentalBenefitPerDay;
-    const dailyIncomeNoSalary = dailyBenefitNoSalary + calc2.netIncome / 30;
+const daysPw = 7;
+const leaveDaysPerMonth = 30;
+const leaveDailyNet = calc1.parentalBenefitPerDay;
+const monthlyBenefit = leaveDailyNet * leaveDaysPerMonth;
+const leaveParentMonthlyIncome = calculateParentMonthlyIncomeDuringLeave(calc1, daysPw, false);
+const householdMonthlyIncome = leaveParentMonthlyIncome + calc2.netIncome;
+const dailyIncomeAvg = householdMonthlyIncome / 30;
+const dailyBenefitAvg = monthlyBenefit / 30;
     
-    periods.push({
-      parent: 'parent1',
-      startDate: new Date(currentDate),
-      endDate: remainingPeriodEnd,
-      daysCount: parent1RemainingDays,
-      dailyBenefit: dailyBenefitNoSalary,
-      dailyIncome: dailyIncomeNoSalary,
-      benefitLevel: 'high',
-      daysPerWeek: 7,
-      otherParentDailyIncome: calc2.netIncome / 30
-    });
-    totalIncome += parent1RemainingDays * dailyIncomeNoSalary;
-    currentDate = addDays(remainingPeriodEnd, 1);
+periods.push({
+  parent: 'parent1',
+  startDate: new Date(currentDate),
+  endDate: remainingPeriodEnd,
+  daysCount: parent1RemainingDays,
+  dailyBenefit: dailyBenefitAvg,
+  dailyIncome: dailyIncomeAvg,
+  benefitLevel: 'high',
+  daysPerWeek: daysPw,
+  otherParentDailyIncome: calc2.netIncome / 30
+});
+ totalIncome += parent1RemainingDays * dailyIncomeAvg;
+ currentDate = addDays(remainingPeriodEnd, 1);
   }
 
   // 4. Parent 2 home for their allocated months
@@ -504,44 +541,56 @@ function generateMaxIncomeStrategy(
   if (parent2SalaryMonths > 0 && parent2.hasCollectiveAgreement) {
     const salaryDays = parent2SalaryMonths * 30;
     const salaryPeriodEnd = addDays(currentDate, salaryDays - 1);
-    const dailyBenefitWithSalary = calc2.parentalBenefitPerDay + calc2.parentalSalaryPerDay;
-    const dailyIncomeWithSalary = dailyBenefitWithSalary + calc1.netIncome / 30;
+const daysPw = 7;
+const leaveDaysPerMonth = 30;
+const leaveDailyNetWithSalary = calc2.parentalBenefitPerDay + calc2.parentalSalaryPerDay;
+const monthlyBenefit = leaveDailyNetWithSalary * leaveDaysPerMonth;
+const leaveParentMonthlyIncome = calculateParentMonthlyIncomeDuringLeave(calc2, daysPw, true);
+const householdMonthlyIncome = leaveParentMonthlyIncome + calc1.netIncome;
+const dailyIncomeAvg = householdMonthlyIncome / 30;
+const dailyBenefitAvg = monthlyBenefit / 30;
     
-    periods.push({
-      parent: 'parent2',
-      startDate: new Date(currentDate),
-      endDate: salaryPeriodEnd,
-      daysCount: salaryDays,
-      dailyBenefit: dailyBenefitWithSalary,
-      dailyIncome: dailyIncomeWithSalary,
-      benefitLevel: 'parental-salary',
-      daysPerWeek: 7,
-      otherParentDailyIncome: calc1.netIncome / 30
-    });
-    totalIncome += salaryDays * dailyIncomeWithSalary;
-    currentDate = addDays(salaryPeriodEnd, 1);
-    parent2RemainingDays -= salaryDays;
+periods.push({
+  parent: 'parent2',
+  startDate: new Date(currentDate),
+  endDate: salaryPeriodEnd,
+  daysCount: salaryDays,
+  dailyBenefit: dailyBenefitAvg,
+  dailyIncome: dailyIncomeAvg,
+  benefitLevel: 'parental-salary',
+  daysPerWeek: daysPw,
+  otherParentDailyIncome: calc1.netIncome / 30
+});
+ totalIncome += salaryDays * dailyIncomeAvg;
+ currentDate = addDays(salaryPeriodEnd, 1);
+ parent2RemainingDays -= salaryDays;
   }
 
   // Parent 2 continues without parental salary (if they have more months)
   if (parent2RemainingDays > 0) {
     const remainingPeriodEnd = addDays(currentDate, parent2RemainingDays - 1);
-    const dailyBenefitNoSalary = calc2.parentalBenefitPerDay;
-    const dailyIncomeNoSalary = dailyBenefitNoSalary + calc1.netIncome / 30;
+const daysPw = 7;
+const leaveDaysPerMonth = 30;
+const leaveDailyNet = calc2.parentalBenefitPerDay;
+const monthlyBenefit = leaveDailyNet * leaveDaysPerMonth;
+const leaveParentMonthlyIncome = calculateParentMonthlyIncomeDuringLeave(calc2, daysPw, false);
+const householdMonthlyIncome = leaveParentMonthlyIncome + calc1.netIncome;
+const dailyIncomeAvg = householdMonthlyIncome / 30;
+const dailyBenefitAvg = monthlyBenefit / 30;
     
-    periods.push({
-      parent: 'parent2',
-      startDate: new Date(currentDate),
-      endDate: remainingPeriodEnd,
-      daysCount: parent2RemainingDays,
-      dailyBenefit: dailyBenefitNoSalary,
-      dailyIncome: dailyIncomeNoSalary,
-      benefitLevel: 'high',
-      daysPerWeek: 7,
-      otherParentDailyIncome: calc1.netIncome / 30
-    });
-    totalIncome += parent2RemainingDays * dailyIncomeNoSalary;
-    currentDate = addDays(remainingPeriodEnd, 1);
+periods.push({
+  parent: 'parent2',
+  startDate: new Date(currentDate),
+  endDate: remainingPeriodEnd,
+  daysCount: parent2RemainingDays,
+  dailyBenefit: dailyBenefitAvg,
+  dailyIncome: dailyIncomeAvg,
+  benefitLevel: 'high',
+  daysPerWeek: daysPw,
+  otherParentDailyIncome: calc1.netIncome / 30
+});
+ totalIncome += parent2RemainingDays * dailyIncomeAvg;
+ currentDate = addDays(remainingPeriodEnd, 1);
   }
 
   // If there's remaining time until endDate, both work
