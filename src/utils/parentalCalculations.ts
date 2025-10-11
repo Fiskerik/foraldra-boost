@@ -438,36 +438,6 @@ function convertLegacyResult(
     daysSaved,
     averageMonthlyIncome,
   };
-
-  const strategies: StrategyMeta[] = [
-    {
-      key: 'save-days',
-      legacyKey: 'longer',
-      title: 'Spara dagar',
-      description: 'Minimerar uttaget per vecka för att hushållets inkomst ska nå målet med färre förbrukade dagar.',
-    },
-    {
-      key: 'maximize-income',
-      legacyKey: 'maximize',
-      title: 'Maximera inkomst',
-      description: 'Använder fler dagar per vecka för att maximera hushållets månadsinkomst under ledigheten.',
-    },
-  ];
-
-  return strategies.map((meta) => {
-    const legacyResult = optimizeParentalLeave({
-      ...basePreferences,
-      strategy: meta.legacyKey,
-    }, baseInputs);
-
-    return convertLegacyResult(meta, legacyResult, {
-      parent1,
-      parent2,
-      parent1NetIncome: calc1.netIncome,
-      parent2NetIncome: calc2.netIncome,
-      adjustedTotalMonths,
-    });
-  });
 }
 
 export function optimizeLeave(

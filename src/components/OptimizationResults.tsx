@@ -2,7 +2,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OptimizationResult, formatPeriod, formatCurrency } from "@/utils/parentalCalculations";
 import { TimelineChart } from "./TimelineChart";
-import { Calendar, TrendingUp, PiggyBank, Users, Clock } from "lucide-react";
+import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { useState } from "react";
+import { format, startOfMonth, endOfMonth, isSameMonth, differenceInCalendarDays } from "date-fns";
 
 interface OptimizationResultsProps {
   results: OptimizationResult[];
@@ -12,6 +14,40 @@ interface OptimizationResultsProps {
 }
 
 export function OptimizationResults({ results, minHouseholdIncome, selectedIndex, onSelectStrategy }: OptimizationResultsProps) {
+  const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
+
+  const togglePeriod = (resultIndex: number, periodIndex: number) => {
+    const key = `${resultIndex}-${periodIndex}`;
+    setExpandedPeriods(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const breakDownByMonth = (period: any) => {
+    const months: any[] = [];
+    let currentDate = new Date(period.startDate);
+    const endDate = new Date(period.endDate);
+    
+    while (currentDate <= endDate) {
+      const monthStart = isSameMonth(currentDate, period.startDate) ? currentDate : startOfMonth(currentDate);
+      const monthEnd = isSameMonth(currentDate, endDate) ? endDate : endOfMonth(currentDate);
+      
+      const daysInThisMonth = differenceInCalendarDays(monthEnd, monthStart) + 1;
+      const proportionOfPeriod = daysInThisMonth / (differenceInCalendarDays(endDate, new Date(period.startDate)) + 1);
+      const daysUsedInMonth = Math.round(period.daysCount * proportionOfPeriod);
+      
+      months.push({
+        startDate: monthStart,
+        endDate: monthEnd,
+        daysInMonth: daysInThisMonth,
+        daysUsed: daysUsedInMonth,
+      });
+      
+      currentDate = new Date(monthEnd);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return months;
+  };
+
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
@@ -87,7 +123,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                 
                 <div className="space-y-3">
                   {result.periods
-                    .filter(period => period.benefitLevel !== 'none') // Only show leave periods, not work periods
+                    .filter(period => period.benefitLevel !== 'none')
                     .map((period, periodIndex) => {
                     const parentColor = 
                       period.parent === 'both' ? 'accent' :
@@ -112,6 +148,11 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                     const leaveParentMonthlyIncome = householdMonthlyIncome - otherParentMonthlyIncome;
                     const periodTotalIncome = period.dailyIncome * period.daysCount;
                     
+                    const expandKey = `${index}-${periodIndex}`;
+                    const isExpanded = expandedPeriods[expandKey];
+                    const monthlyBreakdown = breakDownByMonth(period);
+                    const hasMultipleMonths = monthlyBreakdown.length > 1;
+                    
                     return (
                       <div
                         key={periodIndex}
@@ -124,9 +165,20 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                               {parentLabel}
                             </span>
                           </div>
-                          <Badge variant="secondary" className="text-xs">
-                            {period.daysCount} dagar
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {period.daysCount} dagar
+                            </Badge>
+                            {hasMultipleMonths && (
+                              <button
+                                onClick={() => togglePeriod(index, periodIndex)}
+                                className="p-1 hover:bg-muted rounded transition-colors"
+                                aria-label={isExpanded ? "Dölj månader" : "Visa månader"}
+                              >
+                                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                              </button>
+                            )}
+                          </div>
                         </div>
                         
                         <div className="text-sm space-y-1">
@@ -139,6 +191,22 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           <div className="text-muted-foreground">
                             Uttag: {daysPerWeekLabel}
                           </div>
+                          
+                          {isExpanded && hasMultipleMonths && (
+                            <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
+                              {monthlyBreakdown.map((month, monthIdx) => (
+                                <div key={monthIdx} className="text-xs p-2 bg-muted/30 rounded">
+                                  <div className="font-medium">
+                                    {format(month.startDate, 'd')} - {format(month.endDate, 'd MMM yyyy')}
+                                  </div>
+                                  <div className="text-muted-foreground">
+                                    {month.daysInMonth} kalenderdagar • ~{month.daysUsed} uttagna dagar
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
                           {period.parent !== 'both' && period.benefitLevel !== 'none' && (
                             <div className="mt-2 p-2 bg-muted/50 rounded space-y-1">
                               {period.daysPerWeek && period.daysPerWeek < 7 ? (
