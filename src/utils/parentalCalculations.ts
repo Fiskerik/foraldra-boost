@@ -438,6 +438,36 @@ function convertLegacyResult(
     daysSaved,
     averageMonthlyIncome,
   };
+
+  const strategies: StrategyMeta[] = [
+    {
+      key: 'save-days',
+      legacyKey: 'longer',
+      title: 'Spara dagar',
+      description: 'Minimerar uttaget per vecka för att hushållets inkomst ska nå målet med färre förbrukade dagar.',
+    },
+    {
+      key: 'maximize-income',
+      legacyKey: 'maximize',
+      title: 'Maximera inkomst',
+      description: 'Använder fler dagar per vecka för att maximera hushållets månadsinkomst under ledigheten.',
+    },
+  ];
+
+  return strategies.map((meta) => {
+    const legacyResult = optimizeParentalLeave({
+      ...basePreferences,
+      strategy: meta.legacyKey,
+    }, baseInputs);
+
+    return convertLegacyResult(meta, legacyResult, {
+      parent1,
+      parent2,
+      parent1NetIncome: calc1.netIncome,
+      parent2NetIncome: calc2.netIncome,
+      adjustedTotalMonths,
+    });
+  });
 }
 
 export function optimizeLeave(
@@ -457,16 +487,13 @@ export function optimizeLeave(
   const baseDaysPerWeek = 5;
   const scaleFactor = baseDaysPerWeek / normalizedDaysPerWeek;
 
-  const adjustedParent1Months = parent1Months * scaleFactor;
-  const adjustedParent2Months = parent2Months * scaleFactor;
-  const adjustedTotalMonths = adjustedParent1Months + adjustedParent2Months + simultaneousMonths;
+  const scaledParent1Months = parent1Months * scaleFactor;
+  const scaledParent2Months = parent2Months * scaleFactor;
+  const effectiveParent1Months = Math.max(parent1Months, scaledParent1Months);
+  const effectiveParent2Months = Math.max(parent2Months, scaledParent2Months);
 
-  const basePreferences = {
-    deltid: normalizedDaysPerWeek < 7 ? 'ja' : 'nej',
-    ledigTid1: adjustedParent1Months,
-    ledigTid2: adjustedParent2Months,
-    minInkomst: minHouseholdIncome,
-  };
+  const combinedNetIncome = calc1.netIncome + calc2.netIncome;
+  const combinedAvailableIncome = calc1.availableIncome + calc2.availableIncome;
 
   const baseInputs = {
     inkomst1: parent1.income,
@@ -496,9 +523,28 @@ export function optimizeLeave(
   ];
 
   return strategies.map((meta) => {
-    const legacyResult = optimizeParentalLeave({
-      ...basePreferences,
+    const isSaveDays = meta.key === 'save-days';
+
+    const preferredParent1Months = effectiveParent1Months;
+    const preferredParent2Months = effectiveParent2Months;
+
+    const strategyMinIncome = isSaveDays
+      ? Math.max(0, minHouseholdIncome)
+      : Math.max(minHouseholdIncome, Math.round(Math.max(combinedNetIncome, combinedAvailableIncome)));
+
+    const allowFullWeek = normalizedDaysPerWeek > 5;
+    const preferences = {
+      deltid: allowFullWeek ? 'nej' : 'ja',
+      ledigTid1: preferredParent1Months,
+      ledigTid2: preferredParent2Months,
+      minInkomst: strategyMinIncome,
       strategy: meta.legacyKey,
+    };
+
+    const strategyTotalMonths = preferredParent1Months + preferredParent2Months + simultaneousMonths;
+
+    const legacyResult = optimizeParentalLeave({
+      ...preferences,
     }, baseInputs);
 
     return convertLegacyResult(meta, legacyResult, {
@@ -506,7 +552,7 @@ export function optimizeLeave(
       parent2,
       parent1NetIncome: calc1.netIncome,
       parent2NetIncome: calc2.netIncome,
-      adjustedTotalMonths,
+      adjustedTotalMonths: strategyTotalMonths,
     });
   });
 }
