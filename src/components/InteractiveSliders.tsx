@@ -2,38 +2,32 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/utils/parentalCalculations";
-import { TrendingUp, Users, Calendar, Sparkles } from "lucide-react";
+import { TrendingUp, Calendar, Clock, Sparkles } from "lucide-react";
 
 interface InteractiveSlidersProps {
   householdIncome: number;
   maxHouseholdIncome: number;
-  totalMonths: number;
-  parent1Months: number;
   daysPerWeek: number;
   currentHouseholdIncome: number; // Calculated based on current plan
   totalIncome?: number;
   daysUsed?: number;
   daysSaved?: number;
   onHouseholdIncomeChange: (value: number) => void;
-  onDistributionChange: (parent1Months: number) => void;
   onDaysPerWeekChange: (days: number) => void;
 }
 
 export function InteractiveSliders({
   householdIncome,
   maxHouseholdIncome,
-  totalMonths,
-  parent1Months,
   daysPerWeek,
   currentHouseholdIncome,
   totalIncome,
   daysUsed,
   daysSaved,
   onHouseholdIncomeChange,
-  onDistributionChange,
   onDaysPerWeekChange,
 }: InteractiveSlidersProps) {
-  const parent2Months = totalMonths - parent1Months;
+  const totalDaysValue = Math.max(0, daysUsed ?? 0);
 
   return (
     <Card className="p-6 space-y-8 bg-card/50 backdrop-blur border-2">
@@ -92,37 +86,35 @@ export function InteractiveSliders({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            <Label className="text-sm font-medium">Fördelning mellan föräldrar</Label>
+            <Calendar className="h-4 w-4 text-primary" />
+            <Label className="text-sm font-medium">Totalt använda dagar</Label>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-parent1">
-              F1: {parent1Months} mån
-            </span>
-            <span className="text-muted-foreground">•</span>
-            <span className="text-sm font-semibold text-parent2">
-              F2: {parent2Months} mån
-            </span>
+            <span className="text-xl font-bold text-primary">{totalDaysValue}</span>
+            <span className="text-xs text-muted-foreground">av 480</span>
           </div>
         </div>
         <Slider
-          value={[parent1Months]}
-          onValueChange={(values) => onDistributionChange(values[0])}
+          value={[totalDaysValue]}
           min={0}
-          max={totalMonths}
+          max={480}
           step={1}
-          className="py-4"
+          disabled
+          className="py-4 cursor-not-allowed opacity-80"
         />
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Endast F2</span>
-          <span>Endast F1</span>
+          <span>0 dagar</span>
+          <span>480 dagar</span>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Uppdateras automatiskt utifrån valt inkomstkrav och uttag per vecka.
+        </p>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-primary" />
+            <Clock className="h-4 w-4 text-primary" />
             <Label className="text-sm font-medium">Uttag av dagar per vecka</Label>
           </div>
           <div className="flex items-center gap-2">
