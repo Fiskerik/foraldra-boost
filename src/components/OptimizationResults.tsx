@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { OptimizationResult, formatPeriod, formatCurrency } from "@/utils/parentalCalculations";
+import { OptimizationResult, formatPeriod, formatCurrency, LeavePeriod } from "@/utils/parentalCalculations";
 import { TimelineChart } from "./TimelineChart";
 import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
-import { format, startOfMonth, endOfMonth, isSameMonth, differenceInCalendarDays } from "date-fns";
+import { format, endOfMonth, differenceInCalendarDays, addDays } from "date-fns";
 
 interface OptimizationResultsProps {
   results: OptimizationResult[];
@@ -21,31 +21,77 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     setExpandedPeriods(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const breakDownByMonth = (period: any) => {
-    const months: any[] = [];
-    let currentDate = new Date(period.startDate);
+  interface MonthlyBreakdown {
+    startDate: Date;
+    endDate: Date;
+    calendarDays: number;
+    benefitDays: number;
+  }
+
+  const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
+    const startDate = new Date(period.startDate);
     const endDate = new Date(period.endDate);
-    
-    while (currentDate <= endDate) {
-      const monthStart = isSameMonth(currentDate, period.startDate) ? currentDate : startOfMonth(currentDate);
-      const monthEnd = isSameMonth(currentDate, endDate) ? endDate : endOfMonth(currentDate);
-      
-      const daysInThisMonth = differenceInCalendarDays(monthEnd, monthStart) + 1;
-      const proportionOfPeriod = daysInThisMonth / (differenceInCalendarDays(endDate, new Date(period.startDate)) + 1);
-      const daysUsedInMonth = Math.round(period.daysCount * proportionOfPeriod);
-      
-      months.push({
+    const totalBenefitDays = Math.max(0, Math.round(period.daysCount));
+
+    const segments: MonthlyBreakdown[] = [];
+    let cursor = new Date(startDate);
+
+    while (cursor <= endDate) {
+      const monthStart = new Date(cursor);
+      const monthEndCandidate = endOfMonth(monthStart);
+      const monthEnd = monthEndCandidate < endDate ? monthEndCandidate : endDate;
+      const calendarDays = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
+
+      segments.push({
         startDate: monthStart,
         endDate: monthEnd,
-        daysInMonth: daysInThisMonth,
-        daysUsed: daysUsedInMonth,
+        calendarDays,
+        benefitDays: 0,
       });
-      
-      currentDate = new Date(monthEnd);
-      currentDate.setDate(currentDate.getDate() + 1);
+
+      cursor = addDays(monthEnd, 1);
     }
-    
-    return months;
+
+    if (segments.length === 0) {
+      return [];
+    }
+
+    const totalCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
+    let remainingBenefitDays = totalBenefitDays;
+    let carryOver = 0;
+
+    segments.forEach((segment, index) => {
+      if (remainingBenefitDays <= 0) {
+        segment.benefitDays = 0;
+        return;
+      }
+
+      const weight = segment.calendarDays / totalCalendarDays;
+      const rawShare = totalBenefitDays * weight + carryOver;
+      let allocated = index === segments.length - 1 ? remainingBenefitDays : Math.floor(rawShare);
+
+      if (allocated < 0) {
+        allocated = 0;
+      }
+
+      if (allocated === 0 && remainingBenefitDays > 0 && index !== segments.length - 1) {
+        allocated = 1;
+      }
+
+      if (allocated > remainingBenefitDays) {
+        allocated = remainingBenefitDays;
+      }
+
+      segment.benefitDays = allocated;
+      remainingBenefitDays -= allocated;
+      carryOver = rawShare - allocated;
+    });
+
+    if (remainingBenefitDays !== 0 && segments.length > 0) {
+      segments[segments.length - 1].benefitDays += remainingBenefitDays;
+    }
+
+    return segments;
   };
 
   return (
@@ -200,7 +246,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                     {format(month.startDate, 'd')} - {format(month.endDate, 'd MMM yyyy')}
                                   </div>
                                   <div className="text-muted-foreground">
-                                    {month.daysInMonth} kalenderdagar • ~{month.daysUsed} uttagna dagar
+                                    {month.calendarDays} kalenderdagar • {month.benefitDays} uttagna dagar
                                   </div>
                                 </div>
                               ))}
