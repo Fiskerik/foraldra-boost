@@ -11,6 +11,7 @@ interface InteractiveSlidersProps {
   maxHouseholdIncome: number;
   daysPerWeek: number;
   totalMonths: number;
+  initialTotalMonths: number;
   currentHouseholdIncome: number; // Calculated based on current plan
   periods: LeavePeriod[];
   totalIncome?: number;
@@ -26,6 +27,7 @@ export function InteractiveSliders({
   maxHouseholdIncome,
   daysPerWeek,
   totalMonths,
+  initialTotalMonths,
   currentHouseholdIncome,
   periods,
   totalIncome,
@@ -55,9 +57,22 @@ export function InteractiveSliders({
   
   // Calculate break-point on income slider - show where the lowest month is
   const incomeBreakPoint = isBelowMinimum ? lowestMonthlyIncome : null;
-  const incomeBreakPointPercent = incomeBreakPoint 
-    ? ((incomeBreakPoint - 0) / (maxHouseholdIncome - 0)) * 100 
+  const incomeBreakPointPercent = incomeBreakPoint
+    ? Math.max(
+        0,
+        Math.min(100, ((incomeBreakPoint - 0) / (maxHouseholdIncome - 0)) * 100)
+      )
     : null;
+
+  const monthsSliderMax = Math.max(
+    Math.ceil(initialTotalMonths * 1.33),
+    Math.ceil(totalMonths),
+    1
+  );
+
+  const formattedTotalMonths = Number.isInteger(totalMonths)
+    ? totalMonths
+    : totalMonths.toFixed(1);
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-in-bottom">
@@ -121,7 +136,7 @@ export function InteractiveSliders({
                   <span>Lägsta månaden: {formatCurrency(lowestMonthlyIncome)}. Sänk kravet eller öka uttag/vecka.</span>
                 </div>
               )}
-              <div className="relative pb-6">
+              <div className="relative pt-2 pb-10">
                 <Slider
                   value={[householdIncome]}
                   onValueChange={(values) => onHouseholdIncomeChange(values[0])}
@@ -130,15 +145,23 @@ export function InteractiveSliders({
                   step={1000}
                   className="py-2"
                 />
-                {/* Marker on axis below slider */}
+                <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
                 {incomeBreakPointPercent !== null && isBelowMinimum && (
-                  <div 
-                    className="absolute bottom-0 w-0.5 h-3 bg-destructive pointer-events-none"
-                    style={{ left: `calc(${incomeBreakPointPercent}%)` }}
+                  <div
+                    className="pointer-events-none absolute left-0 right-0 bottom-4"
                     title={`Lägsta månad: ${formatCurrency(lowestMonthlyIncome)}`}
                   >
-                    <div className="absolute top-3 left-1/2 -translate-x-1/2 text-[9px] text-destructive whitespace-nowrap font-semibold">
-                      {formatCurrency(lowestMonthlyIncome)}
+                    <div
+                      className="absolute flex flex-col items-center"
+                      style={{
+                        left: `${incomeBreakPointPercent}%`,
+                        transform: "translateX(-50%)",
+                      }}
+                    >
+                      <div className="h-3 w-px bg-destructive" />
+                      <div className="mt-1 rounded bg-background/90 px-1 text-[9px] font-semibold text-destructive whitespace-nowrap">
+                        {formatCurrency(lowestMonthlyIncome)}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -152,7 +175,7 @@ export function InteractiveSliders({
                   Månader lediga
                 </Label>
                 <span className="text-sm font-bold text-primary">
-                  {totalMonths} {totalMonths === 1 ? 'månad' : 'månader'}
+                  {formattedTotalMonths} {totalMonths === 1 ? 'månad' : 'månader'}
                 </span>
               </div>
               {isBelowMinimum && (
@@ -163,9 +186,9 @@ export function InteractiveSliders({
               <Slider
                 value={[totalMonths]}
                 onValueChange={(values) => onTotalMonthsChange(values[0])}
-                min={1}
-                max={16}
-                step={1}
+                min={0}
+                max={monthsSliderMax}
+                step={0.5}
                 className="py-2"
               />
               <p className="text-[10px] text-muted-foreground">
