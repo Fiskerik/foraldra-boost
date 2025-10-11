@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Calendar, Users, DollarSign } from "lucide-react";
+import { TOTAL_BENEFIT_DAYS } from "@/utils/parentalCalculations";
 
 interface LeavePeriodCardProps {
   totalMonths: number;
@@ -11,6 +12,7 @@ interface LeavePeriodCardProps {
   parent2Months: number;
   minHouseholdIncome: number;
   maxHouseholdIncome: number;
+  maxLeaveMonths: number;
   onTotalMonthsChange: (months: number) => void;
   onDistributionChange: (parent1Months: number) => void;
   onMinIncomeChange: (income: number) => void;
@@ -26,6 +28,7 @@ export function LeavePeriodCard({
   parent2Months,
   minHouseholdIncome,
   maxHouseholdIncome,
+  maxLeaveMonths,
   onTotalMonthsChange,
   onDistributionChange,
   onMinIncomeChange,
@@ -35,11 +38,16 @@ export function LeavePeriodCard({
   onSimultaneousMonthsChange,
 }: LeavePeriodCardProps) {
   const handleMonthsInputChange = (value: string) => {
-    const parsed = parseInt(value);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 16) {
-      onTotalMonthsChange(parsed);
+    const parsed = parseFloat(value.replace(',', '.'));
+    if (!isNaN(parsed) && parsed >= 0) {
+      const clamped = Math.min(parsed, maxLeaveMonths);
+      onTotalMonthsChange(clamped);
     }
   };
+
+  const formattedMaxLeaveMonths = Number.isInteger(maxLeaveMonths)
+    ? maxLeaveMonths.toString()
+    : maxLeaveMonths.toFixed(1);
 
   return (
     <Card className="shadow-card">
@@ -56,13 +64,14 @@ export function LeavePeriodCard({
             id="total-months"
             type="number"
             min="1"
-            max="16"
+            max={maxLeaveMonths}
+            step="0.5"
             value={totalMonths}
             onChange={(e) => handleMonthsInputChange(e.target.value)}
             className="text-lg font-semibold"
           />
           <p className="text-sm text-muted-foreground">
-            Ange antal månader (max 16 månader = 480 dagar)
+            Ange antal månader (upp till {formattedMaxLeaveMonths} månader baserat på {TOTAL_BENEFIT_DAYS} dagar)
           </p>
         </div>
 

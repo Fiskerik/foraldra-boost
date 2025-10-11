@@ -46,12 +46,28 @@ export interface LeavePeriod {
 const PARENTAL_BENEFIT_CEILING = 49000;
 const HIGH_BENEFIT_DAYS = 390;
 const LOW_BENEFIT_DAYS = 90;
-const TOTAL_DAYS = HIGH_BENEFIT_DAYS + LOW_BENEFIT_DAYS;
+export const TOTAL_BENEFIT_DAYS = HIGH_BENEFIT_DAYS + LOW_BENEFIT_DAYS;
 const MAX_PARENTAL_BENEFIT_PER_DAY = 1250;
 const HIGH_BENEFIT_RATE = 0.8;
 const SGI_RATE = 0.97;
 const PRISBASBELOPP_2025 = 58800;
 const PARENTAL_SALARY_THRESHOLD = (10 * PRISBASBELOPP_2025) / 12;
+
+export function calculateMaxLeaveMonths(
+  daysPerWeek: number,
+  totalBenefitDays: number = TOTAL_BENEFIT_DAYS
+): number {
+  const safeDaysPerWeek = Math.max(1, Math.round(daysPerWeek));
+  const weeksAvailable = totalBenefitDays / safeDaysPerWeek;
+  const months = weeksAvailable / WEEKS_PER_MONTH;
+
+  if (!Number.isFinite(months) || months <= 0) {
+    return 1;
+  }
+
+  return Math.ceil(months * 2) / 2;
+}
+export const WEEKS_PER_MONTH = 4.33;
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -296,8 +312,8 @@ function convertLegacyResult(
     usedMinDays2;
 
   const daysUsedRounded = Math.max(0, Math.round(totalDaysUsed));
-  const clampedDaysUsed = Math.min(TOTAL_DAYS, daysUsedRounded);
-  const daysSaved = Math.max(0, TOTAL_DAYS - clampedDaysUsed);
+  const clampedDaysUsed = Math.min(TOTAL_BENEFIT_DAYS, daysUsedRounded);
+  const daysSaved = Math.max(0, TOTAL_BENEFIT_DAYS - clampedDaysUsed);
 
   if (overlapDaysUsed > 0) {
     const overlapParent1Monthly = toNumber(legacyResult.plan1Overlap?.inkomst);

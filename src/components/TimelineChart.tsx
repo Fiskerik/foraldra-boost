@@ -204,7 +204,23 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
   }
 
   const maxLabels = isMobile ? 4 : 8;
-  const labelStride = Math.max(1, Math.ceil(chartData.length / maxLabels));
+  const computeLabelStride = () => {
+    if (!isMobile) {
+      return Math.max(1, Math.ceil(chartData.length / maxLabels));
+    }
+
+    if (chartData.length > 12) {
+      return 3;
+    }
+
+    if (chartData.length > 6) {
+      return 2;
+    }
+
+    return 1;
+  };
+
+  const labelStride = computeLabelStride();
 
   return (
     <div className="space-y-4">
