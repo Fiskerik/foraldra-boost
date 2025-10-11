@@ -89,12 +89,11 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       segment.benefitDays = allocated;
       
       // Calculate monthly income for this segment
-      // dailyIncome includes both benefit and work income for the household
-      // We need to extrapolate based on actual calendar days in the month
+      // dailyIncome is the household daily income rate
+      // Multiply by actual calendar days to get the income for this segment
       const dailyIncomeRate = period.dailyIncome;
-      const daysInMonth = segment.calendarDays;
-      const extrapolatedMonthlyIncome = dailyIncomeRate * (30 / daysInMonth) * daysInMonth;
-      segment.monthlyIncome = extrapolatedMonthlyIncome;
+      const actualMonthlyIncome = dailyIncomeRate * segment.calendarDays;
+      segment.monthlyIncome = actualMonthlyIncome;
       
       remainingBenefitDays -= allocated;
       carryOver = rawShare - allocated;
@@ -225,17 +224,26 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                     const leaveBenefitMonthly = period.dailyBenefit * 30;
                     const householdMonthlyIncome = period.dailyIncome * 30;
                     const leaveParentMonthlyIncome = householdMonthlyIncome - otherParentMonthlyIncome;
-                    const periodTotalIncome = period.dailyIncome * period.daysCount;
+                    const monthlyBreakdown = breakDownByMonth(period);
+                    const periodTotalIncome = monthlyBreakdown.reduce((sum, month) => sum + month.monthlyIncome, 0);
+                    const hasBelowMinimum = monthlyBreakdown.some(month => month.monthlyIncome < minHouseholdIncome);
                     
                     const expandKey = `${index}-${periodIndex}`;
                     const isExpanded = expandedPeriods[expandKey];
-                    const monthlyBreakdown = breakDownByMonth(period);
                     const hasMultipleMonths = monthlyBreakdown.length > 1;
                     
                     return (
                       <div
                         key={periodIndex}
-                        className={`p-4 rounded-lg border-l-4 ${parentColor === 'accent' ? 'border-accent bg-accent/5' : parentColor === 'parent1' ? 'border-parent1 bg-parent1/5' : 'border-parent2 bg-parent2/5'}`}
+                        className={`p-4 rounded-lg border-l-4 ${
+                          hasBelowMinimum 
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20' 
+                            : parentColor === 'accent' 
+                            ? 'border-accent bg-accent/5' 
+                            : parentColor === 'parent1' 
+                            ? 'border-parent1 bg-parent1/5' 
+                            : 'border-parent2 bg-parent2/5'
+                        }`}
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
@@ -275,12 +283,15 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                             <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
                               {monthlyBreakdown.map((month, monthIdx) => {
                                 const isLowest = month.monthlyIncome === lowestMonthlyIncome;
-                                return (
+                                 const isBelowMinimum = month.monthlyIncome < minHouseholdIncome;
+                                 return (
                                   <div 
                                     key={monthIdx} 
                                     className={`text-xs p-2 rounded space-y-1 ${
                                       isLowest 
-                                        ? 'bg-destructive/10 border border-destructive/30' 
+                                        ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400' 
+                                        : isBelowMinimum
+                                        ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-300'
                                         : 'bg-muted/30'
                                     }`}
                                   >
@@ -290,7 +301,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                     <div className="text-muted-foreground">
                                       {month.calendarDays} kalenderdagar • {month.benefitDays} uttagna dagar
                                     </div>
-                                    <div className={`font-semibold ${isLowest ? 'text-destructive' : 'text-foreground'}`}>
+                                    <div className={`font-semibold ${isLowest ? 'text-yellow-700 dark:text-yellow-400' : isBelowMinimum ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>
                                       Hushållets inkomst: {formatCurrency(month.monthlyIncome)}
                                       {isLowest && <span className="ml-1 text-[9px]">(lägst)</span>}
                                     </div>
