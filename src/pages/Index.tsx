@@ -98,6 +98,17 @@ const Index = () => {
     }
   };
 
+  const handleTotalMonthsChange = (value: number) => {
+    setTotalMonths(value);
+    // Adjust parent months to stay within bounds
+    if (parent1Months > value) {
+      setParent1Months(value);
+    }
+    if (optimizationResults) {
+      setTimeout(() => handleOptimize(true), 100);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-gradient-hero text-white py-12 px-4 shadow-soft">
@@ -194,12 +205,15 @@ const Index = () => {
             householdIncome={householdIncome}
             maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
             daysPerWeek={daysPerWeek}
+            totalMonths={totalMonths}
             currentHouseholdIncome={optimizationResults[selectedStrategyIndex]?.averageMonthlyIncome || 0}
+            periods={optimizationResults[selectedStrategyIndex]?.periods || []}
             totalIncome={optimizationResults[selectedStrategyIndex]?.totalIncome}
             daysUsed={optimizationResults[selectedStrategyIndex]?.daysUsed}
             daysSaved={optimizationResults[selectedStrategyIndex]?.daysSaved}
             onHouseholdIncomeChange={handleHouseholdIncomeChange}
             onDaysPerWeekChange={handleDaysPerWeekChange}
+            onTotalMonthsChange={handleTotalMonthsChange}
           />
         )}
       </main>

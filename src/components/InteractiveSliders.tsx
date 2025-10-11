@@ -3,40 +3,58 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/utils/parentalCalculations";
+import { formatCurrency, LeavePeriod } from "@/utils/parentalCalculations";
 import { TrendingUp, Calendar, Clock, Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 
 interface InteractiveSlidersProps {
   householdIncome: number;
   maxHouseholdIncome: number;
   daysPerWeek: number;
+  totalMonths: number;
   currentHouseholdIncome: number; // Calculated based on current plan
+  periods: LeavePeriod[];
   totalIncome?: number;
   daysUsed?: number;
   daysSaved?: number;
   onHouseholdIncomeChange: (value: number) => void;
   onDaysPerWeekChange: (days: number) => void;
+  onTotalMonthsChange: (months: number) => void;
 }
 
 export function InteractiveSliders({
   householdIncome,
   maxHouseholdIncome,
   daysPerWeek,
+  totalMonths,
   currentHouseholdIncome,
+  periods,
   totalIncome,
   daysUsed,
   daysSaved,
   onHouseholdIncomeChange,
   onDaysPerWeekChange,
+  onTotalMonthsChange,
 }: InteractiveSlidersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const totalDaysValue = Math.max(0, daysUsed ?? 0);
   
-  // Check if current plan is below minimum income requirement
-  const isBelowMinimum = currentHouseholdIncome < householdIncome;
+  // Calculate monthly income for each period
+  // Monthly income = dailyIncome * days per month (approximated by daysPerWeek * 4.33)
+  const calculatePeriodMonthlyIncome = (period: LeavePeriod): number => {
+    const daysPerWeek = period.daysPerWeek || 5;
+    const weeksPerMonth = 4.33;
+    const householdDailyIncome = period.dailyIncome + (period.otherParentDailyIncome || 0);
+    return householdDailyIncome * daysPerWeek * weeksPerMonth;
+  };
   
-  // Calculate break-point positions as percentages for visual markers
-  const incomeBreakPoint = isBelowMinimum ? householdIncome : null;
+  // Check if ANY individual period falls below minimum income requirement
+  const lowestMonthlyIncome = periods.length > 0 
+    ? Math.min(...periods.map(p => calculatePeriodMonthlyIncome(p)))
+    : currentHouseholdIncome;
+  
+  const isBelowMinimum = lowestMonthlyIncome < householdIncome;
+  
+  // Calculate break-point on income slider - show where the lowest month is
+  const incomeBreakPoint = isBelowMinimum ? lowestMonthlyIncome : null;
   const incomeBreakPointPercent = incomeBreakPoint 
     ? ((incomeBreakPoint - 0) / (maxHouseholdIncome - 0)) * 100 
     : null;
@@ -100,10 +118,10 @@ export function InteractiveSliders({
               {isBelowMinimum && (
                 <div className="flex items-center gap-1 text-[10px] text-destructive">
                   <AlertTriangle className="h-3 w-3" />
-                  <span>Nuvarande plan når ej målet ({formatCurrency(currentHouseholdIncome)}). Sänk inkomst eller öka dagar/vecka.</span>
+                  <span>Lägsta månaden: {formatCurrency(lowestMonthlyIncome)}. Sänk kravet eller öka uttag/vecka.</span>
                 </div>
               )}
-              <div className="relative">
+              <div className="relative pb-6">
                 <Slider
                   value={[householdIncome]}
                   onValueChange={(values) => onHouseholdIncomeChange(values[0])}
@@ -112,14 +130,15 @@ export function InteractiveSliders({
                   step={1000}
                   className="py-2"
                 />
+                {/* Marker on axis below slider */}
                 {incomeBreakPointPercent !== null && isBelowMinimum && (
                   <div 
-                    className="absolute top-1/2 -translate-y-1/2 w-1 h-4 bg-destructive rounded-full pointer-events-none"
-                    style={{ left: `calc(${incomeBreakPointPercent}% - 2px)` }}
-                    title={`Brytpunkt: ${formatCurrency(incomeBreakPoint!)}`}
+                    className="absolute bottom-0 w-0.5 h-3 bg-destructive pointer-events-none"
+                    style={{ left: `calc(${incomeBreakPointPercent}%)` }}
+                    title={`Lägsta månad: ${formatCurrency(lowestMonthlyIncome)}`}
                   >
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] text-destructive whitespace-nowrap font-bold">
-                      ⚠️ {formatCurrency(currentHouseholdIncome)}
+                    <div className="absolute top-3 left-1/2 -translate-x-1/2 text-[9px] text-destructive whitespace-nowrap font-semibold">
+                      {formatCurrency(lowestMonthlyIncome)}
                     </div>
                   </div>
                 )}
@@ -130,20 +149,27 @@ export function InteractiveSliders({
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium flex items-center gap-1">
                   <Calendar className="h-3 w-3 text-primary" />
-                  Använda dagar
+                  Månader lediga
                 </Label>
-                <span className="text-sm font-bold text-primary">{totalDaysValue} <span className="text-[10px] text-muted-foreground">av 480</span></span>
+                <span className="text-sm font-bold text-primary">
+                  {totalMonths} {totalMonths === 1 ? 'månad' : 'månader'}
+                </span>
               </div>
+              {isBelowMinimum && (
+                <div className="text-[10px] text-muted-foreground">
+                  Minska antalet månader lediga för att öka inkomsten per månad
+                </div>
+              )}
               <Slider
-                value={[totalDaysValue]}
-                min={0}
-                max={480}
+                value={[totalMonths]}
+                onValueChange={(values) => onTotalMonthsChange(values[0])}
+                min={1}
+                max={16}
                 step={1}
-                disabled
-                className="py-2 cursor-not-allowed opacity-80"
+                className="py-2"
               />
               <p className="text-[10px] text-muted-foreground">
-                Uppdateras automatiskt utifrån valt inkomstkrav och uttag per vecka.
+                Totalt antal månader lediga. {daysUsed ?? 0} av 480 dagar används.
               </p>
             </div>
 
