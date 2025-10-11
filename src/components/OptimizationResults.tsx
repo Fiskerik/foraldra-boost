@@ -133,7 +133,10 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
           const fullMonths = allMonthlyBreakdowns.filter(m => m.calendarDays === 30);
           const lowestMonthlyIncome = fullMonths.length > 0
             ? Math.min(...fullMonths.map(m => m.monthlyIncome))
-            : (allMonthlyBreakdowns.length > 0 ? Math.min(...allMonthlyBreakdowns.map(m => m.monthlyIncome)) : Infinity);
+            : Infinity;
+          
+          // Check if lowest month is below minimum
+          const isLowestBelowMinimum = lowestMonthlyIncome < minHouseholdIncome;
 
           return (
           <Card
@@ -229,7 +232,14 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                     const leaveParentMonthlyIncome = householdMonthlyIncome - otherParentMonthlyIncome;
                     const monthlyBreakdown = breakDownByMonth(period);
                     const periodTotalIncome = monthlyBreakdown.reduce((sum, month) => sum + month.monthlyIncome, 0);
-                    const hasBelowMinimum = monthlyBreakdown.some(month => month.monthlyIncome < minHouseholdIncome);
+                    
+                    // Check if this period contains the lowest month (only for full months)
+                    const periodContainsLowest = monthlyBreakdown.some(
+                      month => month.calendarDays === 30 && month.monthlyIncome === lowestMonthlyIncome
+                    );
+                    
+                    // Period should be orange only if it contains the lowest month AND that month is below minimum
+                    const shouldBeOrange = periodContainsLowest && isLowestBelowMinimum;
                     
                     const expandKey = `${index}-${periodIndex}`;
                     const isExpanded = expandedPeriods[expandKey];
@@ -239,7 +249,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                       <div
                         key={periodIndex}
                         className={`p-4 rounded-lg border-l-4 ${
-                          hasBelowMinimum 
+                          shouldBeOrange
                             ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20' 
                             : parentColor === 'accent' 
                             ? 'border-accent bg-accent/5' 
@@ -285,8 +295,10 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           {isExpanded && hasMultipleMonths && (
                             <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
                               {monthlyBreakdown.map((month, monthIdx) => {
-                                const isLowest = month.monthlyIncome === lowestMonthlyIncome;
-                                 const isBelowMinimum = month.monthlyIncome < minHouseholdIncome;
+                                // Only highlight full months
+                                const isFullMonth = month.calendarDays === 30;
+                                const isLowest = isFullMonth && month.monthlyIncome === lowestMonthlyIncome;
+                                const isBelowMinimum = isFullMonth && month.monthlyIncome < minHouseholdIncome;
                                  return (
                                   <div 
                                     key={monthIdx} 
