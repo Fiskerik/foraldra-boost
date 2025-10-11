@@ -29,53 +29,69 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
   }
 
   const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
-    const months: MonthlyBreakdown[] = [];
-
     const startDate = new Date(period.startDate);
     const endDate = new Date(period.endDate);
-    const totalCalendarDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
-    let currentDate = new Date(startDate);
-    let remainingBenefitDays = Math.max(0, Math.round(period.daysCount));
+    const totalBenefitDays = Math.max(0, Math.round(period.daysCount));
 
-    while (currentDate <= endDate && remainingBenefitDays > 0) {
-      const monthStart = new Date(currentDate);
-      const rawMonthEnd = endOfMonth(monthStart);
-      const monthEnd = rawMonthEnd < endDate ? rawMonthEnd : endDate;
-      const daysInThisMonth = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
-      const isLastMonth = monthEnd.getTime() === endDate.getTime();
-      const proportionalShare = (period.daysCount * daysInThisMonth) / totalCalendarDays;
+    const segments: MonthlyBreakdown[] = [];
+    let cursor = new Date(startDate);
 
-      let benefitDays = isLastMonth ? remainingBenefitDays : Math.round(proportionalShare);
+    while (cursor <= endDate) {
+      const monthStart = new Date(cursor);
+      const monthEndCandidate = endOfMonth(monthStart);
+      const monthEnd = monthEndCandidate < endDate ? monthEndCandidate : endDate;
+      const calendarDays = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
 
-      if (benefitDays > remainingBenefitDays) {
-        benefitDays = remainingBenefitDays;
-      } else if (!isLastMonth && benefitDays <= 0) {
-        benefitDays = Math.min(remainingBenefitDays, 1);
-      }
-
-      months.push({
+      segments.push({
         startDate: monthStart,
         endDate: monthEnd,
-        calendarDays: daysInThisMonth,
-        benefitDays,
+        calendarDays,
+        benefitDays: 0,
       });
 
-      remainingBenefitDays -= benefitDays;
-      currentDate = addDays(monthEnd, 1);
+      cursor = addDays(monthEnd, 1);
     }
 
-    if (months.length === 0) {
-      months.push({
-        startDate,
-        endDate,
-        calendarDays: totalCalendarDays,
-        benefitDays: Math.max(0, Math.round(period.daysCount)),
-      });
-    } else if (remainingBenefitDays > 0) {
-      months[months.length - 1].benefitDays += remainingBenefitDays;
+    if (segments.length === 0) {
+      return [];
     }
 
-    return months;
+    const totalCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
+    let remainingBenefitDays = totalBenefitDays;
+    let carryOver = 0;
+
+    segments.forEach((segment, index) => {
+      if (remainingBenefitDays <= 0) {
+        segment.benefitDays = 0;
+        return;
+      }
+
+      const weight = segment.calendarDays / totalCalendarDays;
+      const rawShare = totalBenefitDays * weight + carryOver;
+      let allocated = index === segments.length - 1 ? remainingBenefitDays : Math.floor(rawShare);
+
+      if (allocated < 0) {
+        allocated = 0;
+      }
+
+      if (allocated === 0 && remainingBenefitDays > 0 && index !== segments.length - 1) {
+        allocated = 1;
+      }
+
+      if (allocated > remainingBenefitDays) {
+        allocated = remainingBenefitDays;
+      }
+
+      segment.benefitDays = allocated;
+      remainingBenefitDays -= allocated;
+      carryOver = rawShare - allocated;
+    });
+
+    if (remainingBenefitDays !== 0 && segments.length > 0) {
+      segments[segments.length - 1].benefitDays += remainingBenefitDays;
+    }
+
+    return segments;
   };
 
   return (

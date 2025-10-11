@@ -58,20 +58,44 @@ export function TimelineChart({ periods, minHouseholdIncome }: TimelineChartProp
       bothDays,
     };
   });
-  
-  // Calculate Y-axis domain: max monthly income + 20%, rounded to nice intervals
-  const maxIncome = Math.max(...monthlyData.map(d => d.income));
-  const yAxisMax = maxIncome * 1.2;
-  
-  // Round to nearest 5000 or 10000 for clean scale
-  const roundToNice = (value: number) => {
-    if (value <= 50000) return Math.ceil(value / 5000) * 5000;
-    return Math.ceil(value / 10000) * 10000;
-  };
-  
-  const yMax = roundToNice(yAxisMax);
-  const safeYMax = yMax > 0 ? yMax : 1;
+
   const chartBottomPadding = 32; // matches Tailwind bottom-8 spacing used for the x-axis labels
+  const axisWidth = 80;
+
+  const allIncomeValues = monthlyData.map(d => d.income);
+  const maxIncome = Math.max(minHouseholdIncome, ...allIncomeValues, 0);
+
+  const getNiceStep = (maxValue: number) => {
+    if (maxValue <= 0) {
+      return 1000;
+    }
+
+    const roughStep = maxValue / 4;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+    const residual = roughStep / magnitude;
+
+    if (residual >= 5) return 5 * magnitude;
+    if (residual >= 3) return 2.5 * magnitude;
+    if (residual >= 2) return 2 * magnitude;
+    if (residual >= 1) return magnitude;
+    return 0.5 * magnitude;
+  };
+
+  const step = getNiceStep(maxIncome * 1.1);
+  const safeStep = step > 0 ? step : 1000;
+  const yMax = Math.max(safeStep, Math.ceil((maxIncome * 1.1) / safeStep) * safeStep);
+  const safeYMax = yMax > 0 ? yMax : 1;
+
+  const baseTicks: number[] = [];
+  for (let value = 0; value <= yMax; value += safeStep) {
+    baseTicks.push(Math.round(value));
+  }
+
+  if (!baseTicks.includes(Math.round(minHouseholdIncome))) {
+    baseTicks.push(minHouseholdIncome);
+  }
+
+  const yTicks = Array.from(new Set(baseTicks)).filter(value => value >= 0).sort((a, b) => b - a);
 
   const clampToUnitInterval = (value: number) => {
     if (value <= 0) return 0;
@@ -112,25 +136,36 @@ export function TimelineChart({ periods, minHouseholdIncome }: TimelineChartProp
         
         {/* Y-axis labels */}
         <div
-          className="absolute left-0 top-0 w-20 flex flex-col justify-between text-xs text-muted-foreground"
-          style={{ bottom: chartBottomPadding }}
+          className="absolute top-0 text-xs text-muted-foreground"
+          style={{ left: 0, bottom: chartBottomPadding, width: axisWidth }}
         >
-          <span>{formatCurrency(yMax)}</span>
-          <span>{formatCurrency(yMax * 0.75)}</span>
-          <span>{formatCurrency(yMax * 0.5)}</span>
-          <span>{formatCurrency(yMax * 0.25)}</span>
-          <span>0 kr</span>
+          {yTicks.map((tick) => (
+            <div
+              key={tick}
+              className="absolute left-0"
+              style={{ top: `${getYPercent(tick)}%`, transform: "translateY(-50%)" }}
+            >
+              {formatCurrency(tick)}
+            </div>
+          ))}
         </div>
-        
+
         {/* Minimum income line */}
         {/* Chart canvas */}
-        <div className="absolute left-20 right-0 top-0" style={{ bottom: chartBottomPadding }}>
+        <div className="absolute right-0 top-0" style={{ left: axisWidth, bottom: chartBottomPadding }}>
+          {yTicks.map((tick) => (
+            <div
+              key={`grid-${tick}`}
+              className="absolute left-0 right-0 border-t border-muted/40"
+              style={{ top: `${getYPercent(tick)}%` }}
+            />
+          ))}
           <div
             className="absolute left-0 right-0 border-t-2 border-destructive border-dashed z-10 pointer-events-none"
             style={{ top: `${minIncomePosition}%` }}
           >
-            <span className="absolute -top-5 right-0 text-xs text-destructive font-medium">
-              Min. inkomst
+            <span className="absolute -top-6 right-0 rounded bg-background/80 px-2 py-0.5 text-xs text-destructive font-medium shadow-sm">
+              Min. hushållsinkomst ({formatCurrency(minHouseholdIncome)})
             </span>
           </div>
 

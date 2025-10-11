@@ -124,6 +124,8 @@ interface StrategyMeta {
   description: string;
 }
 
+type LegacyStrategyKey = StrategyMeta['legacyKey'] | 'maximize_parental_salary';
+
 interface ConversionContext {
   parent1: ParentData;
   parent2: ParentData;
@@ -493,39 +495,82 @@ export function optimizeLeave(
     },
   ];
 
-  return strategies.map((meta) => {
-    const isSaveDays = meta.key === 'save-days';
+  const preferredParent1Months = effectiveParent1Months;
+  const preferredParent2Months = effectiveParent2Months;
+  const adjustedTotalMonths = preferredParent1Months + preferredParent2Months + simultaneousMonths;
 
-    const preferredParent1Months = effectiveParent1Months;
-    const preferredParent2Months = effectiveParent2Months;
+  const allowFullWeekForSave = normalizedDaysPerWeek > baseDaysPerWeek;
+  const allowFullWeekForMax = normalizedDaysPerWeek >= baseDaysPerWeek;
 
-    const strategyMinIncome = isSaveDays
-      ? Math.max(0, minHouseholdIncome)
-      : Math.max(minHouseholdIncome, Math.round(Math.max(combinedNetIncome, combinedAvailableIncome)));
+  const buildPreferences = (strategyKey: LegacyStrategyKey, minIncome: number, allowFullWeek: boolean) => ({
+    deltid: allowFullWeek ? 'nej' : 'ja',
+    ledigTid1: preferredParent1Months,
+    ledigTid2: preferredParent2Months,
+    minInkomst: Math.max(0, Math.round(minIncome)),
+    strategy: strategyKey,
+  });
 
-    const allowFullWeek = isSaveDays ? normalizedDaysPerWeek > baseDaysPerWeek : true;
-    const preferences = {
-      deltid: allowFullWeek ? 'nej' : 'ja',
-      ledigTid1: preferredParent1Months,
-      ledigTid2: preferredParent2Months,
-      minInkomst: strategyMinIncome,
-      strategy: meta.legacyKey,
-    };
+  const conversionContext: ConversionContext = {
+    parent1,
+    parent2,
+    parent1NetIncome: calc1.netIncome,
+    parent2NetIncome: calc2.netIncome,
+    adjustedTotalMonths,
+  };
 
-    const strategyTotalMonths = preferredParent1Months + preferredParent2Months + simultaneousMonths;
+  const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
+  const savePreferences = buildPreferences(saveDaysMeta.legacyKey, minHouseholdIncome, allowFullWeekForSave);
+  const saveLegacyResult = optimizeParentalLeave(savePreferences, baseInputs);
+  const saveResult = convertLegacyResult(saveDaysMeta, saveLegacyResult, conversionContext);
 
-    const legacyResult = optimizeParentalLeave({
-      ...preferences,
-    }, baseInputs);
+  const maximizeMeta = strategies.find((strategy) => strategy.key === 'maximize-income')!;
 
-    return convertLegacyResult(meta, legacyResult, {
-      parent1,
-      parent2,
-      parent1NetIncome: calc1.netIncome,
-      parent2NetIncome: calc2.netIncome,
-      adjustedTotalMonths: strategyTotalMonths,
+  const incomeTargets = new Set<number>();
+  incomeTargets.add(Math.max(minHouseholdIncome, Math.round(combinedAvailableIncome)));
+  incomeTargets.add(Math.max(minHouseholdIncome, Math.round(combinedNetIncome)));
+  if (incomeTargets.size === 0) {
+    incomeTargets.add(Math.max(0, Math.round(minHouseholdIncome)));
+  }
+
+  const candidateStrategyKeys: LegacyStrategyKey[] = ['maximize', 'maximize_parental_salary'];
+  const maximizeCandidates: OptimizationResult[] = [];
+
+  incomeTargets.forEach((target) => {
+    candidateStrategyKeys.forEach((strategyKey) => {
+      const preferences = buildPreferences(strategyKey, target, allowFullWeekForMax);
+      const legacyResult = optimizeParentalLeave(preferences, baseInputs);
+      const converted = convertLegacyResult(maximizeMeta, legacyResult, conversionContext);
+      maximizeCandidates.push(converted);
     });
   });
+
+  if (maximizeCandidates.length === 0) {
+    const fallbackPreferences = buildPreferences(maximizeMeta.legacyKey, minHouseholdIncome, allowFullWeekForMax);
+    const fallbackLegacy = optimizeParentalLeave(fallbackPreferences, baseInputs);
+    maximizeCandidates.push(convertLegacyResult(maximizeMeta, fallbackLegacy, conversionContext));
+  }
+
+  const pickBetter = (best: OptimizationResult, current: OptimizationResult) => {
+    if (current.daysUsed !== best.daysUsed) {
+      return current.daysUsed > best.daysUsed ? current : best;
+    }
+    if (current.totalIncome !== best.totalIncome) {
+      return current.totalIncome > best.totalIncome ? current : best;
+    }
+    return current.averageMonthlyIncome > best.averageMonthlyIncome ? current : best;
+  };
+
+  let maximizeResult = maximizeCandidates.reduce(pickBetter);
+
+  if (maximizeResult.daysUsed <= saveResult.daysUsed) {
+    const pushTarget = Math.max(minHouseholdIncome, Math.round(combinedAvailableIncome * 1.1));
+    const extraPreferences = buildPreferences('maximize_parental_salary', pushTarget, allowFullWeekForMax);
+    const extraLegacy = optimizeParentalLeave(extraPreferences, baseInputs);
+    const extraResult = convertLegacyResult(maximizeMeta, extraLegacy, conversionContext);
+    maximizeResult = pickBetter(maximizeResult, extraResult);
+  }
+
+  return [saveResult, maximizeResult];
 }
 
 export function formatPeriod(period: LeavePeriod): string {
