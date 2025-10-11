@@ -118,7 +118,7 @@ export function InteractiveSliders({
 
         {/* Expandable Content */}
         {isExpanded && (
-          <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="p-3 space-y-3 max-h-[40vh] overflow-y-auto">
             {/* Mobile KPI Row */}
             <div className="grid grid-cols-3 gap-2 md:hidden">
               <div className="bg-primary/10 border border-primary/30 rounded p-2">
@@ -136,7 +136,7 @@ export function InteractiveSliders({
             </div>
 
             {/* Sliders - Compact */}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium flex items-center gap-1">
                   <TrendingUp className="h-3 w-3 text-primary" />
@@ -152,7 +152,7 @@ export function InteractiveSliders({
                   <span>Lägsta månaden: {formatCurrency(lowestMonthlyIncome)}. Sänk kravet eller öka uttag/vecka.</span>
                 </div>
               )}
-              <div className="relative pt-2 pb-10">
+              <div className="relative pt-1 pb-8">
                 <Slider
                   value={[householdIncome]}
                   onValueChange={(values) => onHouseholdIncomeChange(values[0])}
@@ -184,7 +184,7 @@ export function InteractiveSliders({
               </div>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium flex items-center gap-1">
                   <Calendar className="h-3 w-3 text-primary" />
@@ -212,7 +212,7 @@ export function InteractiveSliders({
               </p>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium flex items-center gap-1">
                   <Clock className="h-3 w-3 text-primary" />
