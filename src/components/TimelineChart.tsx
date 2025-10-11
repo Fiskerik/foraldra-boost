@@ -66,6 +66,19 @@ const monthlyData = months.map((month) => {
   };
   
   const yMax = roundToNice(yAxisMax);
+  const safeYMax = yMax > 0 ? yMax : 1;
+  const chartBottomPadding = 32; // matches Tailwind bottom-8 spacing used for the x-axis labels
+
+  const clampToUnitInterval = (value: number) => {
+    if (value <= 0) return 0;
+    if (value >= safeYMax) return 1;
+    return value / safeYMax;
+  };
+
+  const getYPercent = (value: number) => 100 - clampToUnitInterval(value) * 100;
+
+  const minIncomePercentage = clampToUnitInterval(minHouseholdIncome) * 100;
+  const minIncomeBottom = `calc(${minIncomePercentage}% + ${chartBottomPadding}px)`;
   
   const getColorForData = (d: typeof monthlyData[number]) => {
     const maxDays = Math.max(d.parent1Days, d.parent2Days, d.bothDays);
@@ -95,7 +108,10 @@ const monthlyData = months.map((month) => {
         )}
         
         {/* Y-axis labels */}
-        <div className="absolute left-0 top-0 bottom-0 w-20 flex flex-col justify-between text-xs text-muted-foreground">
+        <div
+          className="absolute left-0 top-0 w-20 flex flex-col justify-between text-xs text-muted-foreground"
+          style={{ bottom: chartBottomPadding }}
+        >
           <span>{formatCurrency(yMax)}</span>
           <span>{formatCurrency(yMax * 0.75)}</span>
           <span>{formatCurrency(yMax * 0.5)}</span>
@@ -104,11 +120,9 @@ const monthlyData = months.map((month) => {
         </div>
         
         {/* Minimum income line */}
-        <div 
+        <div
           className="absolute left-20 right-0 border-t-2 border-destructive border-dashed z-10 pointer-events-none"
-          style={{ 
-            bottom: `calc(${(minHouseholdIncome / yMax) * 100}% + 32px)`,
-          }}
+          style={{ bottom: minIncomeBottom }}
         >
           <span className="absolute -top-5 right-0 text-xs text-destructive font-medium">
             Min. inkomst
@@ -116,7 +130,7 @@ const monthlyData = months.map((month) => {
         </div>
         
         {/* Line chart */}
-        <div className="absolute left-20 right-0 top-0 bottom-8">
+        <div className="absolute left-20 right-0 top-0" style={{ bottom: chartBottomPadding }}>
           <svg className="w-full h-full" preserveAspectRatio="none">
             {/* Draw lines between points (black baseline + colored overlay) */}
             {monthlyData.map((data, index) => {
@@ -124,8 +138,8 @@ const monthlyData = months.map((month) => {
               
               const x1 = (index / (monthlyData.length - 1)) * 100;
               const x2 = ((index + 1) / (monthlyData.length - 1)) * 100;
-              const y1 = 100 - (data.income / yMax) * 100;
-              const y2 = 100 - (monthlyData[index + 1].income / yMax) * 100;
+              const y1 = getYPercent(data.income);
+              const y2 = getYPercent(monthlyData[index + 1].income);
               const color = getColorForData(data);
               
               return (
@@ -156,7 +170,7 @@ const monthlyData = months.map((month) => {
             {/* Draw points (colored only, no black dot) */}
             {monthlyData.map((data, index) => {
               const x = (index / (monthlyData.length - 1)) * 100;
-              const y = 100 - (data.income / yMax) * 100;
+              const y = getYPercent(data.income);
               const color = getColorForData(data);
 
               return (
