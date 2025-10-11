@@ -9,51 +9,55 @@ interface TimelineChartProps {
 }
 
 export function TimelineChart({ periods, minHouseholdIncome }: TimelineChartProps) {
-  if (periods.length === 0) return null;
-
   const [hoveredPoint, setHoveredPoint] = React.useState<{ income: number; month: string } | null>(null);
+
+  if (periods.length === 0) return null;
 
   const startDate = periods[0].startDate;
   const endDate = periods[periods.length - 1].endDate;
   
-// Generate monthly data based on overlap with each period
-const months = eachMonthOfInterval({ start: startDate, end: endDate });
+  // Generate monthly data based on overlap with each period
+  const months = eachMonthOfInterval({ start: startDate, end: endDate });
 
-const monthlyData = months.map((month) => {
-  const mStart = startOfMonth(month);
-  const mEnd = endOfMonth(month);
-  let incomeDaysSum = 0;
-  let daysCovered = 0;
-  let parent1Days = 0;
-  let parent2Days = 0;
-  let bothDays = 0;
+  const monthlyData = months.map((month) => {
+    const mStart = startOfMonth(month);
+    const mEnd = endOfMonth(month);
+    let incomeDaysSum = 0;
+    let daysCovered = 0;
+    let parent1Days = 0;
+    let parent2Days = 0;
+    let bothDays = 0;
 
-  periods.forEach((period) => {
-    const overlapStart = period.startDate > mStart ? period.startDate : mStart;
-    const overlapEnd = period.endDate < mEnd ? period.endDate : mEnd;
-    const hasOverlap = overlapStart <= overlapEnd;
-    if (!hasOverlap) return;
+    periods.forEach((period) => {
+      const overlapStart = period.startDate > mStart ? period.startDate : mStart;
+      const overlapEnd = period.endDate < mEnd ? period.endDate : mEnd;
+      const hasOverlap = overlapStart <= overlapEnd;
+      if (!hasOverlap) return;
 
-    const daysInOverlap = differenceInCalendarDays(overlapEnd, overlapStart) + 1;
-    incomeDaysSum += period.dailyIncome * daysInOverlap;
-    daysCovered += daysInOverlap;
+      const daysInOverlap = differenceInCalendarDays(overlapEnd, overlapStart) + 1;
+      incomeDaysSum += period.dailyIncome * daysInOverlap;
+      daysCovered += daysInOverlap;
 
-    if (period.parent === 'parent1') parent1Days += daysInOverlap;
-    else if (period.parent === 'parent2') parent2Days += daysInOverlap;
-    else if (period.parent === 'both' && period.benefitLevel !== 'none') bothDays += daysInOverlap; // count only true double-leave
+      if (period.parent === 'parent1') {
+        parent1Days += daysInOverlap;
+      } else if (period.parent === 'parent2') {
+        parent2Days += daysInOverlap;
+      } else if (period.parent === 'both' && period.benefitLevel !== 'none') {
+        bothDays += daysInOverlap; // count only overlap days with compensation
+      }
+    });
+
+    const avgDaily = daysCovered > 0 ? incomeDaysSum / daysCovered : 0;
+    const income = avgDaily * 30; // normalize to 30-day month for a stable baseline
+
+    return {
+      month: format(month, 'MMM yyyy', { locale: sv }),
+      income,
+      parent1Days,
+      parent2Days,
+      bothDays,
+    };
   });
-
-  const avgDaily = daysCovered > 0 ? incomeDaysSum / daysCovered : 0;
-  const income = avgDaily * 30; // normalize to 30-day month for a stable baseline
-
-  return {
-    month: format(month, 'MMM yyyy', { locale: sv }),
-    income,
-    parent1Days,
-    parent2Days,
-    bothDays,
-  };
-});
   
   // Calculate Y-axis domain: max monthly income + 20%, rounded to nice intervals
   const maxIncome = Math.max(...monthlyData.map(d => d.income));
@@ -77,8 +81,7 @@ const monthlyData = months.map((month) => {
 
   const getYPercent = (value: number) => 100 - clampToUnitInterval(value) * 100;
 
-  const minIncomePercentage = clampToUnitInterval(minHouseholdIncome) * 100;
-  const minIncomeBottom = `calc(${minIncomePercentage}% + ${chartBottomPadding}px)`;
+  const minIncomePosition = getYPercent(minHouseholdIncome);
   
   const getColorForData = (d: typeof monthlyData[number]) => {
     const maxDays = Math.max(d.parent1Days, d.parent2Days, d.bothDays);
@@ -120,24 +123,24 @@ const monthlyData = months.map((month) => {
         </div>
         
         {/* Minimum income line */}
-        <div
-          className="absolute left-20 right-0 border-t-2 border-destructive border-dashed z-10 pointer-events-none"
-          style={{ bottom: minIncomeBottom }}
-        >
-          <span className="absolute -top-5 right-0 text-xs text-destructive font-medium">
-            Min. inkomst
-          </span>
-        </div>
-        
-        {/* Line chart */}
+        {/* Chart canvas */}
         <div className="absolute left-20 right-0 top-0" style={{ bottom: chartBottomPadding }}>
+          <div
+            className="absolute left-0 right-0 border-t-2 border-destructive border-dashed z-10 pointer-events-none"
+            style={{ top: `${minIncomePosition}%` }}
+          >
+            <span className="absolute -top-5 right-0 text-xs text-destructive font-medium">
+              Min. inkomst
+            </span>
+          </div>
+
           <svg className="w-full h-full" preserveAspectRatio="none">
             {/* Draw lines between points (black baseline + colored overlay) */}
             {monthlyData.map((data, index) => {
-              if (index === monthlyData.length - 1) return null;
-              
-              const x1 = (index / (monthlyData.length - 1)) * 100;
-              const x2 = ((index + 1) / (monthlyData.length - 1)) * 100;
+              if (monthlyData.length < 2 || index === monthlyData.length - 1) return null;
+
+              const x1 = monthlyData.length > 1 ? (index / (monthlyData.length - 1)) * 100 : 0;
+              const x2 = monthlyData.length > 1 ? ((index + 1) / (monthlyData.length - 1)) * 100 : 0;
               const y1 = getYPercent(data.income);
               const y2 = getYPercent(monthlyData[index + 1].income);
               const color = getColorForData(data);
@@ -169,7 +172,7 @@ const monthlyData = months.map((month) => {
             
             {/* Draw points (colored only, no black dot) */}
             {monthlyData.map((data, index) => {
-              const x = (index / (monthlyData.length - 1)) * 100;
+              const x = monthlyData.length > 1 ? (index / (monthlyData.length - 1)) * 100 : 0;
               const y = getYPercent(data.income);
               const color = getColorForData(data);
 
