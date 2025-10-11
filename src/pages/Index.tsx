@@ -193,15 +193,12 @@ const Index = () => {
           <InteractiveSliders
             householdIncome={householdIncome}
             maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
-            totalMonths={totalMonths}
-            parent1Months={parent1Months}
             daysPerWeek={daysPerWeek}
             currentHouseholdIncome={optimizationResults[selectedStrategyIndex]?.averageMonthlyIncome || 0}
             totalIncome={optimizationResults[selectedStrategyIndex]?.totalIncome}
             daysUsed={optimizationResults[selectedStrategyIndex]?.daysUsed}
             daysSaved={optimizationResults[selectedStrategyIndex]?.daysSaved}
             onHouseholdIncomeChange={handleHouseholdIncomeChange}
-            onDistributionChange={handleDistributionChange}
             onDaysPerWeekChange={handleDaysPerWeekChange}
           />
         )}
