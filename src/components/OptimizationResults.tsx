@@ -27,6 +27,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     endDate: Date;
     calendarDays: number;
     benefitDays: number;
+    monthlyIncome: number;
   }
 
   const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
@@ -48,6 +49,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         endDate: monthEnd,
         calendarDays,
         benefitDays: 0,
+        monthlyIncome: 0,
       });
 
       cursor = addDays(monthEnd, 1);
@@ -64,6 +66,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     segments.forEach((segment, index) => {
       if (remainingBenefitDays <= 0) {
         segment.benefitDays = 0;
+        segment.monthlyIncome = 0;
         return;
       }
 
@@ -84,6 +87,15 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       }
 
       segment.benefitDays = allocated;
+      
+      // Calculate monthly income for this segment
+      // dailyIncome includes both benefit and work income for the household
+      // We need to extrapolate based on actual calendar days in the month
+      const dailyIncomeRate = period.dailyIncome;
+      const daysInMonth = segment.calendarDays;
+      const extrapolatedMonthlyIncome = dailyIncomeRate * (30 / daysInMonth) * daysInMonth;
+      segment.monthlyIncome = extrapolatedMonthlyIncome;
+      
       remainingBenefitDays -= allocated;
       carryOver = rawShare - allocated;
     });
@@ -246,12 +258,15 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           {isExpanded && hasMultipleMonths && (
                             <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
                               {monthlyBreakdown.map((month, monthIdx) => (
-                                <div key={monthIdx} className="text-xs p-2 bg-muted/30 rounded">
+                                <div key={monthIdx} className="text-xs p-2 bg-muted/30 rounded space-y-1">
                                   <div className="font-medium">
                                     {format(month.startDate, 'd')} - {format(month.endDate, 'd MMM yyyy')}
                                   </div>
                                   <div className="text-muted-foreground">
                                     {month.calendarDays} kalenderdagar • {month.benefitDays} uttagna dagar
+                                  </div>
+                                  <div className="font-semibold text-foreground">
+                                    Hushållets inkomst: {formatCurrency(month.monthlyIncome)}
                                   </div>
                                 </div>
                               ))}

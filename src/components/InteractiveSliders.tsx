@@ -37,19 +37,40 @@ export function InteractiveSliders({
 }: InteractiveSlidersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   
-  // Calculate monthly income for each period
-  // Monthly income = dailyIncome * days per month (approximated by daysPerWeek * 4.33)
-  const calculatePeriodMonthlyIncome = (period: LeavePeriod): number => {
-    const daysPerWeek = period.daysPerWeek || 5;
-    const weeksPerMonth = 4.33;
-    const householdDailyIncome = period.dailyIncome + (period.otherParentDailyIncome || 0);
-    return householdDailyIncome * daysPerWeek * weeksPerMonth;
+  // Calculate monthly income for all months that overlap with periods
+  const getAllMonthlyIncomes = (): number[] => {
+    if (periods.length === 0) return [currentHouseholdIncome];
+    
+    const monthlyIncomes: number[] = [];
+    
+    periods.forEach(period => {
+      // For each period, break it down by calendar month
+      let cursor = new Date(period.startDate);
+      const endDate = new Date(period.endDate);
+      
+      while (cursor <= endDate) {
+        const monthStart = new Date(cursor);
+        const monthEnd = new Date(Math.min(
+          new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getTime(),
+          endDate.getTime()
+        ));
+        
+        // Calculate income for this specific month segment
+        // dailyIncome already represents the household's daily income during this period
+        const monthIncome = period.dailyIncome * 30;
+        monthlyIncomes.push(monthIncome);
+        
+        // Move to next month
+        cursor = new Date(monthEnd);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    });
+    
+    return monthlyIncomes.length > 0 ? monthlyIncomes : [currentHouseholdIncome];
   };
-  
-  // Check if ANY individual period falls below minimum income requirement
-  const lowestMonthlyIncome = periods.length > 0 
-    ? Math.min(...periods.map(p => calculatePeriodMonthlyIncome(p)))
-    : currentHouseholdIncome;
+
+  const allMonthlyIncomes = getAllMonthlyIncomes();
+  const lowestMonthlyIncome = Math.min(...allMonthlyIncomes);
   
   const isBelowMinimum = lowestMonthlyIncome < householdIncome;
   
