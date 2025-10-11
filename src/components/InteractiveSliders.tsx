@@ -4,7 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/utils/parentalCalculations";
-import { TrendingUp, Calendar, Clock, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { TrendingUp, Calendar, Clock, Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 
 interface InteractiveSlidersProps {
   householdIncome: number;
@@ -31,6 +31,15 @@ export function InteractiveSliders({
 }: InteractiveSlidersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const totalDaysValue = Math.max(0, daysUsed ?? 0);
+  
+  // Check if current plan is below minimum income requirement
+  const isBelowMinimum = currentHouseholdIncome < householdIncome;
+  
+  // Calculate break-point positions as percentages for visual markers
+  const incomeBreakPoint = isBelowMinimum ? householdIncome : null;
+  const incomeBreakPointPercent = incomeBreakPoint 
+    ? ((incomeBreakPoint - 0) / (maxHouseholdIncome - 0)) * 100 
+    : null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-in-bottom">
@@ -82,20 +91,39 @@ export function InteractiveSliders({
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium flex items-center gap-1">
                   <TrendingUp className="h-3 w-3 text-primary" />
-                  Hushållets inkomst
+                  Min hushållsinkomst
                 </Label>
                 <span className="text-sm font-bold text-primary">
                   {formatCurrency(householdIncome)}
                 </span>
               </div>
-              <Slider
-                value={[householdIncome]}
-                onValueChange={(values) => onHouseholdIncomeChange(values[0])}
-                min={0}
-                max={maxHouseholdIncome}
-                step={1000}
-                className="py-2"
-              />
+              {isBelowMinimum && (
+                <div className="flex items-center gap-1 text-[10px] text-destructive">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span>Nuvarande plan når ej målet ({formatCurrency(currentHouseholdIncome)}). Sänk inkomst eller öka dagar/vecka.</span>
+                </div>
+              )}
+              <div className="relative">
+                <Slider
+                  value={[householdIncome]}
+                  onValueChange={(values) => onHouseholdIncomeChange(values[0])}
+                  min={0}
+                  max={maxHouseholdIncome}
+                  step={1000}
+                  className="py-2"
+                />
+                {incomeBreakPointPercent !== null && isBelowMinimum && (
+                  <div 
+                    className="absolute top-1/2 -translate-y-1/2 w-1 h-4 bg-destructive rounded-full pointer-events-none"
+                    style={{ left: `calc(${incomeBreakPointPercent}% - 2px)` }}
+                    title={`Brytpunkt: ${formatCurrency(incomeBreakPoint!)}`}
+                  >
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] text-destructive whitespace-nowrap font-bold">
+                      ⚠️ {formatCurrency(currentHouseholdIncome)}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -129,14 +157,21 @@ export function InteractiveSliders({
                   {daysPerWeek} {daysPerWeek === 1 ? 'dag' : 'dagar'}
                 </span>
               </div>
-              <Slider
-                value={[daysPerWeek]}
-                onValueChange={(values) => onDaysPerWeekChange(values[0])}
-                min={1}
-                max={7}
-                step={1}
-                className="py-2"
-              />
+              {isBelowMinimum && (
+                <div className="text-[10px] text-muted-foreground">
+                  Öka uttag per vecka för att nå inkomstmålet snabbare
+                </div>
+              )}
+              <div className="relative">
+                <Slider
+                  value={[daysPerWeek]}
+                  onValueChange={(values) => onDaysPerWeekChange(values[0])}
+                  min={1}
+                  max={7}
+                  step={1}
+                  className="py-2"
+                />
+              </div>
             </div>
           </div>
         )}
