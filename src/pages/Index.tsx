@@ -6,7 +6,13 @@ import { AvailableIncomeDisplay } from "@/components/AvailableIncomeDisplay";
 import { LeavePeriodCard } from "@/components/LeavePeriodCard";
 import { OptimizationResults } from "@/components/OptimizationResults";
 import { InteractiveSliders } from "@/components/InteractiveSliders";
-import { ParentData, calculateAvailableIncome, optimizeLeave, OptimizationResult } from "@/utils/parentalCalculations";
+import {
+  ParentData,
+  calculateAvailableIncome,
+  optimizeLeave,
+  OptimizationResult,
+  calculateMaxLeaveMonths,
+} from "@/utils/parentalCalculations";
 import { Baby, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,7 +24,6 @@ const Index = () => {
   const [municipality, setMunicipality] = useState("Vallentuna");
   const [taxRate, setTaxRate] = useState(30.2);
   const [totalMonths, setTotalMonths] = useState(15);
-  const [optimizedBaselineMonths, setOptimizedBaselineMonths] = useState(15);
   const [parent1Months, setParent1Months] = useState(10);
   const [householdIncome, setHouseholdIncome] = useState(45000);
   const [simultaneousLeave, setSimultaneousLeave] = useState(false);
@@ -29,6 +34,7 @@ const Index = () => {
 
   const parent2Months = totalMonths - parent1Months;
   const maxHouseholdIncome = parent1Income + parent2Income;
+  const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
 
   const parent1Data: ParentData = {
     income: parent1Income,
@@ -67,7 +73,6 @@ const Index = () => {
       simultaneousLeave ? simultaneousMonths : 0
     );
 
-    setOptimizedBaselineMonths(totalMonths);
     setOptimizationResults(results);
     if (!silent) {
       toast.success("Optimering klar!");
@@ -94,17 +99,42 @@ const Index = () => {
   };
 
   const handleDaysPerWeekChange = (value: number) => {
-    setDaysPerWeek(value);
+    const clampedDays = Math.max(1, Math.min(7, Math.round(value)));
+    const newMaxMonths = calculateMaxLeaveMonths(clampedDays);
+    const adjustedTotalMonths = Math.min(Math.max(totalMonths, 0), newMaxMonths);
+
+    setDaysPerWeek(clampedDays);
+
+    if (totalMonths !== adjustedTotalMonths) {
+      setTotalMonths(adjustedTotalMonths);
+    }
+
+    if (parent1Months > adjustedTotalMonths) {
+      setParent1Months(adjustedTotalMonths);
+    }
+
+    const maxSimultaneous = Math.floor(adjustedTotalMonths / 2);
+    if (simultaneousMonths > maxSimultaneous) {
+      setSimultaneousMonths(maxSimultaneous);
+    }
+
     if (optimizationResults) {
       setTimeout(() => handleOptimize(true), 100);
     }
   };
 
   const handleTotalMonthsChange = (value: number) => {
-    setTotalMonths(value);
+    const safeValue = Math.max(0, value);
+    const allowedMax = calculateMaxLeaveMonths(daysPerWeek);
+    const constrainedValue = Math.min(safeValue, allowedMax);
+
+    setTotalMonths(constrainedValue);
     // Adjust parent months to stay within bounds
-    if (parent1Months > value) {
-      setParent1Months(value);
+    if (parent1Months > constrainedValue) {
+      setParent1Months(constrainedValue);
+    }
+    if (simultaneousMonths > Math.floor(constrainedValue / 2)) {
+      setSimultaneousMonths(Math.floor(constrainedValue / 2));
     }
     if (optimizationResults) {
       setTimeout(() => handleOptimize(true), 100);
@@ -171,7 +201,8 @@ const Index = () => {
           parent2Months={parent2Months}
           minHouseholdIncome={householdIncome}
           maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
-          onTotalMonthsChange={setTotalMonths}
+          maxLeaveMonths={maxLeaveMonths}
+          onTotalMonthsChange={handleTotalMonthsChange}
           onDistributionChange={setParent1Months}
           onMinIncomeChange={setHouseholdIncome}
           simultaneousLeave={simultaneousLeave}
@@ -209,7 +240,6 @@ const Index = () => {
             maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
             daysPerWeek={daysPerWeek}
             totalMonths={totalMonths}
-            initialTotalMonths={optimizedBaselineMonths}
             currentHouseholdIncome={optimizationResults[selectedStrategyIndex]?.averageMonthlyIncome || 0}
             periods={optimizationResults[selectedStrategyIndex]?.periods || []}
             totalIncome={optimizationResults[selectedStrategyIndex]?.totalIncome}

@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, LeavePeriod } from "@/utils/parentalCalculations";
+import { formatCurrency, LeavePeriod, calculateMaxLeaveMonths, TOTAL_BENEFIT_DAYS } from "@/utils/parentalCalculations";
 import { TrendingUp, Calendar, Clock, Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 
 interface InteractiveSlidersProps {
@@ -11,7 +11,6 @@ interface InteractiveSlidersProps {
   maxHouseholdIncome: number;
   daysPerWeek: number;
   totalMonths: number;
-  initialTotalMonths: number;
   currentHouseholdIncome: number; // Calculated based on current plan
   periods: LeavePeriod[];
   totalIncome?: number;
@@ -27,7 +26,6 @@ export function InteractiveSliders({
   maxHouseholdIncome,
   daysPerWeek,
   totalMonths,
-  initialTotalMonths,
   currentHouseholdIncome,
   periods,
   totalIncome,
@@ -64,11 +62,8 @@ export function InteractiveSliders({
       )
     : null;
 
-  const monthsSliderMax = Math.max(
-    Math.ceil(initialTotalMonths * 1.33),
-    Math.ceil(totalMonths),
-    1
-  );
+  const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
+  const monthsSliderMax = Math.max(maxLeaveMonths, totalMonths, 1);
 
   const formattedTotalMonths = Number.isInteger(totalMonths)
     ? totalMonths
@@ -192,7 +187,7 @@ export function InteractiveSliders({
                 className="py-2"
               />
               <p className="text-[10px] text-muted-foreground">
-                Totalt antal månader lediga. {daysUsed ?? 0} av 480 dagar används.
+                Totalt antal månader lediga. {daysUsed ?? 0} av {TOTAL_BENEFIT_DAYS} dagar används.
               </p>
             </div>
 
