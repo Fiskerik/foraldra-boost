@@ -256,7 +256,26 @@ function convertLegacyResult(
 ): OptimizationResult {
   const periods: LeavePeriod[] = [];
   let currentDate = new Date();
-  const calendarDaysAccumulator = { value: 0 };
+  
+  // Add initial 10 days (both parents) from child's birth
+  const initialEndDate = addDays(currentDate, 9); // 10 days total (0-9)
+  const parent1NetDaily = context.parent1NetIncome / 30;
+  const parent2NetDaily = context.parent2NetIncome / 30;
+  
+  periods.push({
+    parent: 'both',
+    startDate: new Date(currentDate),
+    endDate: initialEndDate,
+    daysCount: 10,
+    dailyBenefit: 0,
+    dailyIncome: parent1NetDaily + parent2NetDaily,
+    benefitLevel: 'none',
+    daysPerWeek: 0,
+    otherParentDailyIncome: parent2NetDaily,
+  });
+  
+  currentDate = addDays(initialEndDate, 1);
+  const calendarDaysAccumulator = { value: 10 }; // Start with 10 days already used
 
   const resolveDaysPerWeek = (...values: unknown[]): number => {
     for (const value of values) {
@@ -440,31 +459,33 @@ function convertLegacyResult(
     }, calendarDaysAccumulator);
   }
 
-  const targetCalendarDays = Math.max(0, Math.round(context.adjustedTotalMonths * 30));
-  if (targetCalendarDays > calendarDaysAccumulator.value) {
-    const remainingDays = targetCalendarDays - calendarDaysAccumulator.value;
-    const startDate = new Date(currentDate);
-    const endDate = addDays(startDate, Math.max(0, remainingDays - 1));
-    const parent1NetDaily = context.parent1NetIncome / 30;
-    const parent2NetDaily = context.parent2NetIncome / 30;
+  // No filler periods - we strictly adhere to the total months specified
+  // The periods should end when we've reached the target total months
 
-    periods.push({
-      parent: 'both',
-      startDate,
-      endDate,
-      daysCount: Math.max(1, remainingDays),
-      dailyBenefit: 0,
-      dailyIncome: parent1NetDaily + parent2NetDaily,
-      benefitLevel: 'none',
-      daysPerWeek: 0,
-      otherParentDailyIncome: parent2NetDaily,
-    });
-
-    calendarDaysAccumulator.value += remainingDays;
-    currentDate = addDays(endDate, 1);
+  // Merge consecutive periods with same parent and benefit level
+  const mergedPeriods: LeavePeriod[] = [];
+  for (const period of periods) {
+    const last = mergedPeriods[mergedPeriods.length - 1];
+    
+    // Check if we can merge with the previous period
+    if (
+      last &&
+      last.parent === period.parent &&
+      last.benefitLevel === period.benefitLevel &&
+      last.daysPerWeek === period.daysPerWeek &&
+      Math.abs(last.dailyIncome - period.dailyIncome) < 1 && // Same income
+      Math.abs(last.dailyBenefit - period.dailyBenefit) < 1 && // Same benefit
+      Math.abs((last.otherParentDailyIncome || 0) - (period.otherParentDailyIncome || 0)) < 1 // Same other parent income
+    ) {
+      // Merge with previous period
+      last.endDate = period.endDate;
+      last.daysCount += period.daysCount;
+    } else {
+      mergedPeriods.push({ ...period });
+    }
   }
 
-  const totalIncome = periods.reduce((sum, period) => sum + period.dailyIncome * period.daysCount, 0);
+  const totalIncome = mergedPeriods.reduce((sum, period) => sum + period.dailyIncome * period.daysCount, 0);
   const averageMonthlyIncome = calendarDaysAccumulator.value > 0
     ? (totalIncome / calendarDaysAccumulator.value) * 30
     : 0;
@@ -473,7 +494,7 @@ function convertLegacyResult(
     strategy: meta.key,
     title: meta.title,
     description: meta.description,
-    periods,
+    periods: mergedPeriods,
     totalIncome,
     daysUsed: clampedDaysUsed,
     daysSaved,
