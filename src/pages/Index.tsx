@@ -193,11 +193,12 @@ const Index = () => {
 
         {optimizationResults && (
           <div id="results" className="pt-12">
-            <OptimizationResults 
-              results={optimizationResults} 
+            <OptimizationResults
+              results={optimizationResults}
               minHouseholdIncome={householdIncome}
               selectedIndex={selectedStrategyIndex}
               onSelectStrategy={setSelectedStrategyIndex}
+              timelineMonths={totalMonths}
             />
           </div>
         )}

@@ -11,9 +11,10 @@ interface OptimizationResultsProps {
   minHouseholdIncome: number;
   selectedIndex: number;
   onSelectStrategy: (index: number) => void;
+  timelineMonths: number;
 }
 
-export function OptimizationResults({ results, minHouseholdIncome, selectedIndex, onSelectStrategy }: OptimizationResultsProps) {
+export function OptimizationResults({ results, minHouseholdIncome, selectedIndex, onSelectStrategy, timelineMonths }: OptimizationResultsProps) {
   const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
 
   const togglePeriod = (resultIndex: number, periodIndex: number) => {
@@ -159,7 +160,11 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                 </div>
               </div>
               
-              <TimelineChart periods={result.periods} minHouseholdIncome={minHouseholdIncome} />
+              <TimelineChart
+                periods={result.periods}
+                minHouseholdIncome={minHouseholdIncome}
+                calendarMonthsLimit={timelineMonths}
+              />
 
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm font-semibold">
