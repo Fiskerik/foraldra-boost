@@ -132,6 +132,7 @@ interface ConversionContext {
   parent1NetIncome: number;
   parent2NetIncome: number;
   adjustedTotalMonths: number;
+  requestedDaysPerWeek: number;
 }
 
 type LegacyPlan = Record<string, unknown> | undefined;
@@ -241,33 +242,46 @@ function convertLegacyResult(
   let currentDate = new Date();
   const calendarDaysAccumulator = { value: 0 };
 
-  const plan1TotalInkomstDays = getInkomstDays(legacyResult.plan1, toNumber(legacyResult.plan1?.dagarPerVecka));
+  const resolveDaysPerWeek = (...values: unknown[]): number => {
+    for (const value of values) {
+      const candidate = toNumber(value);
+      if (candidate > 0) {
+        return candidate;
+      }
+    }
+    const normalized = Math.max(1, Math.round(context.requestedDaysPerWeek));
+    return normalized > 0 ? normalized : 5;
+  };
+
+  const plan1DaysPerWeek = resolveDaysPerWeek(legacyResult.plan1?.dagarPerVecka);
+  const plan1TotalInkomstDays = getInkomstDays(legacyResult.plan1, plan1DaysPerWeek);
   const plan1NoExtraDays = getInkomstDays(
     legacyResult.plan1NoExtra,
-    toNumber(legacyResult.plan1NoExtra?.dagarPerVecka || legacyResult.plan1?.dagarPerVecka)
+    resolveDaysPerWeek(legacyResult.plan1NoExtra?.dagarPerVecka, legacyResult.plan1?.dagarPerVecka)
   );
   const plan1ExtraDays = Math.max(0, plan1TotalInkomstDays - plan1NoExtraDays);
-  const plan1MinDays = getMinDays(legacyResult.plan1, toNumber(legacyResult.plan1?.dagarPerVecka));
+  const plan1MinDays = getMinDays(legacyResult.plan1, plan1DaysPerWeek);
   const plan1MinContinuationDays = getMinDays(
     legacyResult.plan1MinDagar,
-    toNumber(legacyResult.plan1MinDagar?.dagarPerVecka || legacyResult.plan1?.dagarPerVecka)
+    resolveDaysPerWeek(legacyResult.plan1MinDagar?.dagarPerVecka, legacyResult.plan1?.dagarPerVecka)
   );
 
-  const plan2TotalInkomstDays = getInkomstDays(legacyResult.plan2, toNumber(legacyResult.plan2?.dagarPerVecka));
+  const plan2DaysPerWeek = resolveDaysPerWeek(legacyResult.plan2?.dagarPerVecka);
+  const plan2TotalInkomstDays = getInkomstDays(legacyResult.plan2, plan2DaysPerWeek);
   const plan2NoExtraDays = getInkomstDays(
     legacyResult.plan2NoExtra,
-    toNumber(legacyResult.plan2NoExtra?.dagarPerVecka || legacyResult.plan2?.dagarPerVecka)
+    resolveDaysPerWeek(legacyResult.plan2NoExtra?.dagarPerVecka, legacyResult.plan2?.dagarPerVecka)
   );
   const plan2ExtraDays = Math.max(0, plan2TotalInkomstDays - plan2NoExtraDays);
-  const plan2MinDays = getMinDays(legacyResult.plan2, toNumber(legacyResult.plan2?.dagarPerVecka));
+  const plan2MinDays = getMinDays(legacyResult.plan2, plan2DaysPerWeek);
   const plan2MinContinuationDays = getMinDays(
     legacyResult.plan2MinDagar,
-    toNumber(legacyResult.plan2MinDagar?.dagarPerVecka || legacyResult.plan2?.dagarPerVecka)
+    resolveDaysPerWeek(legacyResult.plan2MinDagar?.dagarPerVecka, legacyResult.plan2?.dagarPerVecka)
   );
 
   const overlapDaysUsed = computeDaysFromPlan(
     legacyResult.plan1Overlap,
-    toNumber(legacyResult.plan1Overlap?.dagarPerVecka)
+    resolveDaysPerWeek(legacyResult.plan1Overlap?.dagarPerVecka)
   );
 
   const usedInkomstDays1 = plan1ExtraDays + plan1NoExtraDays;
@@ -304,7 +318,7 @@ function convertLegacyResult(
       benefitLevel: legacyResult.extra1 > 0 || legacyResult.extra2 > 0 ? 'parental-salary' : 'high',
       otherParentMonthlyIncome: 0,
       usedDays: overlapDaysUsed,
-      fallbackDaysPerWeek: toNumber(legacyResult.plan1Overlap?.dagarPerVecka) || 5,
+      fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan1Overlap?.dagarPerVecka),
       benefitMonthly: overlapBenefitMonthly,
       leaveMonthlyIncome: overlapParent1Monthly + overlapParent2Monthly,
     }, calendarDaysAccumulator);
@@ -319,7 +333,7 @@ function convertLegacyResult(
       benefitLevel: legacyResult.extra1 > 0 ? 'parental-salary' : 'high',
       otherParentMonthlyIncome: toNumber(legacyResult.arbetsInkomst2),
       usedDays: plan1ExtraDays,
-      fallbackDaysPerWeek: toNumber(legacyResult.plan1?.dagarPerVecka) || 5,
+      fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan1?.dagarPerVecka),
       benefitMonthly,
       leaveMonthlyIncome,
     }, calendarDaysAccumulator);
@@ -333,8 +347,10 @@ function convertLegacyResult(
       benefitLevel: 'high',
       otherParentMonthlyIncome: toNumber(legacyResult.arbetsInkomst2),
       usedDays: plan1NoExtraDays,
-      fallbackDaysPerWeek:
-        toNumber(legacyResult.plan1NoExtra?.dagarPerVecka || legacyResult.plan1?.dagarPerVecka) || 5,
+      fallbackDaysPerWeek: resolveDaysPerWeek(
+        legacyResult.plan1NoExtra?.dagarPerVecka,
+        legacyResult.plan1?.dagarPerVecka
+      ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
     }, calendarDaysAccumulator);
@@ -349,8 +365,10 @@ function convertLegacyResult(
       benefitLevel: 'low',
       otherParentMonthlyIncome: toNumber(legacyResult.arbetsInkomst2),
       usedDays: totalPlan1MinDays,
-      fallbackDaysPerWeek:
-        toNumber(legacyResult.plan1MinDagar?.dagarPerVecka || legacyResult.plan1?.dagarPerVecka) || 5,
+      fallbackDaysPerWeek: resolveDaysPerWeek(
+        legacyResult.plan1MinDagar?.dagarPerVecka,
+        legacyResult.plan1?.dagarPerVecka
+      ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
     }, calendarDaysAccumulator);
@@ -365,7 +383,7 @@ function convertLegacyResult(
       benefitLevel: legacyResult.extra2 > 0 ? 'parental-salary' : 'high',
       otherParentMonthlyIncome: toNumber(legacyResult.arbetsInkomst1),
       usedDays: plan2ExtraDays,
-      fallbackDaysPerWeek: toNumber(legacyResult.plan2?.dagarPerVecka) || 5,
+      fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan2?.dagarPerVecka),
       benefitMonthly,
       leaveMonthlyIncome,
     }, calendarDaysAccumulator);
@@ -379,8 +397,10 @@ function convertLegacyResult(
       benefitLevel: 'high',
       otherParentMonthlyIncome: toNumber(legacyResult.arbetsInkomst1),
       usedDays: plan2NoExtraDays,
-      fallbackDaysPerWeek:
-        toNumber(legacyResult.plan2NoExtra?.dagarPerVecka || legacyResult.plan2?.dagarPerVecka) || 5,
+      fallbackDaysPerWeek: resolveDaysPerWeek(
+        legacyResult.plan2NoExtra?.dagarPerVecka,
+        legacyResult.plan2?.dagarPerVecka
+      ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
     }, calendarDaysAccumulator);
@@ -395,8 +415,10 @@ function convertLegacyResult(
       benefitLevel: 'low',
       otherParentMonthlyIncome: toNumber(legacyResult.arbetsInkomst1),
       usedDays: totalPlan2MinDays,
-      fallbackDaysPerWeek:
-        toNumber(legacyResult.plan2MinDagar?.dagarPerVecka || legacyResult.plan2?.dagarPerVecka) || 5,
+      fallbackDaysPerWeek: resolveDaysPerWeek(
+        legacyResult.plan2MinDagar?.dagarPerVecka,
+        legacyResult.plan2?.dagarPerVecka
+      ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
     }, calendarDaysAccumulator);
@@ -516,6 +538,7 @@ export function optimizeLeave(
     parent1NetIncome: calc1.netIncome,
     parent2NetIncome: calc2.netIncome,
     adjustedTotalMonths,
+    requestedDaysPerWeek: normalizedDaysPerWeek,
   };
 
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
