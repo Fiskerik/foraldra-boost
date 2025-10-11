@@ -114,7 +114,7 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-5xl px-4 py-12 space-y-8">
+      <main className="container mx-auto max-w-5xl px-4 py-12 space-y-8 pb-32">
         <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <ParentIncomeCard
             parentNumber={1}
