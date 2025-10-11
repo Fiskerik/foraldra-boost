@@ -117,8 +117,24 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {results.map((result, index) => (
-          <Card 
+        {results.map((result, index) => {
+          // Find the absolute lowest monthly income across ALL periods in this strategy
+          const allMonthlyBreakdowns: Array<MonthlyBreakdown & { periodIndex: number }> = [];
+          result.periods
+            .filter(period => period.benefitLevel !== 'none')
+            .forEach((period, periodIndex) => {
+              const breakdown = breakDownByMonth(period);
+              breakdown.forEach(month => {
+                allMonthlyBreakdowns.push({ ...month, periodIndex });
+              });
+            });
+          
+          const lowestMonthlyIncome = allMonthlyBreakdowns.length > 0
+            ? Math.min(...allMonthlyBreakdowns.map(m => m.monthlyIncome))
+            : Infinity;
+
+          return (
+          <Card
             key={index} 
             className={`shadow-soft cursor-pointer transition-all ${
               selectedIndex === index 
@@ -255,37 +271,34 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                             Uttag: {daysPerWeekLabel}
                           </div>
                           
-                          {isExpanded && hasMultipleMonths && (() => {
-                            const lowestIncome = Math.min(...monthlyBreakdown.map(m => m.monthlyIncome));
-                            return (
-                              <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
-                                {monthlyBreakdown.map((month, monthIdx) => {
-                                  const isLowest = month.monthlyIncome === lowestIncome;
-                                  return (
-                                    <div 
-                                      key={monthIdx} 
-                                      className={`text-xs p-2 rounded space-y-1 ${
-                                        isLowest 
-                                          ? 'bg-destructive/10 border border-destructive/30' 
-                                          : 'bg-muted/30'
-                                      }`}
-                                    >
-                                      <div className="font-medium">
-                                        {format(month.startDate, 'd')} - {format(month.endDate, 'd MMM yyyy')}
-                                      </div>
-                                      <div className="text-muted-foreground">
-                                        {month.calendarDays} kalenderdagar • {month.benefitDays} uttagna dagar
-                                      </div>
-                                      <div className={`font-semibold ${isLowest ? 'text-destructive' : 'text-foreground'}`}>
-                                        Hushållets inkomst: {formatCurrency(month.monthlyIncome)}
-                                        {isLowest && <span className="ml-1 text-[9px]">(lägst)</span>}
-                                      </div>
+                          {isExpanded && hasMultipleMonths && (
+                            <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
+                              {monthlyBreakdown.map((month, monthIdx) => {
+                                const isLowest = month.monthlyIncome === lowestMonthlyIncome;
+                                return (
+                                  <div 
+                                    key={monthIdx} 
+                                    className={`text-xs p-2 rounded space-y-1 ${
+                                      isLowest 
+                                        ? 'bg-destructive/10 border border-destructive/30' 
+                                        : 'bg-muted/30'
+                                    }`}
+                                  >
+                                    <div className="font-medium">
+                                      {format(month.startDate, 'd')} - {format(month.endDate, 'd MMM yyyy')}
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })()}
+                                    <div className="text-muted-foreground">
+                                      {month.calendarDays} kalenderdagar • {month.benefitDays} uttagna dagar
+                                    </div>
+                                    <div className={`font-semibold ${isLowest ? 'text-destructive' : 'text-foreground'}`}>
+                                      Hushållets inkomst: {formatCurrency(month.monthlyIncome)}
+                                      {isLowest && <span className="ml-1 text-[9px]">(lägst)</span>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                           
                           {period.parent !== 'both' && period.benefitLevel !== 'none' && (
                             <div className="mt-2 p-2 bg-muted/50 rounded space-y-1">
@@ -322,7 +335,8 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
