@@ -18,6 +18,7 @@ const Index = () => {
   const [municipality, setMunicipality] = useState("Vallentuna");
   const [taxRate, setTaxRate] = useState(30.2);
   const [totalMonths, setTotalMonths] = useState(15);
+  const [optimizedBaselineMonths, setOptimizedBaselineMonths] = useState(15);
   const [parent1Months, setParent1Months] = useState(10);
   const [householdIncome, setHouseholdIncome] = useState(45000);
   const [simultaneousLeave, setSimultaneousLeave] = useState(false);
@@ -66,6 +67,7 @@ const Index = () => {
       simultaneousLeave ? simultaneousMonths : 0
     );
 
+    setOptimizedBaselineMonths(totalMonths);
     setOptimizationResults(results);
     if (!silent) {
       toast.success("Optimering klar!");
@@ -206,6 +208,7 @@ const Index = () => {
             maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
             daysPerWeek={daysPerWeek}
             totalMonths={totalMonths}
+            initialTotalMonths={optimizedBaselineMonths}
             currentHouseholdIncome={optimizationResults[selectedStrategyIndex]?.averageMonthlyIncome || 0}
             periods={optimizationResults[selectedStrategyIndex]?.periods || []}
             totalIncome={optimizationResults[selectedStrategyIndex]?.totalIncome}
