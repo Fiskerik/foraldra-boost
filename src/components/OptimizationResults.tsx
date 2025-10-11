@@ -118,6 +118,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {results.map((result, index) => {
           // Find the absolute lowest monthly income across ALL periods in this strategy
+          // Only consider full months (calendarDays === 30) to avoid partial months
           const allMonthlyBreakdowns: Array<MonthlyBreakdown & { periodIndex: number }> = [];
           result.periods
             .filter(period => period.benefitLevel !== 'none')
@@ -128,9 +129,11 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               });
             });
           
-          const lowestMonthlyIncome = allMonthlyBreakdowns.length > 0
-            ? Math.min(...allMonthlyBreakdowns.map(m => m.monthlyIncome))
-            : Infinity;
+          // Filter to only full months for determining the lowest
+          const fullMonths = allMonthlyBreakdowns.filter(m => m.calendarDays === 30);
+          const lowestMonthlyIncome = fullMonths.length > 0
+            ? Math.min(...fullMonths.map(m => m.monthlyIncome))
+            : (allMonthlyBreakdowns.length > 0 ? Math.min(...allMonthlyBreakdowns.map(m => m.monthlyIncome)) : Infinity);
 
           return (
           <Card
