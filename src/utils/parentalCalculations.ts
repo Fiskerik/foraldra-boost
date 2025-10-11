@@ -280,7 +280,8 @@ function convertLegacyResult(
     usedMinDays2;
 
   const daysUsedRounded = Math.max(0, Math.round(totalDaysUsed));
-  const daysSaved = Math.max(0, TOTAL_DAYS - daysUsedRounded);
+  const clampedDaysUsed = Math.min(TOTAL_DAYS, daysUsedRounded);
+  const daysSaved = Math.max(0, TOTAL_DAYS - clampedDaysUsed);
 
   if (overlapDaysUsed > 0) {
     const overlapParent1Monthly = toNumber(legacyResult.plan1Overlap?.inkomst);
@@ -434,7 +435,7 @@ function convertLegacyResult(
     description: meta.description,
     periods,
     totalIncome,
-    daysUsed: Math.round(totalDaysUsed),
+    daysUsed: clampedDaysUsed,
     daysSaved,
     averageMonthlyIncome,
   };
@@ -502,7 +503,7 @@ export function optimizeLeave(
       ? Math.max(0, minHouseholdIncome)
       : Math.max(minHouseholdIncome, Math.round(Math.max(combinedNetIncome, combinedAvailableIncome)));
 
-    const allowFullWeek = normalizedDaysPerWeek > 5;
+    const allowFullWeek = isSaveDays ? normalizedDaysPerWeek > baseDaysPerWeek : true;
     const preferences = {
       deltid: allowFullWeek ? 'nej' : 'ja',
       ledigTid1: preferredParent1Months,
