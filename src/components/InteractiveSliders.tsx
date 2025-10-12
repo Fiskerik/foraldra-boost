@@ -71,16 +71,13 @@ export function InteractiveSliders({
 
   const allMonthlyIncomes = getAllMonthlyIncomes();
   const lowestMonthlyIncome = Math.min(...allMonthlyIncomes);
-  
+
   const isBelowMinimum = lowestMonthlyIncome < householdIncome;
-  
+
   // Calculate break-point on income slider - show where the lowest month is
-  const incomeBreakPoint = isBelowMinimum ? lowestMonthlyIncome : null;
-  const incomeBreakPointPercent = incomeBreakPoint
-    ? Math.max(
-        0,
-        Math.min(100, ((incomeBreakPoint - 0) / (maxHouseholdIncome - 0)) * 100)
-      )
+  const incomeBreakPoint = Number.isFinite(lowestMonthlyIncome) ? lowestMonthlyIncome : null;
+  const incomeBreakPointPercent = incomeBreakPoint !== null
+    ? Math.max(0, Math.min(100, (incomeBreakPoint / Math.max(maxHouseholdIncome, 1)) * 100))
     : null;
 
   const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
@@ -162,10 +159,10 @@ export function InteractiveSliders({
                   className="py-2"
                 />
                 <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
-                {incomeBreakPointPercent !== null && isBelowMinimum && (
+                {incomeBreakPointPercent !== null && incomeBreakPoint !== null && (
                   <div
                     className="pointer-events-none absolute left-0 right-0 bottom-4"
-                    title={`Lägsta månad: ${formatCurrency(lowestMonthlyIncome)}`}
+                    title={`Lägsta månad: ${formatCurrency(incomeBreakPoint)}`}
                   >
                     <div
                       className="absolute flex flex-col items-center"
@@ -174,9 +171,9 @@ export function InteractiveSliders({
                         transform: "translateX(-50%)",
                       }}
                     >
-                      <div className="h-3 w-px bg-destructive" />
-                      <div className="mt-1 rounded bg-background/90 px-1 text-[9px] font-semibold text-destructive whitespace-nowrap">
-                        {formatCurrency(lowestMonthlyIncome)}
+                      <div className="h-3 w-px bg-amber-500" />
+                      <div className="mt-1 rounded bg-amber-100/90 px-1 text-[9px] font-semibold text-amber-700 shadow-sm whitespace-nowrap">
+                        {formatCurrency(incomeBreakPoint)}
                       </div>
                     </div>
                   </div>

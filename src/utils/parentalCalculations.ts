@@ -1,4 +1,4 @@
-import { addDays, format } from 'date-fns';
+import { addDays, addMonths, differenceInCalendarDays, format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 
 import {
@@ -201,7 +201,8 @@ function addSegment(
   periods: LeavePeriod[],
   currentDate: Date,
   config: SegmentConfig,
-  calendarDaysAccumulator: { value: number }
+  calendarDaysAccumulator: { value: number },
+  timelineLimit?: Date | null
 ): Date {
   const {
     plan,
@@ -227,7 +228,21 @@ function addSegment(
   const calendarDays = Math.max(1, Math.round(weeks * 7));
   const daysCount = Math.max(1, Math.round(usedDays));
   const startDate = new Date(currentDate);
-  const endDate = addDays(startDate, calendarDays - 1);
+
+  if (timelineLimit && startDate.getTime() > timelineLimit.getTime()) {
+    return startDate;
+  }
+
+  let effectiveCalendarDays = calendarDays;
+  let endDate = addDays(startDate, effectiveCalendarDays - 1);
+
+  if (timelineLimit && endDate.getTime() > timelineLimit.getTime()) {
+    endDate = new Date(timelineLimit);
+    effectiveCalendarDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+  }
+
+  const ratio = effectiveCalendarDays / calendarDays;
+  const adjustedDaysCount = Math.max(1, Math.round(daysCount * ratio));
   const otherDailyIncome = otherParentMonthlyIncome / 30;
   const householdMonthlyIncome = leaveMonthlyIncome + otherParentMonthlyIncome;
   const dailyIncome = householdMonthlyIncome / 30;
@@ -237,7 +252,7 @@ function addSegment(
     parent,
     startDate,
     endDate,
-    daysCount,
+    daysCount: adjustedDaysCount,
     dailyBenefit,
     dailyIncome,
     benefitLevel,
@@ -245,8 +260,10 @@ function addSegment(
     otherParentDailyIncome: parent === 'both' ? 0 : otherDailyIncome,
   });
 
-  calendarDaysAccumulator.value += calendarDays;
-  return addDays(endDate, 1);
+  calendarDaysAccumulator.value += effectiveCalendarDays;
+
+  const nextDate = addDays(endDate, 1);
+  return nextDate;
 }
 
 function convertLegacyResult(
@@ -255,27 +272,48 @@ function convertLegacyResult(
   context: ConversionContext
 ): OptimizationResult {
   const periods: LeavePeriod[] = [];
-  let currentDate = new Date();
-  
+  const computeLimitDate = (start: Date, months: number) => {
+    const safeMonths = Math.max(0, months);
+    const wholeMonths = Math.floor(safeMonths);
+    const fractional = safeMonths - wholeMonths;
+    let limit = addMonths(start, wholeMonths);
+    if (fractional > 0) {
+      limit = addDays(limit, Math.round(fractional * 30));
+    }
+    return limit;
+  };
+
+  const baseStartDate = new Date();
+  const rawTimelineLimit =
+    context.adjustedTotalMonths > 0 ? computeLimitDate(baseStartDate, context.adjustedTotalMonths) : null;
+  const timelineLimit =
+    rawTimelineLimit && rawTimelineLimit.getTime() < baseStartDate.getTime() ? new Date(baseStartDate) : rawTimelineLimit;
+  let currentDate = new Date(baseStartDate);
+
   // Add initial 10 days (both parents) from child's birth
-  const initialEndDate = addDays(currentDate, 9); // 10 days total (0-9)
+  let initialEndDate = addDays(baseStartDate, 9); // 10 days total (0-9)
+  if (timelineLimit && initialEndDate.getTime() > timelineLimit.getTime()) {
+    initialEndDate = new Date(timelineLimit);
+  }
   const parent1NetDaily = context.parent1NetIncome / 30;
   const parent2NetDaily = context.parent2NetIncome / 30;
-  
+  const initialCalendarDays = Math.max(1, differenceInCalendarDays(initialEndDate, baseStartDate) + 1);
+  const initialDaysCount = Math.min(10, initialCalendarDays);
+
   periods.push({
     parent: 'both',
-    startDate: new Date(currentDate),
+    startDate: new Date(baseStartDate),
     endDate: initialEndDate,
-    daysCount: 10,
+    daysCount: initialDaysCount,
     dailyBenefit: 0,
     dailyIncome: parent1NetDaily + parent2NetDaily,
     benefitLevel: 'none',
     daysPerWeek: 0,
     otherParentDailyIncome: parent2NetDaily,
   });
-  
+
   currentDate = addDays(initialEndDate, 1);
-  const calendarDaysAccumulator = { value: 10 }; // Start with 10 days already used
+  const calendarDaysAccumulator = { value: initialCalendarDays };
 
   const resolveDaysPerWeek = (...values: unknown[]): number => {
     for (const value of values) {
@@ -331,8 +369,8 @@ function convertLegacyResult(
     usedMinDays2;
 
   const daysUsedRounded = Math.max(0, Math.round(totalDaysUsed));
-  const clampedDaysUsed = Math.min(TOTAL_BENEFIT_DAYS, daysUsedRounded);
-  const daysSaved = Math.max(0, TOTAL_BENEFIT_DAYS - clampedDaysUsed);
+  let clampedDaysUsed = Math.min(TOTAL_BENEFIT_DAYS, daysUsedRounded);
+  let daysSaved = Math.max(0, TOTAL_BENEFIT_DAYS - clampedDaysUsed);
 
   if (overlapDaysUsed > 0) {
     const overlapParent1Monthly = toNumber(legacyResult.plan1Overlap?.inkomst);
@@ -356,7 +394,7 @@ function convertLegacyResult(
       fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan1Overlap?.dagarPerVecka),
       benefitMonthly: overlapBenefitMonthly,
       leaveMonthlyIncome: overlapParent1Monthly + overlapParent2Monthly,
-    }, calendarDaysAccumulator);
+    }, calendarDaysAccumulator, timelineLimit);
   }
 
   if (plan1ExtraDays > 0) {
@@ -371,7 +409,7 @@ function convertLegacyResult(
       fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan1?.dagarPerVecka),
       benefitMonthly,
       leaveMonthlyIncome,
-    }, calendarDaysAccumulator);
+    }, calendarDaysAccumulator, timelineLimit);
   }
 
   if (plan1NoExtraDays > 0) {
@@ -388,7 +426,7 @@ function convertLegacyResult(
       ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
-    }, calendarDaysAccumulator);
+    }, calendarDaysAccumulator, timelineLimit);
   }
 
   const totalPlan1MinDays = plan1MinDays + plan1MinContinuationDays;
@@ -406,7 +444,7 @@ function convertLegacyResult(
       ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
-    }, calendarDaysAccumulator);
+    }, calendarDaysAccumulator, timelineLimit);
   }
 
   if (plan2ExtraDays > 0) {
@@ -421,7 +459,7 @@ function convertLegacyResult(
       fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan2?.dagarPerVecka),
       benefitMonthly,
       leaveMonthlyIncome,
-    }, calendarDaysAccumulator);
+    }, calendarDaysAccumulator, timelineLimit);
   }
 
   if (plan2NoExtraDays > 0) {
@@ -438,7 +476,7 @@ function convertLegacyResult(
       ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
-    }, calendarDaysAccumulator);
+    }, calendarDaysAccumulator, timelineLimit);
   }
 
   const totalPlan2MinDays = plan2MinDays + plan2MinContinuationDays;
@@ -456,7 +494,7 @@ function convertLegacyResult(
       ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
-    }, calendarDaysAccumulator);
+    }, calendarDaysAccumulator, timelineLimit);
   }
 
   // No filler periods - we strictly adhere to the total months specified
@@ -486,6 +524,14 @@ function convertLegacyResult(
   }
 
   const totalIncome = mergedPeriods.reduce((sum, period) => sum + period.dailyIncome * period.daysCount, 0);
+  const benefitDaysUsed = mergedPeriods.reduce((sum, period) => {
+    if (period.benefitLevel === 'none') {
+      return sum;
+    }
+    return sum + period.daysCount;
+  }, 0);
+  clampedDaysUsed = Math.min(TOTAL_BENEFIT_DAYS, Math.max(0, Math.round(benefitDaysUsed)));
+  daysSaved = Math.max(0, TOTAL_BENEFIT_DAYS - clampedDaysUsed);
   const averageMonthlyIncome = calendarDaysAccumulator.value > 0
     ? (totalIncome / calendarDaysAccumulator.value) * 30
     : 0;
