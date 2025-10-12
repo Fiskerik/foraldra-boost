@@ -157,7 +157,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
     return aggregated;
   }, [isMobile, monthlyData]);
 
-  const chartBottomPadding = isMobile ? 40 : 32;
+  const chartBottomPadding = isMobile ? 72 : 56;
   const axisWidth = isMobile ? 68 : 80;
 
   const allIncomeValues = monthlyData.map((d) => d.income);
@@ -361,7 +361,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
         {/* X-axis labels */}
         <div
           className={`absolute bottom-0 flex items-end text-xs text-muted-foreground ${
-            isMobile ? "h-10 text-[10px] leading-tight" : "h-8"
+            isMobile ? "h-16 text-[10px]" : "h-14"
           }`}
           style={{ left: axisWidth, right: 0 }}
         >
@@ -401,13 +401,20 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
                 ];
               })();
 
+              const labelKey = `${index}-label`;
               return (
-                <div key={index} className="flex-1 text-center flex flex-col items-center justify-center gap-0.5">
-                  {labelLines.map((line, lineIndex) => (
-                    <span key={lineIndex} className="block whitespace-nowrap">
-                      {line}
-                    </span>
-                  ))}
+                <div key={index} className="relative flex-1 h-full">
+                  <div
+                    className="absolute bottom-0 left-1/2 flex -translate-x-1/2 origin-bottom rotate-[-60deg] flex-col items-center gap-0.5"
+                    style={{ transformOrigin: "bottom center" }}
+                    aria-hidden="true"
+                  >
+                    {labelLines.map((line, lineIndex) => (
+                      <span key={`${labelKey}-${lineIndex}`} className="block whitespace-nowrap">
+                        {line}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               );
             }

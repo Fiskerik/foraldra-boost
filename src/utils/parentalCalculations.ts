@@ -657,13 +657,13 @@ export function optimizeLeave(
   }
 
   const pickBetter = (best: OptimizationResult, current: OptimizationResult) => {
-    if (current.daysUsed !== best.daysUsed) {
-      return current.daysUsed > best.daysUsed ? current : best;
+    if (current.averageMonthlyIncome !== best.averageMonthlyIncome) {
+      return current.averageMonthlyIncome > best.averageMonthlyIncome ? current : best;
     }
     if (current.totalIncome !== best.totalIncome) {
       return current.totalIncome > best.totalIncome ? current : best;
     }
-    return current.averageMonthlyIncome > best.averageMonthlyIncome ? current : best;
+    return current.daysUsed > best.daysUsed ? current : best;
   };
 
   let maximizeResult = maximizeCandidates.reduce(pickBetter);
