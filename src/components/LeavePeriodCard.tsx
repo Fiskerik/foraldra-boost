@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -37,12 +39,63 @@ export function LeavePeriodCard({
   onSimultaneousLeaveChange,
   onSimultaneousMonthsChange,
 }: LeavePeriodCardProps) {
-  const handleMonthsInputChange = (value: string) => {
-    const parsed = parseFloat(value.replace(',', '.'));
-    if (!isNaN(parsed) && parsed >= 0) {
-      const clamped = Math.min(parsed, maxLeaveMonths);
-      onTotalMonthsChange(clamped);
+  const [monthsInputValue, setMonthsInputValue] = useState(() =>
+    Number.isInteger(totalMonths) ? totalMonths.toString() : totalMonths.toFixed(1)
+  );
+
+  useEffect(() => {
+    const formatted = Number.isInteger(totalMonths)
+      ? totalMonths.toString()
+      : totalMonths.toFixed(1);
+    setMonthsInputValue(formatted);
+  }, [totalMonths]);
+
+  const sanitizeMonthsValue = (value: string) => value.replace(',', '.');
+
+  const isParsableNumber = (value: string) => {
+    if (value.trim() === "") {
+      return false;
     }
+    const normalized = sanitizeMonthsValue(value);
+    if (normalized.endsWith(".")) {
+      return false;
+    }
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed);
+  };
+
+  const clampMonths = (value: number) => {
+    const safeValue = Math.max(0, value);
+    return Math.min(safeValue, maxLeaveMonths);
+  };
+
+  const handleMonthsInputChange = (value: string) => {
+    setMonthsInputValue(value);
+
+    if (!isParsableNumber(value)) {
+      return;
+    }
+
+    const parsed = Number.parseFloat(sanitizeMonthsValue(value));
+    if (parsed >= 0 && parsed <= maxLeaveMonths) {
+      onTotalMonthsChange(parsed);
+    }
+  };
+
+  const handleMonthsInputBlur = () => {
+    const normalized = sanitizeMonthsValue(monthsInputValue);
+    const parsed = Number.parseFloat(normalized);
+
+    if (!Number.isFinite(parsed)) {
+      const formatted = Number.isInteger(totalMonths)
+        ? totalMonths.toString()
+        : totalMonths.toFixed(1);
+      setMonthsInputValue(formatted);
+      return;
+    }
+
+    const clamped = clampMonths(parsed);
+    onTotalMonthsChange(clamped);
   };
 
   const formattedMaxLeaveMonths = Number.isInteger(maxLeaveMonths)
@@ -63,11 +116,11 @@ export function LeavePeriodCard({
           <Input
             id="total-months"
             type="number"
-            min="1"
-            max={maxLeaveMonths}
             step="0.5"
-            value={totalMonths}
+            inputMode="decimal"
+            value={monthsInputValue}
             onChange={(e) => handleMonthsInputChange(e.target.value)}
+            onBlur={handleMonthsInputBlur}
             className="text-lg font-semibold"
           />
           <p className="text-sm text-muted-foreground">

@@ -4,7 +4,7 @@ import { OptimizationResult, formatPeriod, formatCurrency, LeavePeriod } from "@
 import { TimelineChart } from "./TimelineChart";
 import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
-import { format, endOfMonth, differenceInCalendarDays, addDays } from "date-fns";
+import { format, endOfMonth, differenceInCalendarDays, addDays, startOfMonth } from "date-fns";
 
 interface OptimizationResultsProps {
   results: OptimizationResult[];
@@ -183,27 +183,78 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             mergeMonthlySegments(group.periods.flatMap(breakDownByMonth))
           );
 
-          const allMonthlyBreakdowns: Array<MonthlyBreakdown & { groupIndex: number }> = [];
-          groupMonthlyBreakdowns.forEach((months, groupIndex) => {
+          const aggregatedMonthMap = new Map<string, {
+            totalIncome: number;
+            totalCalendarDays: number;
+            monthStart: Date;
+            monthLength: number;
+          }>();
+
+          groupMonthlyBreakdowns.forEach(months => {
             months.forEach(month => {
-              allMonthlyBreakdowns.push({ ...month, groupIndex });
+              const monthStartDate = startOfMonth(month.startDate);
+              const key = `${monthStartDate.getFullYear()}-${monthStartDate.getMonth()}`;
+              const monthLength = differenceInCalendarDays(endOfMonth(monthStartDate), monthStartDate) + 1;
+              const existing = aggregatedMonthMap.get(key);
+
+              if (!existing) {
+                aggregatedMonthMap.set(key, {
+                  totalIncome: month.monthlyIncome,
+                  totalCalendarDays: month.calendarDays,
+                  monthStart: monthStartDate,
+                  monthLength,
+                });
+                return;
+              }
+
+              existing.totalIncome += month.monthlyIncome;
+              existing.totalCalendarDays += month.calendarDays;
             });
           });
 
-          const monthsWithIncome = allMonthlyBreakdowns.filter(m => m.calendarDays > 0);
-          const lowestMonthlyIncome = monthsWithIncome.length > 0
-            ? Math.min(...monthsWithIncome.map(m => m.monthlyIncome))
+          const eligibleAggregatedEntries = Array.from(aggregatedMonthMap.entries()).filter(([, info]) =>
+            info.totalCalendarDays >= info.monthLength
+          );
+
+          let lowestAggregatedKey: string | null = null;
+          let lowestAggregatedIncome = Infinity;
+
+          eligibleAggregatedEntries.forEach(([key, info]) => {
+            if (info.totalIncome < lowestAggregatedIncome - 0.5) {
+              lowestAggregatedKey = key;
+              lowestAggregatedIncome = info.totalIncome;
+              return;
+            }
+
+            if (Math.abs(info.totalIncome - lowestAggregatedIncome) <= 0.5) {
+              if (!lowestAggregatedKey) {
+                lowestAggregatedKey = key;
+                lowestAggregatedIncome = info.totalIncome;
+                return;
+              }
+
+              const currentBest = aggregatedMonthMap.get(lowestAggregatedKey);
+              if (currentBest && info.monthStart.getTime() < currentBest.monthStart.getTime()) {
+                lowestAggregatedKey = key;
+                lowestAggregatedIncome = info.totalIncome;
+              }
+            }
+          });
+
+          const lowestMonthlyIncome = lowestAggregatedKey
+            ? aggregatedMonthMap.get(lowestAggregatedKey)?.totalIncome ?? Infinity
             : Infinity;
 
-          const isLowestBelowMinimum = lowestMonthlyIncome < minHouseholdIncome;
+          const isLowestBelowMinimum =
+            Number.isFinite(lowestMonthlyIncome) && lowestMonthlyIncome < minHouseholdIncome;
 
           return (
-          <Card
-            key={index} 
-            className={`shadow-soft cursor-pointer transition-all ${
-              selectedIndex === index 
-                ? 'ring-4 ring-primary shadow-xl scale-[1.02]' 
-                : 'hover:shadow-lg'
+            <Card
+              key={index}
+              className={`shadow-soft cursor-pointer transition-all ${
+                selectedIndex === index
+                  ? 'ring-4 ring-primary shadow-xl scale-[1.02]'
+                  : 'hover:shadow-lg'
             }`}
             onClick={() => onSelectStrategy(index)}
           >
@@ -320,9 +371,13 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
 
                     const monthlyBreakdown = groupMonthlyBreakdowns[groupIndex];
                     const periodTotalIncome = monthlyBreakdown.reduce((sum, month) => sum + month.monthlyIncome, 0);
-                    const periodContainsLowest = monthlyBreakdown.some(month =>
-                      Math.abs(month.monthlyIncome - lowestMonthlyIncome) < 1
-                    );
+                    const periodContainsLowest = lowestAggregatedKey
+                      ? monthlyBreakdown.some(month => {
+                          const monthStartDate = startOfMonth(month.startDate);
+                          const monthKey = `${monthStartDate.getFullYear()}-${monthStartDate.getMonth()}`;
+                          return monthKey === lowestAggregatedKey;
+                        })
+                      : false;
                     const shouldBeOrange = periodContainsLowest && isLowestBelowMinimum;
 
                     const expandKey = `${index}-${groupIndex}`;
@@ -381,8 +436,16 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           {isExpanded && hasMultipleMonths && (
                             <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
                               {monthlyBreakdown.map((month, monthIdx) => {
-                                const isLowest = Math.abs(month.monthlyIncome - lowestMonthlyIncome) < 1;
-                                const isBelowMinimum = month.monthlyIncome < minHouseholdIncome;
+                                const monthStartDate = startOfMonth(month.startDate);
+                                const monthKey = `${monthStartDate.getFullYear()}-${monthStartDate.getMonth()}`;
+                                const aggregatedInfo = aggregatedMonthMap.get(monthKey);
+                                const isEligibleMonth = aggregatedInfo
+                                  ? aggregatedInfo.totalCalendarDays >= aggregatedInfo.monthLength
+                                  : false;
+                                const aggregatedIncome = aggregatedInfo?.totalIncome ?? month.monthlyIncome;
+                                const isLowest =
+                                  lowestAggregatedKey !== null && monthKey === lowestAggregatedKey;
+                                const isBelowMinimum = isEligibleMonth && aggregatedIncome < minHouseholdIncome;
                                 return (
                                   <div
                                     key={`${month.startDate.toISOString()}-${monthIdx}`}
@@ -401,7 +464,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                       {month.calendarDays} kalenderdagar • {month.benefitDays} uttagna dagar
                                     </div>
                                     <div className={`font-semibold ${isLowest ? 'text-yellow-700 dark:text-yellow-400' : isBelowMinimum ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>
-                                      Hushållets inkomst: {formatCurrency(month.monthlyIncome)}
+                                      Hushållets inkomst: {formatCurrency(aggregatedIncome)}
                                       {isLowest && <span className="ml-1 text-[9px]">(lägst)</span>}
                                     </div>
                                   </div>
