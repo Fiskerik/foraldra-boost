@@ -631,12 +631,13 @@ export function optimizeLeave(
 
   const maximizeMeta = strategies.find((strategy) => strategy.key === 'maximize-income')!;
 
+  // For maximize-income, we want the highest possible income which means using
+  // the combined net income as target and allowing all strategies
   const incomeTargets = new Set<number>();
-  incomeTargets.add(Math.max(minHouseholdIncome, Math.round(combinedAvailableIncome)));
-  incomeTargets.add(Math.max(minHouseholdIncome, Math.round(combinedNetIncome)));
-  if (incomeTargets.size === 0) {
-    incomeTargets.add(Math.max(0, Math.round(minHouseholdIncome)));
-  }
+  incomeTargets.add(Math.round(combinedNetIncome * 1.2)); // Push higher to maximize days
+  incomeTargets.add(Math.round(combinedNetIncome));
+  incomeTargets.add(Math.round(combinedAvailableIncome * 1.2));
+  incomeTargets.add(Math.round(combinedAvailableIncome));
 
   const candidateStrategyKeys: LegacyStrategyKey[] = ['maximize', 'maximize_parental_salary'];
   const maximizeCandidates: OptimizationResult[] = [];
@@ -657,24 +658,24 @@ export function optimizeLeave(
   }
 
   const pickBetter = (best: OptimizationResult, current: OptimizationResult) => {
+    // Prioritize using MORE days for maximize-income strategy
+    if (current.daysUsed !== best.daysUsed) {
+      return current.daysUsed > best.daysUsed ? current : best;
+    }
     if (current.averageMonthlyIncome !== best.averageMonthlyIncome) {
       return current.averageMonthlyIncome > best.averageMonthlyIncome ? current : best;
     }
-    if (current.totalIncome !== best.totalIncome) {
-      return current.totalIncome > best.totalIncome ? current : best;
-    }
-    return current.daysUsed > best.daysUsed ? current : best;
+    return current.totalIncome > best.totalIncome ? current : best;
   };
 
   let maximizeResult = maximizeCandidates.reduce(pickBetter);
 
-  if (maximizeResult.daysUsed <= saveResult.daysUsed) {
-    const pushTarget = Math.max(minHouseholdIncome, Math.round(combinedAvailableIncome * 1.1));
-    const extraPreferences = buildPreferences('maximize_parental_salary', pushTarget, allowFullWeekForMax);
-    const extraLegacy = optimizeParentalLeave(extraPreferences, baseInputs);
-    const extraResult = convertLegacyResult(maximizeMeta, extraLegacy, conversionContext);
-    maximizeResult = pickBetter(maximizeResult, extraResult);
-  }
+  // Always push for maximum days used
+  const pushTarget = Math.round(combinedNetIncome * 1.5);
+  const extraPreferences = buildPreferences('maximize_parental_salary', pushTarget, allowFullWeekForMax);
+  const extraLegacy = optimizeParentalLeave(extraPreferences, baseInputs);
+  const extraResult = convertLegacyResult(maximizeMeta, extraLegacy, conversionContext);
+  maximizeResult = pickBetter(maximizeResult, extraResult);
 
   return [saveResult, maximizeResult];
 }
