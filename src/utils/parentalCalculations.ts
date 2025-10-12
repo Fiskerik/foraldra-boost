@@ -41,6 +41,8 @@ export interface LeavePeriod {
   benefitLevel: 'parental-salary' | 'high' | 'low' | 'none';
   daysPerWeek?: number;
   otherParentDailyIncome?: number;
+  isInitialTenDayPeriod?: boolean;
+  isPreferenceFiller?: boolean;
 }
 
 const PARENTAL_BENEFIT_CEILING = 49000;
@@ -335,6 +337,7 @@ function convertLegacyResult(
     benefitLevel: 'none',
     daysPerWeek: 0,
     otherParentDailyIncome: parent2NetDaily,
+    isInitialTenDayPeriod: true,
   });
 
   currentDate = startOfDay(addDays(initialEndDate, 1));
@@ -628,6 +631,7 @@ function convertLegacyResult(
       benefitLevel: 'none',
       daysPerWeek: 7,
       otherParentDailyIncome,
+      isPreferenceFiller: true,
     });
 
     if (parent === 'parent1') {
