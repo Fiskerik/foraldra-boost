@@ -7,7 +7,7 @@ import {
   endOfMonth,
   differenceInCalendarDays,
   addMonths,
-  subDays,
+  addDays,
 } from "date-fns";
 import { sv } from "date-fns/locale";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -25,6 +25,8 @@ interface MonthlyPoint {
   parent1Days: number;
   parent2Days: number;
   bothDays: number;
+  labelStartDate: Date;
+  labelEndDate: Date;
 }
 
 export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit }: TimelineChartProps) {
@@ -37,9 +39,20 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
   const rawEndDate = periods[periods.length - 1].endDate;
   const monthsLimit = calendarMonthsLimit && calendarMonthsLimit > 0 ? calendarMonthsLimit : null;
 
+  const computeLimitDate = (base: Date, months: number) => {
+    const safeMonths = Math.max(0, months);
+    const wholeMonths = Math.floor(safeMonths);
+    const fractional = safeMonths - wholeMonths;
+    let limit = addMonths(base, wholeMonths);
+    if (fractional > 0) {
+      limit = addDays(limit, Math.round(fractional * 30));
+    }
+    return limit;
+  };
+
   let chartEndDate = rawEndDate;
-  if (monthsLimit) {
-    const limitCandidate = subDays(addMonths(startDate, monthsLimit), 1);
+  if (monthsLimit !== null) {
+    const limitCandidate = computeLimitDate(startDate, monthsLimit);
     if (limitCandidate.getTime() >= startDate.getTime() && limitCandidate.getTime() < chartEndDate.getTime()) {
       chartEndDate = limitCandidate;
     }
@@ -96,6 +109,8 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
       parent1Days,
       parent2Days,
       bothDays,
+      labelStartDate: mStart,
+      labelEndDate: mEnd,
     };
   });
 
@@ -124,6 +139,8 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
       const bothTotal = slice.reduce((sum, item) => sum + item.bothDays, 0);
       const labelStart = slice[0].month;
       const labelEnd = slice[slice.length - 1].month;
+      const labelStartDate = slice[0].labelStartDate;
+      const labelEndDate = slice[slice.length - 1].labelEndDate;
 
       aggregated.push({
         month: slice.length === 1 ? labelStart : `${labelStart} – ${labelEnd}`,
@@ -132,14 +149,16 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
         parent1Days: parent1Total,
         parent2Days: parent2Total,
         bothDays: bothTotal,
+        labelStartDate,
+        labelEndDate,
       });
     }
 
     return aggregated;
   }, [isMobile, monthlyData]);
 
-  const chartBottomPadding = 32; // matches Tailwind bottom-8 spacing used for the x-axis labels
-  const axisWidth = 80;
+  const chartBottomPadding = isMobile ? 40 : 32;
+  const axisWidth = isMobile ? 68 : 80;
 
   const allIncomeValues = monthlyData.map((d) => d.income);
   const maxIncome = Math.max(minHouseholdIncome, ...allIncomeValues, 0);
@@ -340,12 +359,55 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
         </div>
 
         {/* X-axis labels */}
-        <div className="absolute left-20 right-0 bottom-0 h-8 flex items-center text-xs text-muted-foreground">
+        <div
+          className={`absolute bottom-0 flex items-end text-xs text-muted-foreground ${
+            isMobile ? "h-10 text-[10px] leading-tight" : "h-8"
+          }`}
+          style={{ left: axisWidth, right: 0 }}
+        >
           {chartData.map((data, index) => {
             if (index % labelStride === 0 || index === chartData.length - 1) {
+              const sameMonth =
+                data.labelStartDate.getFullYear() === data.labelEndDate.getFullYear() &&
+                data.labelStartDate.getMonth() === data.labelEndDate.getMonth();
+              const sameYear = data.labelStartDate.getFullYear() === data.labelEndDate.getFullYear();
+              const labelLines: string[] = (() => {
+                if (sameMonth) {
+                  return [format(data.labelStartDate, isMobile ? "MMM yy" : "MMM yyyy", { locale: sv })];
+                }
+
+                if (sameYear) {
+                  if (isMobile) {
+                    return [
+                      `${format(data.labelStartDate, "MMM", { locale: sv })}–${format(data.labelEndDate, "MMM yy", { locale: sv })}`,
+                    ];
+                  }
+
+                  return [
+                    `${format(data.labelStartDate, "MMM", { locale: sv })} – ${format(data.labelEndDate, "MMM yyyy", { locale: sv })}`,
+                  ];
+                }
+
+                if (isMobile) {
+                  return [
+                    format(data.labelStartDate, "MMM yy", { locale: sv }),
+                    format(data.labelEndDate, "MMM yy", { locale: sv }),
+                  ];
+                }
+
+                return [
+                  `${format(data.labelStartDate, "MMM yyyy", { locale: sv })}`,
+                  `${format(data.labelEndDate, "MMM yyyy", { locale: sv })}`,
+                ];
+              })();
+
               return (
-                <div key={index} className="flex-1 text-center">
-                  {data.month}
+                <div key={index} className="flex-1 text-center flex flex-col items-center justify-center gap-0.5">
+                  {labelLines.map((line, lineIndex) => (
+                    <span key={lineIndex} className="block whitespace-nowrap">
+                      {line}
+                    </span>
+                  ))}
                 </div>
               );
             }
