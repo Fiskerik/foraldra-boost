@@ -71,6 +71,42 @@ export function calculateMaxLeaveMonths(
 }
 export const WEEKS_PER_MONTH = 4.33;
 
+interface ParentDayAllocation {
+  parent1IncomeDays: number;
+  parent2IncomeDays: number;
+  parent1LowDays: number;
+  parent2LowDays: number;
+}
+
+function deriveParentDayAllocation(parent1Months: number, parent2Months: number): ParentDayAllocation {
+  const safeParent1Months = Math.max(0, parent1Months);
+  const safeParent2Months = Math.max(0, parent2Months);
+  const totalPreferredMonths = safeParent1Months + safeParent2Months;
+
+  if (totalPreferredMonths <= 0) {
+    const halfIncome = Math.round(HIGH_BENEFIT_DAYS / 2);
+    const halfLow = Math.round(LOW_BENEFIT_DAYS / 2);
+
+    return {
+      parent1IncomeDays: halfIncome,
+      parent2IncomeDays: HIGH_BENEFIT_DAYS - halfIncome,
+      parent1LowDays: halfLow,
+      parent2LowDays: LOW_BENEFIT_DAYS - halfLow,
+    };
+  }
+
+  const parent1Share = safeParent1Months / totalPreferredMonths;
+  const parent1IncomeDays = Math.max(0, Math.round(HIGH_BENEFIT_DAYS * parent1Share));
+  const parent1LowDays = Math.max(0, Math.round(LOW_BENEFIT_DAYS * parent1Share));
+
+  return {
+    parent1IncomeDays,
+    parent2IncomeDays: Math.max(0, HIGH_BENEFIT_DAYS - parent1IncomeDays),
+    parent1LowDays,
+    parent2LowDays: Math.max(0, LOW_BENEFIT_DAYS - parent1LowDays),
+  };
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -781,9 +817,18 @@ export function optimizeLeave(
     simultaneousMonths,
   };
 
+  const saveDayAllocation = deriveParentDayAllocation(preferredParent1Months, preferredParent2Months);
+  const saveInputs = {
+    ...baseInputs,
+    förälder1InkomstDagar: saveDayAllocation.parent1IncomeDays,
+    förälder2InkomstDagar: saveDayAllocation.parent2IncomeDays,
+    förälder1MinDagar: saveDayAllocation.parent1LowDays,
+    förälder2MinDagar: saveDayAllocation.parent2LowDays,
+  };
+
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
   const savePreferences = buildPreferences(saveDaysMeta.legacyKey, minHouseholdIncome, allowFullWeekForSave);
-  const saveLegacyResult = optimizeParentalLeave(savePreferences, baseInputs);
+  const saveLegacyResult = optimizeParentalLeave(savePreferences, saveInputs);
   const saveResult = convertLegacyResult(saveDaysMeta, saveLegacyResult, conversionContext);
 
   const maximizeMeta = strategies.find((strategy) => strategy.key === 'maximize-income')!;
