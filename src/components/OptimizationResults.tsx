@@ -201,7 +201,9 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         {results.map((result, index) => {
           // Find the absolute lowest monthly income across ALL periods in this strategy
           // Only consider full months (calendarDays === 30) to avoid partial months
-          const filteredPeriods = result.periods.filter(period => period.benefitLevel !== 'none');
+          const filteredPeriods = result.periods.filter(period =>
+            period.benefitLevel !== 'none' || period.isInitialTenDayPeriod || period.isPreferenceFiller
+          );
           const periodGroups = groupConsecutivePeriods(filteredPeriods);
           const groupMonthlyBreakdowns = periodGroups.map(group =>
             createMonthlyBreakdownEntries(group.periods)
@@ -348,13 +350,20 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                       group.parent === 'both' ? 'Båda föräldrarna' :
                       group.parent === 'parent1' ? 'Förälder 1' : 'Förälder 2';
 
-                    const uniqueBenefitLabels = Array.from(new Set(group.periods.map(segment =>
-                      segment.benefitLevel === 'parental-salary'
-                        ? 'Föräldralön (90%)'
-                        : segment.benefitLevel === 'high'
-                        ? 'Hög föräldrapenning (80%)'
-                        : 'Låg föräldrapenning'
-                    )));
+                    const uniqueBenefitLabels = Array.from(new Set(group.periods.map(segment => {
+                      if (segment.benefitLevel === 'parental-salary') {
+                        return 'Föräldralön (90%)';
+                      }
+                      if (segment.benefitLevel === 'high') {
+                        return 'Hög föräldrapenning (80%)';
+                      }
+                      if (segment.benefitLevel === 'low') {
+                        return 'Låg föräldrapenning';
+                      }
+                      return segment.isPreferenceFiller || segment.isInitialTenDayPeriod
+                        ? 'Ingen ersättning'
+                        : 'Ingen ersättning';
+                    })));
                     const benefitLabel = uniqueBenefitLabels.length === 1
                       ? uniqueBenefitLabels[0]
                       : `Varierad ersättning: ${uniqueBenefitLabels.join(' → ')}`;
