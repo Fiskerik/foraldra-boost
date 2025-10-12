@@ -1,4 +1,4 @@
-import { addDays, addMonths, differenceInCalendarDays, format } from 'date-fns';
+import { addDays, addMonths, differenceInCalendarDays, format, startOfDay } from 'date-fns';
 import { sv } from 'date-fns/locale';
 
 import {
@@ -225,9 +225,9 @@ function addSegment(
     return currentDate;
   }
 
-  const calendarDays = Math.max(1, Math.round(weeks * 7));
+  const calendarDays = Math.max(1, Math.ceil(weeks * 7));
   const daysCount = Math.max(1, Math.round(usedDays));
-  const startDate = new Date(currentDate);
+  const startDate = startOfDay(currentDate);
 
   if (timelineLimit && startDate.getTime() > timelineLimit.getTime()) {
     return startDate;
@@ -237,7 +237,7 @@ function addSegment(
   let endDate = addDays(startDate, effectiveCalendarDays - 1);
 
   if (timelineLimit && endDate.getTime() > timelineLimit.getTime()) {
-    endDate = new Date(timelineLimit);
+    endDate = startOfDay(timelineLimit);
     effectiveCalendarDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
   }
 
@@ -262,7 +262,7 @@ function addSegment(
 
   calendarDaysAccumulator.value += effectiveCalendarDays;
 
-  const nextDate = addDays(endDate, 1);
+  const nextDate = startOfDay(addDays(endDate, 1));
   return nextDate;
 }
 
@@ -276,14 +276,14 @@ function convertLegacyResult(
     const safeMonths = Math.max(0, months);
     const wholeMonths = Math.floor(safeMonths);
     const fractional = safeMonths - wholeMonths;
-    let limit = addMonths(start, wholeMonths);
+    let limit = startOfDay(addMonths(start, wholeMonths));
     if (fractional > 0) {
-      limit = addDays(limit, Math.round(fractional * 30));
+      limit = startOfDay(addDays(limit, Math.round(fractional * 30)));
     }
     return limit;
   };
 
-  const baseStartDate = new Date();
+  const baseStartDate = startOfDay(new Date());
   const rawTimelineLimit =
     context.adjustedTotalMonths > 0 ? computeLimitDate(baseStartDate, context.adjustedTotalMonths) : null;
   const timelineLimit =
@@ -293,7 +293,7 @@ function convertLegacyResult(
   // Add initial 10 days (both parents) from child's birth
   let initialEndDate = addDays(baseStartDate, 9); // 10 days total (0-9)
   if (timelineLimit && initialEndDate.getTime() > timelineLimit.getTime()) {
-    initialEndDate = new Date(timelineLimit);
+    initialEndDate = startOfDay(timelineLimit);
   }
   const parent1NetDaily = context.parent1NetIncome / 30;
   const parent2NetDaily = context.parent2NetIncome / 30;
@@ -312,7 +312,7 @@ function convertLegacyResult(
     otherParentDailyIncome: parent2NetDaily,
   });
 
-  currentDate = addDays(initialEndDate, 1);
+  currentDate = startOfDay(addDays(initialEndDate, 1));
   const calendarDaysAccumulator = { value: initialCalendarDays };
 
   const resolveDaysPerWeek = (...values: unknown[]): number => {
@@ -662,10 +662,10 @@ export function optimizeLeave(
     if (current.daysUsed !== best.daysUsed) {
       return current.daysUsed > best.daysUsed ? current : best;
     }
-    if (current.averageMonthlyIncome !== best.averageMonthlyIncome) {
-      return current.averageMonthlyIncome > best.averageMonthlyIncome ? current : best;
+    if (current.totalIncome !== best.totalIncome) {
+      return current.totalIncome > best.totalIncome ? current : best;
     }
-    return current.totalIncome > best.totalIncome ? current : best;
+    return current.averageMonthlyIncome > best.averageMonthlyIncome ? current : best;
   };
 
   let maximizeResult = maximizeCandidates.reduce(pickBetter);
