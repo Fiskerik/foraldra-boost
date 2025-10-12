@@ -122,13 +122,14 @@ export function InteractiveSliders({
     : totalMonths.toFixed(1);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-in-bottom">
-      <Card className="rounded-t-2xl rounded-b-none border-t-2 border-x-0 border-b-0 bg-card/95 backdrop-blur-lg shadow-2xl">
-        {/* Header - Always visible */}
-        <div className="flex items-center justify-between p-3 border-b cursor-pointer hover:bg-accent/5 transition-colors" onClick={() => setIsExpanded(!isExpanded)}>
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-bold">Justera plan</h3>
+    <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-in-bottom flex justify-center px-4 pb-4 pointer-events-none">
+      <div className="w-full max-w-5xl pointer-events-auto">
+        <Card className="w-full rounded-t-2xl rounded-b-none border-t-2 border-x-0 border-b-0 bg-card/95 backdrop-blur-lg shadow-2xl">
+          {/* Header - Always visible */}
+          <div className="flex items-center justify-between p-3 border-b cursor-pointer hover:bg-accent/5 transition-colors" onClick={() => setIsExpanded(!isExpanded)}>
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-bold">Justera plan</h3>
           </div>
           <div className="flex items-center gap-4">
             {/* KPI Chips - Compact */}
@@ -147,9 +148,9 @@ export function InteractiveSliders({
           </div>
         </div>
 
-        {/* Expandable Content */}
-        {isExpanded && (
-          <div className="p-3 space-y-3 max-h-[40vh] overflow-y-auto">
+          {/* Expandable Content */}
+          {isExpanded && (
+            <div className="p-3 space-y-3 max-h-[40vh] overflow-y-auto">
             {/* Mobile KPI Row */}
             <div className="grid grid-cols-3 gap-2 md:hidden">
               <div className="bg-primary/10 border border-primary/30 rounded p-2">
@@ -270,8 +271,9 @@ export function InteractiveSliders({
               </div>
             </div>
           </div>
-        )}
-      </Card>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

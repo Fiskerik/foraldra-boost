@@ -613,7 +613,25 @@ function convertLegacyResult(
     }
 
     const startDate = startOfDay(fillerCursor);
-    const endDate = startOfDay(addDays(startDate, safeDays - 1));
+
+    if (timelineLimit && startDate.getTime() > timelineLimit.getTime()) {
+      return;
+    }
+
+    let effectiveDays = safeDays;
+    if (timelineLimit) {
+      const remainingDays = differenceInCalendarDays(timelineLimit, startDate) + 1;
+      if (remainingDays <= 0) {
+        return;
+      }
+      effectiveDays = Math.min(effectiveDays, remainingDays);
+    }
+
+    if (effectiveDays <= 0) {
+      return;
+    }
+
+    const endDate = startOfDay(addDays(startDate, effectiveDays - 1));
     const otherParentDailyIncome = parent === 'parent1'
       ? context.parent2NetIncome / 30
       : context.parent1NetIncome / 30;
@@ -625,7 +643,7 @@ function convertLegacyResult(
       parent,
       startDate,
       endDate,
-      daysCount: safeDays,
+      daysCount: effectiveDays,
       dailyBenefit: 0,
       dailyIncome: ownDailyIncome + otherParentDailyIncome,
       benefitLevel: 'none',
@@ -635,12 +653,12 @@ function convertLegacyResult(
     });
 
     if (parent === 'parent1') {
-      parentCalendarDays.parent1 += safeDays;
+      parentCalendarDays.parent1 += effectiveDays;
     } else {
-      parentCalendarDays.parent2 += safeDays;
+      parentCalendarDays.parent2 += effectiveDays;
     }
 
-    calendarDaysAccumulator.value += safeDays;
+    calendarDaysAccumulator.value += effectiveDays;
     fillerCursor = startOfDay(addDays(endDate, 1));
   };
 

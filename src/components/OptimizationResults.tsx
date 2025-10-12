@@ -412,6 +412,9 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                     const isExpanded = expandedPeriods[expandKey];
                     const hasMultipleMonths = monthlyBreakdown.length > 1;
                     const totalDaysUsed = group.periods.reduce((sum, segment) => sum + segment.daysCount, 0);
+                    const isInitialTenDayGroup =
+                      group.parent === 'both' && group.periods.every(segment => segment.isInitialTenDayPeriod);
+                    const totalDaysLabel = isInitialTenDayGroup ? '2 × 10 dagar' : `${totalDaysUsed} dagar`;
                     const periodRangeLabel = formatPeriod({ ...firstPeriod, endDate: lastPeriod.endDate });
 
                     return (
@@ -436,7 +439,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="text-xs">
-                              {totalDaysUsed} dagar
+                              {totalDaysLabel}
                             </Badge>
                             {hasMultipleMonths && (
                               <button
@@ -487,7 +490,9 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                       {format(month.startDate, 'd')} - {format(month.endDate, 'd MMM yyyy')}
                                     </div>
                                     <div className="text-muted-foreground">
-                                      {month.calendarDays} kalenderdagar • {month.benefitDays} uttagna dagar
+                                      {month.calendarDays} kalenderdagar • {
+                                        isInitialTenDayGroup ? '2 × 10 uttagna dagar' : `${month.benefitDays} uttagna dagar`
+                                      }
                                     </div>
                                     <div className={`font-semibold ${isLowest ? 'text-yellow-700 dark:text-yellow-400' : isBelowMinimum ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>
                                       Hushållets inkomst: {formatCurrency(aggregatedIncome)}
