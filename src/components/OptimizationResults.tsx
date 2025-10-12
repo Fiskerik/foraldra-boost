@@ -190,9 +190,9 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             });
           });
 
-          const fullMonths = allMonthlyBreakdowns.filter(m => m.calendarDays === 30);
-          const lowestMonthlyIncome = fullMonths.length > 0
-            ? Math.min(...fullMonths.map(m => m.monthlyIncome))
+          const monthsWithIncome = allMonthlyBreakdowns.filter(m => m.calendarDays > 0);
+          const lowestMonthlyIncome = monthsWithIncome.length > 0
+            ? Math.min(...monthsWithIncome.map(m => m.monthlyIncome))
             : Infinity;
 
           const isLowestBelowMinimum = lowestMonthlyIncome < minHouseholdIncome;
@@ -320,8 +320,8 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
 
                     const monthlyBreakdown = groupMonthlyBreakdowns[groupIndex];
                     const periodTotalIncome = monthlyBreakdown.reduce((sum, month) => sum + month.monthlyIncome, 0);
-                    const periodContainsLowest = monthlyBreakdown.some(
-                      month => month.calendarDays === 30 && month.monthlyIncome === lowestMonthlyIncome
+                    const periodContainsLowest = monthlyBreakdown.some(month =>
+                      Math.abs(month.monthlyIncome - lowestMonthlyIncome) < 1
                     );
                     const shouldBeOrange = periodContainsLowest && isLowestBelowMinimum;
 
@@ -381,9 +381,8 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           {isExpanded && hasMultipleMonths && (
                             <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
                               {monthlyBreakdown.map((month, monthIdx) => {
-                                const isFullMonth = month.calendarDays === 30;
-                                const isLowest = isFullMonth && month.monthlyIncome === lowestMonthlyIncome;
-                                const isBelowMinimum = isFullMonth && month.monthlyIncome < minHouseholdIncome;
+                                const isLowest = Math.abs(month.monthlyIncome - lowestMonthlyIncome) < 1;
+                                const isBelowMinimum = month.monthlyIncome < minHouseholdIncome;
                                 return (
                                   <div
                                     key={`${month.startDate.toISOString()}-${monthIdx}`}

@@ -98,8 +98,8 @@ export function InteractiveSliders({
         return currentHouseholdIncome;
       }
 
-      const avgDailyIncome = incomeDaysSum / daysCovered;
-      return avgDailyIncome * 30;
+      const monthlyIncome = incomeDaysSum;
+      return monthlyIncome;
     });
 
     return monthlyValues.length > 0 ? monthlyValues : [currentHouseholdIncome];

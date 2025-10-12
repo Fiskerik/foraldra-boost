@@ -149,6 +149,9 @@ interface ConversionContext {
   parent2NetIncome: number;
   adjustedTotalMonths: number;
   requestedDaysPerWeek: number;
+  preferredParent1Months: number;
+  preferredParent2Months: number;
+  simultaneousMonths: number;
 }
 
 type LegacyPlan = Record<string, unknown> | undefined;
@@ -195,6 +198,8 @@ interface SegmentConfig {
   fallbackDaysPerWeek: number;
   benefitMonthly: number;
   leaveMonthlyIncome: number;
+  preferredDaysPerWeek?: number;
+  forceRecomputeWeeks?: boolean;
 }
 
 function addSegment(
@@ -213,14 +218,34 @@ function addSegment(
     fallbackDaysPerWeek,
     benefitMonthly,
     leaveMonthlyIncome,
+    preferredDaysPerWeek,
+    forceRecomputeWeeks,
   } = config;
 
   if (!plan || usedDays <= 0) {
     return currentDate;
   }
 
-  const weeks = toNumber(plan.weeks) || (fallbackDaysPerWeek > 0 ? usedDays / fallbackDaysPerWeek : 0);
-  const dagarPerVecka = toNumber(plan.dagarPerVecka || fallbackDaysPerWeek);
+  const preferredDays = preferredDaysPerWeek && preferredDaysPerWeek > 0 ? Math.round(preferredDaysPerWeek) : undefined;
+  const planDaysPerWeek = toNumber(plan.dagarPerVecka);
+  let dagarPerVecka = planDaysPerWeek > 0 ? planDaysPerWeek : fallbackDaysPerWeek;
+  if (preferredDays) {
+    dagarPerVecka = Math.max(dagarPerVecka, preferredDays);
+  }
+
+  if (dagarPerVecka <= 0) {
+    dagarPerVecka = fallbackDaysPerWeek;
+  }
+
+  let weeks = toNumber(plan.weeks);
+  if (!weeks || weeks <= 0 || forceRecomputeWeeks) {
+    weeks = dagarPerVecka > 0 ? usedDays / dagarPerVecka : 0;
+  }
+
+  if (!Number.isFinite(weeks)) {
+    weeks = 0;
+  }
+
   if (weeks <= 0 || dagarPerVecka <= 0) {
     return currentDate;
   }
@@ -315,14 +340,24 @@ function convertLegacyResult(
   currentDate = startOfDay(addDays(initialEndDate, 1));
   const calendarDaysAccumulator = { value: initialCalendarDays };
 
+  const preferFullWeek = meta.key === 'maximize-income';
+  const preferredDaysPerWeek = preferFullWeek ? 7 : undefined;
+  const forceFullWeekScheduling = preferFullWeek;
+
   const resolveDaysPerWeek = (...values: unknown[]): number => {
     for (const value of values) {
       const candidate = toNumber(value);
       if (candidate > 0) {
+        if (preferFullWeek) {
+          return Math.max(candidate, 7);
+        }
         return candidate;
       }
     }
     const normalized = Math.max(1, Math.round(context.requestedDaysPerWeek));
+    if (preferFullWeek) {
+      return Math.max(normalized, 7);
+    }
     return normalized > 0 ? normalized : 5;
   };
 
@@ -394,6 +429,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan1Overlap?.dagarPerVecka),
       benefitMonthly: overlapBenefitMonthly,
       leaveMonthlyIncome: overlapParent1Monthly + overlapParent2Monthly,
+      preferredDaysPerWeek,
+      forceRecomputeWeeks: forceFullWeekScheduling,
     }, calendarDaysAccumulator, timelineLimit);
   }
 
@@ -409,6 +446,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan1?.dagarPerVecka),
       benefitMonthly,
       leaveMonthlyIncome,
+      preferredDaysPerWeek,
+      forceRecomputeWeeks: forceFullWeekScheduling,
     }, calendarDaysAccumulator, timelineLimit);
   }
 
@@ -426,6 +465,8 @@ function convertLegacyResult(
       ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
+      preferredDaysPerWeek,
+      forceRecomputeWeeks: forceFullWeekScheduling,
     }, calendarDaysAccumulator, timelineLimit);
   }
 
@@ -444,6 +485,8 @@ function convertLegacyResult(
       ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
+      preferredDaysPerWeek,
+      forceRecomputeWeeks: forceFullWeekScheduling,
     }, calendarDaysAccumulator, timelineLimit);
   }
 
@@ -459,6 +502,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan2?.dagarPerVecka),
       benefitMonthly,
       leaveMonthlyIncome,
+      preferredDaysPerWeek,
+      forceRecomputeWeeks: forceFullWeekScheduling,
     }, calendarDaysAccumulator, timelineLimit);
   }
 
@@ -476,6 +521,8 @@ function convertLegacyResult(
       ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
+      preferredDaysPerWeek,
+      forceRecomputeWeeks: forceFullWeekScheduling,
     }, calendarDaysAccumulator, timelineLimit);
   }
 
@@ -494,6 +541,8 @@ function convertLegacyResult(
       ),
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
+      preferredDaysPerWeek,
+      forceRecomputeWeeks: forceFullWeekScheduling,
     }, calendarDaysAccumulator, timelineLimit);
   }
 
@@ -504,7 +553,7 @@ function convertLegacyResult(
   const mergedPeriods: LeavePeriod[] = [];
   for (const period of periods) {
     const last = mergedPeriods[mergedPeriods.length - 1];
-    
+
     // Check if we can merge with the previous period
     if (
       last &&
@@ -522,6 +571,79 @@ function convertLegacyResult(
       mergedPeriods.push({ ...period });
     }
   }
+
+  const parentCalendarDays: Record<'parent1' | 'parent2', number> = { parent1: 0, parent2: 0 };
+  const accumulateParentDays = (period: LeavePeriod) => {
+    const days = Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
+    if (period.parent === 'parent1') {
+      parentCalendarDays.parent1 += days;
+    } else if (period.parent === 'parent2') {
+      parentCalendarDays.parent2 += days;
+    } else if (period.parent === 'both') {
+      parentCalendarDays.parent1 += days;
+      parentCalendarDays.parent2 += days;
+    }
+  };
+
+  mergedPeriods.forEach(accumulateParentDays);
+
+  const targetParent1Days = Math.max(0, Math.round(context.preferredParent1Months * 30));
+  const targetParent2Days = Math.max(0, Math.round(context.preferredParent2Months * 30));
+
+  let fillerCursor = startOfDay(currentDate);
+  const lastExistingPeriod = mergedPeriods[mergedPeriods.length - 1];
+  if (lastExistingPeriod) {
+    const nextDay = startOfDay(addDays(lastExistingPeriod.endDate, 1));
+    if (nextDay.getTime() > fillerCursor.getTime()) {
+      fillerCursor = nextDay;
+    }
+  }
+
+  const appendFiller = (parent: 'parent1' | 'parent2', missingDays: number) => {
+    if (!Number.isFinite(missingDays) || missingDays <= 0) {
+      return;
+    }
+
+    const safeDays = Math.round(missingDays);
+    if (safeDays <= 0) {
+      return;
+    }
+
+    const startDate = startOfDay(fillerCursor);
+    const endDate = startOfDay(addDays(startDate, safeDays - 1));
+    const otherParentDailyIncome = parent === 'parent1'
+      ? context.parent2NetIncome / 30
+      : context.parent1NetIncome / 30;
+    const ownDailyIncome = parent === 'parent1'
+      ? context.parent1NetIncome / 30
+      : context.parent2NetIncome / 30;
+
+    mergedPeriods.push({
+      parent,
+      startDate,
+      endDate,
+      daysCount: safeDays,
+      dailyBenefit: 0,
+      dailyIncome: ownDailyIncome + otherParentDailyIncome,
+      benefitLevel: 'none',
+      daysPerWeek: 7,
+      otherParentDailyIncome,
+    });
+
+    if (parent === 'parent1') {
+      parentCalendarDays.parent1 += safeDays;
+    } else {
+      parentCalendarDays.parent2 += safeDays;
+    }
+
+    calendarDaysAccumulator.value += safeDays;
+    fillerCursor = startOfDay(addDays(endDate, 1));
+  };
+
+  appendFiller('parent1', targetParent1Days - parentCalendarDays.parent1);
+  appendFiller('parent2', targetParent2Days - parentCalendarDays.parent2);
+
+  mergedPeriods.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
   const totalIncome = mergedPeriods.reduce((sum, period) => sum + period.dailyIncome * period.daysCount, 0);
   const benefitDaysUsed = mergedPeriods.reduce((sum, period) => {
@@ -605,7 +727,7 @@ export function optimizeLeave(
   const adjustedTotalMonths = preferredParent1Months + preferredParent2Months + simultaneousMonths;
 
   const allowFullWeekForSave = normalizedDaysPerWeek > baseDaysPerWeek;
-  const allowFullWeekForMax = normalizedDaysPerWeek >= baseDaysPerWeek;
+  const allowFullWeekForMax = true;
 
   const buildPreferences = (strategyKey: LegacyStrategyKey, minIncome: number, allowFullWeek: boolean) => ({
     deltid: allowFullWeek ? 'nej' : 'ja',
@@ -622,6 +744,9 @@ export function optimizeLeave(
     parent2NetIncome: calc2.netIncome,
     adjustedTotalMonths,
     requestedDaysPerWeek: normalizedDaysPerWeek,
+    preferredParent1Months,
+    preferredParent2Months,
+    simultaneousMonths,
   };
 
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
