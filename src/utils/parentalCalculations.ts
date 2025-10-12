@@ -645,6 +645,19 @@ function convertLegacyResult(
 
   mergedPeriods.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
+  if (mergedPeriods.length > 0) {
+    const expectedStart = baseStartDate;
+    const earliest = mergedPeriods[0];
+    const offsetDays = differenceInCalendarDays(earliest.startDate, expectedStart);
+
+    if (offsetDays > 0) {
+      mergedPeriods.forEach(period => {
+        period.startDate = startOfDay(addDays(period.startDate, -offsetDays));
+        period.endDate = startOfDay(addDays(period.endDate, -offsetDays));
+      });
+    }
+  }
+
   const totalIncome = mergedPeriods.reduce((sum, period) => sum + period.dailyIncome * period.daysCount, 0);
   const benefitDaysUsed = mergedPeriods.reduce((sum, period) => {
     if (period.benefitLevel === 'none') {
@@ -685,12 +698,9 @@ export function optimizeLeave(
 
   const normalizedDaysPerWeek = Math.max(1, Math.min(7, Math.round(daysPerWeek)));
   const baseDaysPerWeek = 5;
-  const scaleFactor = baseDaysPerWeek / normalizedDaysPerWeek;
-
-  const scaledParent1Months = parent1Months * scaleFactor;
-  const scaledParent2Months = parent2Months * scaleFactor;
-  const effectiveParent1Months = Math.max(parent1Months, scaledParent1Months);
-  const effectiveParent2Months = Math.max(parent2Months, scaledParent2Months);
+  const safeParent1Months = Math.max(0, parent1Months);
+  const safeParent2Months = Math.max(0, parent2Months);
+  const safeTotalMonths = Math.max(0, totalMonths);
 
   const combinedNetIncome = calc1.netIncome + calc2.netIncome;
   const combinedAvailableIncome = calc1.availableIncome + calc2.availableIncome;
@@ -722,9 +732,9 @@ export function optimizeLeave(
     },
   ];
 
-  const preferredParent1Months = effectiveParent1Months;
-  const preferredParent2Months = effectiveParent2Months;
-  const adjustedTotalMonths = preferredParent1Months + preferredParent2Months + simultaneousMonths;
+  const preferredParent1Months = safeParent1Months;
+  const preferredParent2Months = safeParent2Months;
+  const adjustedTotalMonths = safeTotalMonths + Math.max(0, simultaneousMonths);
 
   const allowFullWeekForSave = normalizedDaysPerWeek > baseDaysPerWeek;
   const allowFullWeekForMax = true;
