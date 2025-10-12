@@ -30,6 +30,12 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     monthlyIncome: number;
   }
 
+  interface MonthlyBreakdownEntry extends MonthlyBreakdown {
+    monthKey: string;
+    monthStart: Date;
+    monthLength: number;
+  }
+
   const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
     const startDate = new Date(period.startDate);
     const endDate = new Date(period.endDate);
@@ -106,30 +112,48 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     return segments;
   };
 
-  const mergeMonthlySegments = (segments: MonthlyBreakdown[]): MonthlyBreakdown[] => {
-    if (segments.length === 0) {
+  const createMonthlyBreakdownEntries = (periodList: LeavePeriod[]): MonthlyBreakdownEntry[] => {
+    if (periodList.length === 0) {
       return [];
     }
 
-    const monthMap = new Map<string, MonthlyBreakdown>();
+    const monthMap = new Map<string, MonthlyBreakdownEntry>();
 
-    segments.forEach(segment => {
-      const key = `${segment.startDate.getFullYear()}-${segment.startDate.getMonth()}`;
-      const existing = monthMap.get(key);
+    periodList
+      .flatMap(breakDownByMonth)
+      .forEach(segment => {
+        const monthStart = startOfMonth(segment.startDate);
+        const key = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
+        const monthLength = differenceInCalendarDays(endOfMonth(monthStart), monthStart) + 1;
+        const existing = monthMap.get(key);
 
-      if (!existing) {
-        monthMap.set(key, { ...segment });
-        return;
-      }
+        if (!existing) {
+          monthMap.set(key, {
+            ...segment,
+            startDate: new Date(segment.startDate),
+            endDate: new Date(segment.endDate),
+            monthKey: key,
+            monthStart,
+            monthLength,
+          });
+          return;
+        }
 
-      existing.startDate = existing.startDate < segment.startDate ? existing.startDate : segment.startDate;
-      existing.endDate = existing.endDate > segment.endDate ? existing.endDate : segment.endDate;
-      existing.calendarDays += segment.calendarDays;
-      existing.benefitDays += segment.benefitDays;
-      existing.monthlyIncome += segment.monthlyIncome;
-    });
+        existing.startDate =
+          existing.startDate.getTime() <= segment.startDate.getTime()
+            ? existing.startDate
+            : new Date(segment.startDate);
+        existing.endDate =
+          existing.endDate.getTime() >= segment.endDate.getTime()
+            ? existing.endDate
+            : new Date(segment.endDate);
+        existing.calendarDays += segment.calendarDays;
+        existing.benefitDays += segment.benefitDays;
+        existing.monthlyIncome += segment.monthlyIncome;
+        existing.monthLength = monthLength;
+      });
 
-    return Array.from(monthMap.values()).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+    return Array.from(monthMap.values()).sort((a, b) => a.monthStart.getTime() - b.monthStart.getTime());
   };
 
   interface PeriodGroup {
@@ -180,7 +204,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
           const filteredPeriods = result.periods.filter(period => period.benefitLevel !== 'none');
           const periodGroups = groupConsecutivePeriods(filteredPeriods);
           const groupMonthlyBreakdowns = periodGroups.map(group =>
-            mergeMonthlySegments(group.periods.flatMap(breakDownByMonth))
+            createMonthlyBreakdownEntries(group.periods)
           );
 
           const aggregatedMonthMap = new Map<string, {
@@ -192,17 +216,14 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
 
           groupMonthlyBreakdowns.forEach(months => {
             months.forEach(month => {
-              const monthStartDate = startOfMonth(month.startDate);
-              const key = `${monthStartDate.getFullYear()}-${monthStartDate.getMonth()}`;
-              const monthLength = differenceInCalendarDays(endOfMonth(monthStartDate), monthStartDate) + 1;
-              const existing = aggregatedMonthMap.get(key);
+              const existing = aggregatedMonthMap.get(month.monthKey);
 
               if (!existing) {
-                aggregatedMonthMap.set(key, {
+                aggregatedMonthMap.set(month.monthKey, {
                   totalIncome: month.monthlyIncome,
                   totalCalendarDays: month.calendarDays,
-                  monthStart: monthStartDate,
-                  monthLength,
+                  monthStart: month.monthStart,
+                  monthLength: month.monthLength,
                 });
                 return;
               }
@@ -373,9 +394,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                     const periodTotalIncome = monthlyBreakdown.reduce((sum, month) => sum + month.monthlyIncome, 0);
                     const periodContainsLowest = lowestAggregatedKey
                       ? monthlyBreakdown.some(month => {
-                          const monthStartDate = startOfMonth(month.startDate);
-                          const monthKey = `${monthStartDate.getFullYear()}-${monthStartDate.getMonth()}`;
-                          return monthKey === lowestAggregatedKey;
+                          return month.monthKey === lowestAggregatedKey;
                         })
                       : false;
                     const shouldBeOrange = periodContainsLowest && isLowestBelowMinimum;
@@ -436,15 +455,13 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           {isExpanded && hasMultipleMonths && (
                             <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
                               {monthlyBreakdown.map((month, monthIdx) => {
-                                const monthStartDate = startOfMonth(month.startDate);
-                                const monthKey = `${monthStartDate.getFullYear()}-${monthStartDate.getMonth()}`;
-                                const aggregatedInfo = aggregatedMonthMap.get(monthKey);
+                                const aggregatedInfo = aggregatedMonthMap.get(month.monthKey);
                                 const isEligibleMonth = aggregatedInfo
                                   ? aggregatedInfo.totalCalendarDays >= aggregatedInfo.monthLength
                                   : false;
                                 const aggregatedIncome = aggregatedInfo?.totalIncome ?? month.monthlyIncome;
                                 const isLowest =
-                                  lowestAggregatedKey !== null && monthKey === lowestAggregatedKey;
+                                  lowestAggregatedKey !== null && month.monthKey === lowestAggregatedKey;
                                 const isBelowMinimum = isEligibleMonth && aggregatedIncome < minHouseholdIncome;
                                 return (
                                   <div
