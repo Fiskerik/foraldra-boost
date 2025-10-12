@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, LeavePeriod, calculateMaxLeaveMonths, TOTAL_BENEFIT_DAYS } from "@/utils/parentalCalculations";
 import { TrendingUp, Calendar, Clock, Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { eachMonthOfInterval, startOfMonth, endOfMonth, differenceInCalendarDays } from "date-fns";
 
 interface InteractiveSlidersProps {
   householdIncome: number;
@@ -37,39 +38,72 @@ export function InteractiveSliders({
 }: InteractiveSlidersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   
-  // Calculate monthly income for all months that overlap with periods
-  const getAllMonthlyIncomes = (): number[] => {
-    if (periods.length === 0) return [currentHouseholdIncome];
-    
-    const monthlyIncomes: number[] = [];
-    
-    periods.forEach(period => {
-      // For each period, break it down by calendar month
-      let cursor = new Date(period.startDate);
-      const endDate = new Date(period.endDate);
-      
-      while (cursor <= endDate) {
-        const monthStart = new Date(cursor);
-        const monthEnd = new Date(Math.min(
-          new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getTime(),
-          endDate.getTime()
-        ));
-        
-        // Calculate income for this specific month segment
-        // dailyIncome already represents the household's daily income during this period
-        const monthIncome = period.dailyIncome * 30;
-        monthlyIncomes.push(monthIncome);
-        
-        // Move to next month
-        cursor = new Date(monthEnd);
-        cursor.setDate(cursor.getDate() + 1);
-      }
-    });
-    
-    return monthlyIncomes.length > 0 ? monthlyIncomes : [currentHouseholdIncome];
-  };
+  const allMonthlyIncomes = useMemo(() => {
+    if (periods.length === 0) {
+      return [currentHouseholdIncome];
+    }
 
-  const allMonthlyIncomes = getAllMonthlyIncomes();
+    const normalizedPeriods = periods
+      .map(period => ({
+        ...period,
+        startDate: new Date(period.startDate),
+        endDate: new Date(period.endDate),
+      }))
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+    if (normalizedPeriods.length === 0) {
+      return [currentHouseholdIncome];
+    }
+
+    const firstStart = normalizedPeriods[0].startDate;
+    const lastEnd = normalizedPeriods.reduce((latest, period) => {
+      return period.endDate.getTime() > latest.getTime() ? period.endDate : latest;
+    }, normalizedPeriods[normalizedPeriods.length - 1].endDate);
+
+    const months = eachMonthOfInterval({ start: firstStart, end: lastEnd });
+    if (months.length === 0) {
+      return [currentHouseholdIncome];
+    }
+
+    const monthlyValues = months.map(month => {
+      const monthStart = startOfMonth(month);
+      const rawMonthEnd = endOfMonth(month);
+      const monthEnd = rawMonthEnd.getTime() > lastEnd.getTime() ? lastEnd : rawMonthEnd;
+
+      let incomeDaysSum = 0;
+      let daysCovered = 0;
+
+      normalizedPeriods.forEach(period => {
+        if (period.endDate.getTime() < monthStart.getTime() || period.startDate.getTime() > monthEnd.getTime()) {
+          return;
+        }
+
+        const overlapStart = period.startDate.getTime() > monthStart.getTime() ? period.startDate : monthStart;
+        const overlapEnd = period.endDate.getTime() < monthEnd.getTime() ? period.endDate : monthEnd;
+
+        if (overlapStart.getTime() > overlapEnd.getTime()) {
+          return;
+        }
+
+        const overlapDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+        if (overlapDays <= 0) {
+          return;
+        }
+
+        incomeDaysSum += period.dailyIncome * overlapDays;
+        daysCovered += overlapDays;
+      });
+
+      if (daysCovered <= 0) {
+        return currentHouseholdIncome;
+      }
+
+      const avgDailyIncome = incomeDaysSum / daysCovered;
+      return avgDailyIncome * 30;
+    });
+
+    return monthlyValues.length > 0 ? monthlyValues : [currentHouseholdIncome];
+  }, [periods, currentHouseholdIncome]);
   const lowestMonthlyIncome = Math.min(...allMonthlyIncomes);
 
   const isBelowMinimum = lowestMonthlyIncome < householdIncome;

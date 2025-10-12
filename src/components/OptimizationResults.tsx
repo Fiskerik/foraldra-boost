@@ -106,6 +106,64 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     return segments;
   };
 
+  const mergeMonthlySegments = (segments: MonthlyBreakdown[]): MonthlyBreakdown[] => {
+    if (segments.length === 0) {
+      return [];
+    }
+
+    const monthMap = new Map<string, MonthlyBreakdown>();
+
+    segments.forEach(segment => {
+      const key = `${segment.startDate.getFullYear()}-${segment.startDate.getMonth()}`;
+      const existing = monthMap.get(key);
+
+      if (!existing) {
+        monthMap.set(key, { ...segment });
+        return;
+      }
+
+      existing.startDate = existing.startDate < segment.startDate ? existing.startDate : segment.startDate;
+      existing.endDate = existing.endDate > segment.endDate ? existing.endDate : segment.endDate;
+      existing.calendarDays += segment.calendarDays;
+      existing.benefitDays += segment.benefitDays;
+      existing.monthlyIncome += segment.monthlyIncome;
+    });
+
+    return Array.from(monthMap.values()).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  };
+
+  interface PeriodGroup {
+    parent: LeavePeriod["parent"];
+    periods: LeavePeriod[];
+  }
+
+  const groupConsecutivePeriods = (periodList: LeavePeriod[]): PeriodGroup[] => {
+    if (periodList.length === 0) {
+      return [];
+    }
+
+    const sorted = [...periodList].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+    const groups: PeriodGroup[] = [];
+
+    sorted.forEach(period => {
+      const lastGroup = groups[groups.length - 1];
+      const lastSegment = lastGroup?.periods[lastGroup.periods.length - 1];
+
+      const canGroup =
+        lastGroup &&
+        lastGroup.parent === period.parent &&
+        differenceInCalendarDays(period.startDate, addDays(lastSegment.endDate, 1)) === 0;
+
+      if (canGroup) {
+        lastGroup.periods.push(period);
+      } else {
+        groups.push({ parent: period.parent, periods: [period] });
+      }
+    });
+
+    return groups;
+  };
+
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
@@ -119,23 +177,24 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         {results.map((result, index) => {
           // Find the absolute lowest monthly income across ALL periods in this strategy
           // Only consider full months (calendarDays === 30) to avoid partial months
-          const allMonthlyBreakdowns: Array<MonthlyBreakdown & { periodIndex: number }> = [];
-          result.periods
-            .filter(period => period.benefitLevel !== 'none')
-            .forEach((period, periodIndex) => {
-              const breakdown = breakDownByMonth(period);
-              breakdown.forEach(month => {
-                allMonthlyBreakdowns.push({ ...month, periodIndex });
-              });
+          const filteredPeriods = result.periods.filter(period => period.benefitLevel !== 'none');
+          const periodGroups = groupConsecutivePeriods(filteredPeriods);
+          const groupMonthlyBreakdowns = periodGroups.map(group =>
+            mergeMonthlySegments(group.periods.flatMap(breakDownByMonth))
+          );
+
+          const allMonthlyBreakdowns: Array<MonthlyBreakdown & { groupIndex: number }> = [];
+          groupMonthlyBreakdowns.forEach((months, groupIndex) => {
+            months.forEach(month => {
+              allMonthlyBreakdowns.push({ ...month, groupIndex });
             });
-          
-          // Filter to only full months for determining the lowest
+          });
+
           const fullMonths = allMonthlyBreakdowns.filter(m => m.calendarDays === 30);
           const lowestMonthlyIncome = fullMonths.length > 0
             ? Math.min(...fullMonths.map(m => m.monthlyIncome))
             : Infinity;
-          
-          // Check if lowest month is below minimum
+
           const isLowestBelowMinimum = lowestMonthlyIncome < minHouseholdIncome;
 
           return (
@@ -206,55 +265,82 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                 </div>
                 
                 <div className="space-y-3">
-                  {result.periods
-                    .filter(period => period.benefitLevel !== 'none')
-                    .map((period, periodIndex) => {
-                    const parentColor = 
-                      period.parent === 'both' ? 'accent' :
-                      period.parent === 'parent1' ? 'parent1' : 'parent2';
-                    
-                    const parentLabel = 
-                      period.parent === 'both' ? 'Båda föräldrarna' :
-                      period.parent === 'parent1' ? 'Förälder 1' : 'Förälder 2';
-                    
-                    const benefitLabel =
-                      period.benefitLevel === 'parental-salary' ? 'Föräldralön (90%)' :
-                      period.benefitLevel === 'high' ? 'Hög föräldrapenning (80%)' :
-                      period.benefitLevel === 'low' ? 'Låg föräldrapenning' : 'Ingen ersättning';
-                    
-                    const daysPerWeekLabel = period.daysPerWeek 
-                      ? `${period.daysPerWeek} ${period.daysPerWeek === 1 ? 'dag' : 'dagar'}/vecka`
-                      : 'Heltid';
-                    
-                    const otherParentMonthlyIncome = (period.otherParentDailyIncome || 0) * 30;
-                    const leaveBenefitMonthly = period.dailyBenefit * 30;
-                    const householdMonthlyIncome = period.dailyIncome * 30;
+                  {periodGroups.map((group, groupIndex) => {
+                    const firstPeriod = group.periods[0];
+                    const lastPeriod = group.periods[group.periods.length - 1];
+                    const parentColor =
+                      group.parent === 'both' ? 'accent' :
+                      group.parent === 'parent1' ? 'parent1' : 'parent2';
+
+                    const parentLabel =
+                      group.parent === 'both' ? 'Båda föräldrarna' :
+                      group.parent === 'parent1' ? 'Förälder 1' : 'Förälder 2';
+
+                    const uniqueBenefitLabels = Array.from(new Set(group.periods.map(segment =>
+                      segment.benefitLevel === 'parental-salary'
+                        ? 'Föräldralön (90%)'
+                        : segment.benefitLevel === 'high'
+                        ? 'Hög föräldrapenning (80%)'
+                        : 'Låg föräldrapenning'
+                    )));
+                    const benefitLabel = uniqueBenefitLabels.length === 1
+                      ? uniqueBenefitLabels[0]
+                      : `Varierad ersättning: ${uniqueBenefitLabels.join(' → ')}`;
+
+                    const uniqueDaysPerWeekLabels = Array.from(new Set(group.periods.map(segment =>
+                      segment.daysPerWeek
+                        ? `${segment.daysPerWeek} ${segment.daysPerWeek === 1 ? 'dag' : 'dagar'}/vecka`
+                        : 'Heltid'
+                    )));
+                    const daysPerWeekLabel = uniqueDaysPerWeekLabels.length === 1
+                      ? uniqueDaysPerWeekLabels[0]
+                      : `Varierar: ${uniqueDaysPerWeekLabels.join(' → ')}`;
+
+                    const totalCalendarDays = group.periods.reduce((sum, segment) => {
+                      const days = Math.max(1, differenceInCalendarDays(segment.endDate, segment.startDate) + 1);
+                      return sum + days;
+                    }, 0);
+                    const totalHouseholdIncome = group.periods.reduce((sum, segment) => {
+                      const days = Math.max(1, differenceInCalendarDays(segment.endDate, segment.startDate) + 1);
+                      return sum + segment.dailyIncome * days;
+                    }, 0);
+                    const totalBenefitIncome = group.periods.reduce((sum, segment) => {
+                      const days = Math.max(1, differenceInCalendarDays(segment.endDate, segment.startDate) + 1);
+                      return sum + segment.dailyBenefit * days;
+                    }, 0);
+                    const totalOtherIncome = group.periods.reduce((sum, segment) => {
+                      const days = Math.max(1, differenceInCalendarDays(segment.endDate, segment.startDate) + 1);
+                      return sum + (segment.otherParentDailyIncome || 0) * days;
+                    }, 0);
+
+                    const householdMonthlyIncome = totalCalendarDays > 0 ? (totalHouseholdIncome / totalCalendarDays) * 30 : 0;
+                    const leaveBenefitMonthly = totalCalendarDays > 0 ? (totalBenefitIncome / totalCalendarDays) * 30 : 0;
+                    const otherParentMonthlyIncome = totalCalendarDays > 0 ? (totalOtherIncome / totalCalendarDays) * 30 : 0;
                     const leaveParentMonthlyIncome = householdMonthlyIncome - otherParentMonthlyIncome;
-                    const monthlyBreakdown = breakDownByMonth(period);
+
+                    const monthlyBreakdown = groupMonthlyBreakdowns[groupIndex];
                     const periodTotalIncome = monthlyBreakdown.reduce((sum, month) => sum + month.monthlyIncome, 0);
-                    
-                    // Check if this period contains the lowest month (only for full months)
                     const periodContainsLowest = monthlyBreakdown.some(
                       month => month.calendarDays === 30 && month.monthlyIncome === lowestMonthlyIncome
                     );
-                    
-                    // Period should be orange only if it contains the lowest month AND that month is below minimum
                     const shouldBeOrange = periodContainsLowest && isLowestBelowMinimum;
-                    
-                    const expandKey = `${index}-${periodIndex}`;
+
+                    const expandKey = `${index}-${groupIndex}`;
                     const isExpanded = expandedPeriods[expandKey];
                     const hasMultipleMonths = monthlyBreakdown.length > 1;
-                    
+                    const totalDaysUsed = group.periods.reduce((sum, segment) => sum + segment.daysCount, 0);
+                    const periodRangeLabel = formatPeriod({ ...firstPeriod, endDate: lastPeriod.endDate });
+
                     return (
                       <div
-                        key={periodIndex}
+                        key={groupIndex}
                         className={`p-4 rounded-lg border-l-4 ${
                           shouldBeOrange
-                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20' 
-                            : parentColor === 'accent' 
-                            ? 'border-accent bg-accent/5' 
-                            : parentColor === 'parent1' 
-                            ? 'border-parent1 bg-parent1/5' 
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20'
+                            : parentColor === 'accent'
+                            ? 'border-accent bg-accent/5'
+                            : parentColor === 'parent1'
+                            ? 'border-parent1 bg-parent1/5'
                             : 'border-parent2 bg-parent2/5'
                         }`}
                       >
@@ -267,11 +353,11 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="text-xs">
-                              {period.daysCount} dagar
+                              {totalDaysUsed} dagar
                             </Badge>
                             {hasMultipleMonths && (
                               <button
-                                onClick={() => togglePeriod(index, periodIndex)}
+                                onClick={() => togglePeriod(index, groupIndex)}
                                 className="p-1 hover:bg-muted rounded transition-colors"
                                 aria-label={isExpanded ? "Dölj månader" : "Visa månader"}
                               >
@@ -280,10 +366,10 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                             )}
                           </div>
                         </div>
-                        
+
                         <div className="text-sm space-y-1">
                           <div className="text-muted-foreground">
-                            {formatPeriod(period)}
+                            {periodRangeLabel}
                           </div>
                           <div className="font-medium">
                             {benefitLabel}
@@ -291,20 +377,19 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           <div className="text-muted-foreground">
                             Uttag: {daysPerWeekLabel}
                           </div>
-                          
+
                           {isExpanded && hasMultipleMonths && (
                             <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
                               {monthlyBreakdown.map((month, monthIdx) => {
-                                // Only highlight full months
                                 const isFullMonth = month.calendarDays === 30;
                                 const isLowest = isFullMonth && month.monthlyIncome === lowestMonthlyIncome;
                                 const isBelowMinimum = isFullMonth && month.monthlyIncome < minHouseholdIncome;
-                                 return (
-                                  <div 
-                                    key={monthIdx} 
+                                return (
+                                  <div
+                                    key={`${month.startDate.toISOString()}-${monthIdx}`}
                                     className={`text-xs p-2 rounded space-y-1 ${
-                                      isLowest 
-                                        ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400' 
+                                      isLowest
+                                        ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400'
                                         : isBelowMinimum
                                         ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-300'
                                         : 'bg-muted/30'
@@ -325,10 +410,10 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                               })}
                             </div>
                           )}
-                          
-                          {period.parent !== 'both' && period.benefitLevel !== 'none' && (
+
+                          {group.parent !== 'both' && (
                             <div className="mt-2 p-2 bg-muted/50 rounded space-y-1">
-                              {period.daysPerWeek && period.daysPerWeek < 7 ? (
+                              {uniqueDaysPerWeekLabels.every(label => label !== 'Heltid') ? (
                                 <>
                                   <div className="text-xs text-muted-foreground">
                                     Lediga förälderns totala inkomst: {formatCurrency(leaveParentMonthlyIncome)}/mån
