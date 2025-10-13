@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, LeavePeriod, calculateMaxLeaveMonths, TOTAL_BENEFIT_DAYS } from "@/utils/parentalCalculations";
 import { TrendingUp, Calendar, Clock, Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
-import { eachMonthOfInterval, startOfMonth, endOfMonth, differenceInCalendarDays } from "date-fns";
+import { addDays, startOfDay, startOfMonth, endOfMonth, differenceInCalendarDays } from "date-fns";
 
 interface InteractiveSlidersProps {
   householdIncome: number;
@@ -38,78 +38,78 @@ export function InteractiveSliders({
 }: InteractiveSlidersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   
-  const allMonthlyIncomes = useMemo(() => {
+  const { lowestMonthlyIncome, hasEligibleMonths } = useMemo(() => {
     if (periods.length === 0) {
-      return [currentHouseholdIncome];
+      return { lowestMonthlyIncome: currentHouseholdIncome, hasEligibleMonths: false };
     }
 
-    const normalizedPeriods = periods
-      .map(period => ({
-        ...period,
-        startDate: new Date(period.startDate),
-        endDate: new Date(period.endDate),
-      }))
-      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+    const relevantPeriods = periods.filter(period =>
+      period.benefitLevel !== "none" || period.isInitialTenDayPeriod || period.isPreferenceFiller
+    );
 
-    if (normalizedPeriods.length === 0) {
-      return [currentHouseholdIncome];
+    if (relevantPeriods.length === 0) {
+      return { lowestMonthlyIncome: currentHouseholdIncome, hasEligibleMonths: false };
     }
 
-    const firstStart = normalizedPeriods[0].startDate;
-    const lastEnd = normalizedPeriods.reduce((latest, period) => {
-      return period.endDate.getTime() > latest.getTime() ? period.endDate : latest;
-    }, normalizedPeriods[normalizedPeriods.length - 1].endDate);
+    const monthlyTotals = new Map<
+      string,
+      { totalIncome: number; calendarDays: number; monthLength: number }
+    >();
 
-    const months = eachMonthOfInterval({ start: firstStart, end: lastEnd });
-    if (months.length === 0) {
-      return [currentHouseholdIncome];
-    }
+    relevantPeriods.forEach(period => {
+      const periodStart = startOfDay(new Date(period.startDate));
+      const periodEnd = startOfDay(new Date(period.endDate));
 
-    const monthlyValues = months.map(month => {
-      const monthStart = startOfMonth(month);
-      const rawMonthEnd = endOfMonth(month);
-      const monthEnd = rawMonthEnd.getTime() > lastEnd.getTime() ? lastEnd : rawMonthEnd;
+      let segmentStart = new Date(periodStart);
 
-      let incomeDaysSum = 0;
-      let daysCovered = 0;
+      while (segmentStart.getTime() <= periodEnd.getTime()) {
+        const monthStart = startOfMonth(segmentStart);
+        const monthEnd = endOfMonth(monthStart);
+        const segmentEnd = periodEnd.getTime() < monthEnd.getTime() ? periodEnd : monthEnd;
+        const segmentDays = Math.max(1, differenceInCalendarDays(segmentEnd, segmentStart) + 1);
+        const monthKey = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
+        const monthLength = differenceInCalendarDays(monthEnd, monthStart) + 1;
 
-      normalizedPeriods.forEach(period => {
-        if (period.endDate.getTime() < monthStart.getTime() || period.startDate.getTime() > monthEnd.getTime()) {
-          return;
+        const existing = monthlyTotals.get(monthKey);
+        if (existing) {
+          existing.totalIncome += period.dailyIncome * segmentDays;
+          existing.calendarDays += segmentDays;
+          existing.monthLength = monthLength;
+        } else {
+          monthlyTotals.set(monthKey, {
+            totalIncome: period.dailyIncome * segmentDays,
+            calendarDays: segmentDays,
+            monthLength,
+          });
         }
 
-        const overlapStart = period.startDate.getTime() > monthStart.getTime() ? period.startDate : monthStart;
-        const overlapEnd = period.endDate.getTime() < monthEnd.getTime() ? period.endDate : monthEnd;
-
-        if (overlapStart.getTime() > overlapEnd.getTime()) {
-          return;
-        }
-
-        const overlapDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
-        if (overlapDays <= 0) {
-          return;
-        }
-
-        incomeDaysSum += period.dailyIncome * overlapDays;
-        daysCovered += overlapDays;
-      });
-
-      if (daysCovered <= 0) {
-        return currentHouseholdIncome;
+        segmentStart = addDays(segmentEnd, 1);
       }
-
-      const monthlyIncome = incomeDaysSum;
-      return monthlyIncome;
     });
 
-    return monthlyValues.length > 0 ? monthlyValues : [currentHouseholdIncome];
-  }, [periods, currentHouseholdIncome]);
-  const lowestMonthlyIncome = Math.min(...allMonthlyIncomes);
+    const eligibleEntries = Array.from(monthlyTotals.values()).filter(
+      entry => entry.calendarDays >= entry.monthLength
+    );
 
-  const isBelowMinimum = lowestMonthlyIncome < householdIncome;
+    if (eligibleEntries.length === 0) {
+      return { lowestMonthlyIncome: currentHouseholdIncome, hasEligibleMonths: false };
+    }
+
+    const lowestIncome = eligibleEntries.reduce((min, entry) => {
+      return entry.totalIncome < min ? entry.totalIncome : min;
+    }, Infinity);
+
+    if (!Number.isFinite(lowestIncome)) {
+      return { lowestMonthlyIncome: currentHouseholdIncome, hasEligibleMonths: false };
+    }
+
+    return { lowestMonthlyIncome: lowestIncome, hasEligibleMonths: true };
+  }, [periods, currentHouseholdIncome]);
+
+  const isBelowMinimum = hasEligibleMonths && lowestMonthlyIncome < householdIncome;
 
   // Calculate break-point on income slider - show where the lowest month is
-  const incomeBreakPoint = Number.isFinite(lowestMonthlyIncome) ? lowestMonthlyIncome : null;
+  const incomeBreakPoint = hasEligibleMonths ? lowestMonthlyIncome : null;
   const incomeBreakPointPercent = incomeBreakPoint !== null
     ? Math.max(0, Math.min(100, (incomeBreakPoint / Math.max(maxHouseholdIncome, 1)) * 100))
     : null;
