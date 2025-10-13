@@ -300,14 +300,24 @@ function addSegment(
   const offsetDays = Number.isFinite(startWeek) ? Math.max(0, Math.round(startWeek * 7)) : 0;
   let startDate = startOfDay(addDays(baseStartDate, offsetDays));
 
+  // Ensure periods don't overlap by checking all relevant previous periods
   const lastEnd = parentLastEndDates[parent];
-  if (lastEnd) {
-    const potentialStart = startOfDay(addDays(lastEnd, 1));
-    if (parent === 'both') {
-      if (potentialStart.getTime() > startDate.getTime()) {
-        startDate = potentialStart;
-      }
-    } else if (potentialStart.getTime() < startDate.getTime()) {
+  const bothEnd = parent !== 'both' ? parentLastEndDates.both : null;
+  const otherParentEnd = parent === 'parent1' ? parentLastEndDates.parent2 : parent === 'parent2' ? parentLastEndDates.parent1 : null;
+  
+  // Find the latest relevant end date to prevent overlaps
+  let relevantLastEnd = lastEnd;
+  if (bothEnd && (!relevantLastEnd || bothEnd.getTime() > relevantLastEnd.getTime())) {
+    relevantLastEnd = bothEnd;
+  }
+  // For non-simultaneous periods, also check the other parent's end date
+  if (otherParentEnd && parent !== 'both' && (!relevantLastEnd || otherParentEnd.getTime() > relevantLastEnd.getTime())) {
+    relevantLastEnd = otherParentEnd;
+  }
+  
+  if (relevantLastEnd) {
+    const potentialStart = startOfDay(addDays(relevantLastEnd, 1));
+    if (potentialStart.getTime() > startDate.getTime()) {
       startDate = potentialStart;
     }
   }
