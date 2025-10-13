@@ -243,6 +243,7 @@ interface SegmentConfig {
 interface SegmentContext {
   baseStartDate: Date;
   timelineLimit?: Date | null;
+  parentLastEndDates: Record<'parent1' | 'parent2' | 'both', Date | null>;
 }
 
 function addSegment(
@@ -263,7 +264,7 @@ function addSegment(
     forceRecomputeWeeks,
   } = config;
 
-  const { baseStartDate } = context;
+  const { baseStartDate, parentLastEndDates } = context;
 
   if (!plan || usedDays <= 0) {
     return;
@@ -299,6 +300,18 @@ function addSegment(
   const offsetDays = Number.isFinite(startWeek) ? Math.max(0, Math.round(startWeek * 7)) : 0;
   let startDate = startOfDay(addDays(baseStartDate, offsetDays));
 
+  const lastEnd = parentLastEndDates[parent];
+  if (lastEnd) {
+    const potentialStart = startOfDay(addDays(lastEnd, 1));
+    if (parent === 'both') {
+      if (potentialStart.getTime() > startDate.getTime()) {
+        startDate = potentialStart;
+      }
+    } else if (potentialStart.getTime() < startDate.getTime()) {
+      startDate = potentialStart;
+    }
+  }
+
   const { timelineLimit: limit } = context;
 
   if (limit && startDate.getTime() > limit.getTime()) {
@@ -331,6 +344,8 @@ function addSegment(
     daysPerWeek: Math.round(dagarPerVecka),
     otherParentDailyIncome: parent === 'both' ? 0 : otherDailyIncome,
   });
+
+  parentLastEndDates[parent] = new Date(endDate);
 }
 
 function convertLegacyResult(
@@ -355,6 +370,11 @@ function convertLegacyResult(
     context.adjustedTotalMonths > 0 ? computeLimitDate(baseStartDate, context.adjustedTotalMonths) : null;
   const timelineLimit =
     rawTimelineLimit && rawTimelineLimit.getTime() < baseStartDate.getTime() ? new Date(baseStartDate) : rawTimelineLimit;
+  const parentLastEndDates: Record<'parent1' | 'parent2' | 'both', Date | null> = {
+    parent1: null,
+    parent2: null,
+    both: null,
+  };
   // Add initial 10 days (both parents) from child's birth
   let initialEndDate = addDays(baseStartDate, 9); // 10 days total (0-9)
   if (timelineLimit && initialEndDate.getTime() > timelineLimit.getTime()) {
@@ -377,6 +397,7 @@ function convertLegacyResult(
     otherParentDailyIncome: parent2NetDaily,
     isInitialTenDayPeriod: true,
   });
+  parentLastEndDates.both = new Date(initialEndDate);
 
   const preferFullWeek = meta.key === 'maximize-income';
   const preferredDaysPerWeek = preferFullWeek ? 7 : undefined;
@@ -429,6 +450,7 @@ function convertLegacyResult(
     legacyResult.plan1Overlap,
     resolveDaysPerWeek(legacyResult.plan1Overlap?.dagarPerVecka)
   );
+  const allowSimultaneousSegments = context.simultaneousMonths > 0;
 
   const usedInkomstDays1 = plan1ExtraDays + plan1NoExtraDays;
   const usedMinDays1 = plan1MinDays + plan1MinContinuationDays;
@@ -445,7 +467,7 @@ function convertLegacyResult(
   let clampedDaysUsed = Math.min(TOTAL_BENEFIT_DAYS, daysUsedRounded);
   let daysSaved = Math.max(0, TOTAL_BENEFIT_DAYS - clampedDaysUsed);
 
-  if (overlapDaysUsed > 0) {
+  if (allowSimultaneousSegments && overlapDaysUsed > 0) {
     const overlapParent1Monthly = toNumber(legacyResult.plan1Overlap?.inkomst);
     const overlapParent2Monthly = beräknaMånadsinkomst(
       toNumber(legacyResult.dag2),
@@ -469,7 +491,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: overlapParent1Monthly + overlapParent2Monthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit });
+    }, { baseStartDate, timelineLimit, parentLastEndDates });
   }
 
   if (plan1ExtraDays > 0) {
@@ -486,7 +508,7 @@ function convertLegacyResult(
       leaveMonthlyIncome,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit });
+    }, { baseStartDate, timelineLimit, parentLastEndDates });
   }
 
   if (plan1NoExtraDays > 0) {
@@ -505,7 +527,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit });
+    }, { baseStartDate, timelineLimit, parentLastEndDates });
   }
 
   const totalPlan1MinDays = plan1MinDays + plan1MinContinuationDays;
@@ -525,7 +547,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit });
+    }, { baseStartDate, timelineLimit, parentLastEndDates });
   }
 
   if (plan2ExtraDays > 0) {
@@ -542,7 +564,7 @@ function convertLegacyResult(
       leaveMonthlyIncome,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit });
+    }, { baseStartDate, timelineLimit, parentLastEndDates });
   }
 
   if (plan2NoExtraDays > 0) {
@@ -561,7 +583,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit });
+    }, { baseStartDate, timelineLimit, parentLastEndDates });
   }
 
   const totalPlan2MinDays = plan2MinDays + plan2MinContinuationDays;
@@ -581,7 +603,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit });
+    }, { baseStartDate, timelineLimit, parentLastEndDates });
   }
 
   // No filler periods - we strictly adhere to the total months specified
