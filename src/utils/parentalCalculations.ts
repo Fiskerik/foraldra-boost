@@ -660,6 +660,17 @@ function convertLegacyResult(
   const targetParent1Days = Math.max(0, Math.round(context.preferredParent1Months * 30));
   const targetParent2Days = Math.max(0, Math.round(context.preferredParent2Months * 30));
 
+  const getGlobalLastEndDate = () => {
+    let latest: Date | null = null;
+    for (const period of mergedPeriods) {
+      const periodEnd = startOfDay(period.endDate);
+      if (!latest || periodEnd.getTime() > latest.getTime()) {
+        latest = periodEnd;
+      }
+    }
+    return latest;
+  };
+
   const appendFiller = (parent: 'parent1' | 'parent2', missingDays: number) => {
     if (!Number.isFinite(missingDays) || missingDays <= 0) {
       return;
@@ -674,10 +685,13 @@ function convertLegacyResult(
       .filter(period => period.parent === parent)
       .sort((a, b) => a.endDate.getTime() - b.endDate.getTime());
     const lastParentPeriod = parentPeriods[parentPeriods.length - 1];
+    const globalLastEnd = getGlobalLastEndDate();
 
     let startDate = lastParentPeriod
       ? startOfDay(addDays(lastParentPeriod.endDate, 1))
-      : startOfDay(baseStartDate);
+      : globalLastEnd
+        ? startOfDay(addDays(globalLastEnd, 1))
+        : startOfDay(baseStartDate);
 
     if (timelineLimit) {
       const latestStart = startOfDay(addDays(timelineLimit, 1 - effectiveDays));
@@ -735,6 +749,49 @@ function convertLegacyResult(
   appendFiller('parent2', targetParent2Days - parentCalendarDays.parent2);
 
   mergedPeriods.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+  const sequentialPeriods: LeavePeriod[] = [];
+  let cursor = startOfDay(baseStartDate);
+  const limitDate = timelineLimit ? startOfDay(timelineLimit) : null;
+
+  for (const period of mergedPeriods) {
+    if (limitDate && cursor.getTime() > limitDate.getTime()) {
+      break;
+    }
+
+    let startDate = startOfDay(period.startDate);
+    if (startDate.getTime() < cursor.getTime()) {
+      startDate = new Date(cursor);
+    }
+
+    if (startDate.getTime() > cursor.getTime()) {
+      startDate = new Date(cursor);
+    }
+
+    const plannedDays = Math.max(1, Math.round(period.daysCount));
+    let endDate = startOfDay(addDays(startDate, plannedDays - 1));
+
+    if (limitDate && endDate.getTime() > limitDate.getTime()) {
+      endDate = new Date(limitDate);
+    }
+
+    if (limitDate && startDate.getTime() > limitDate.getTime()) {
+      continue;
+    }
+
+    const actualDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+    const adjustedPeriod: LeavePeriod = {
+      ...period,
+      startDate,
+      endDate,
+      daysCount: actualDays,
+    };
+
+    sequentialPeriods.push(adjustedPeriod);
+    cursor = startOfDay(addDays(endDate, 1));
+  }
+
+  mergedPeriods.splice(0, mergedPeriods.length, ...sequentialPeriods);
 
   if (mergedPeriods.length > 0) {
     const expectedStart = baseStartDate;
