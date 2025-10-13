@@ -28,12 +28,17 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     calendarDays: number;
     benefitDays: number;
     monthlyIncome: number;
+    leaveParentIncome: number;
+    otherParentIncome: number;
+    benefitIncome: number;
+    daysPerWeekValue: number;
   }
 
   interface MonthlyBreakdownEntry extends MonthlyBreakdown {
     monthKey: string;
     monthStart: Date;
     monthLength: number;
+    daysPerWeekValues: number[];
   }
 
   const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
@@ -43,6 +48,8 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
 
     const segments: MonthlyBreakdown[] = [];
     let cursor = new Date(startDate);
+
+    const normalizedDaysPerWeek = period.daysPerWeek && period.daysPerWeek > 0 ? period.daysPerWeek : 7;
 
     while (cursor <= endDate) {
       const monthStart = new Date(cursor);
@@ -56,6 +63,10 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         calendarDays,
         benefitDays: 0,
         monthlyIncome: 0,
+        leaveParentIncome: 0,
+        otherParentIncome: 0,
+        benefitIncome: 0,
+        daysPerWeekValue: normalizedDaysPerWeek,
       });
 
       cursor = addDays(monthEnd, 1);
@@ -98,8 +109,15 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       // dailyIncome is the household daily income rate
       // Multiply by actual calendar days to get the income for this segment
       const dailyIncomeRate = period.dailyIncome;
+      const otherParentDaily = period.otherParentDailyIncome ?? 0;
+      const leaveParentDaily = dailyIncomeRate - otherParentDaily;
+      const benefitDaily = period.dailyBenefit;
       const actualMonthlyIncome = dailyIncomeRate * segment.calendarDays;
       segment.monthlyIncome = actualMonthlyIncome;
+      segment.leaveParentIncome = leaveParentDaily * segment.calendarDays;
+      segment.otherParentIncome = otherParentDaily * segment.calendarDays;
+      segment.benefitIncome = benefitDaily * segment.calendarDays;
+      segment.daysPerWeekValue = normalizedDaysPerWeek;
       
       remainingBenefitDays -= allocated;
       carryOver = rawShare - allocated;
@@ -135,6 +153,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             monthKey: key,
             monthStart,
             monthLength,
+            daysPerWeekValues: [segment.daysPerWeekValue],
           });
           return;
         }
@@ -151,6 +170,12 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         existing.benefitDays += segment.benefitDays;
         existing.monthlyIncome += segment.monthlyIncome;
         existing.monthLength = monthLength;
+        existing.leaveParentIncome += segment.leaveParentIncome;
+        existing.otherParentIncome += segment.otherParentIncome;
+        existing.benefitIncome += segment.benefitIncome;
+        if (!existing.daysPerWeekValues.includes(segment.daysPerWeekValue)) {
+          existing.daysPerWeekValues.push(segment.daysPerWeekValue);
+        }
       });
 
     return Array.from(monthMap.values()).sort((a, b) => a.monthStart.getTime() - b.monthStart.getTime());
@@ -475,6 +500,33 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                 const isLowest =
                                   lowestAggregatedKey !== null && month.monthKey === lowestAggregatedKey;
                                 const isBelowMinimum = isEligibleMonth && aggregatedIncome < minHouseholdIncome;
+                                const leaveParentLabel =
+                                  group.parent === 'parent1'
+                                    ? 'Förälder 1 (Hemma)'
+                                    : group.parent === 'parent2'
+                                    ? 'Förälder 2 (Hemma)'
+                                    : 'Båda föräldrarna hemma';
+                                const workingParentLabel =
+                                  group.parent === 'parent1'
+                                    ? 'Förälder 2 (Arbetar)'
+                                    : 'Förälder 1 (Arbetar)';
+                                const uniqueDayLabels = Array.from(
+                                  new Set(
+                                    month.daysPerWeekValues.map(value =>
+                                      value >= 7
+                                        ? 'Heltid'
+                                        : `${value} ${value === 1 ? 'dag' : 'dagar'}/vecka`
+                                    )
+                                  )
+                                );
+                                const daysPerWeekText =
+                                  uniqueDayLabels.length === 1
+                                    ? uniqueDayLabels[0]
+                                    : `Varierar: ${uniqueDayLabels.join(' → ')}`;
+                                const leaveIncome =
+                                  group.parent === 'both' ? month.monthlyIncome : month.leaveParentIncome;
+                                const workingIncome = group.parent === 'both' ? 0 : month.otherParentIncome;
+                                const benefitIncome = month.benefitIncome;
                                 return (
                                   <div
                                     key={`${month.startDate.toISOString()}-${monthIdx}`}
@@ -497,6 +549,20 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                     <div className={`font-semibold ${isLowest ? 'text-yellow-700 dark:text-yellow-400' : isBelowMinimum ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>
                                       Hushållets inkomst: {formatCurrency(aggregatedIncome)}
                                       {isLowest && <span className="ml-1 text-[9px]">(lägst)</span>}
+                                    </div>
+                                    <div className="font-medium">
+                                      {leaveParentLabel}: {formatCurrency(leaveIncome)}
+                                      {group.parent !== 'both' && (
+                                        <span className="ml-1 text-muted-foreground">{daysPerWeekText}</span>
+                                      )}
+                                    </div>
+                                    {group.parent !== 'both' && (
+                                      <div className="text-muted-foreground">
+                                        {workingParentLabel}: {formatCurrency(workingIncome)}
+                                      </div>
+                                    )}
+                                    <div className="text-muted-foreground italic">
+                                      Föräldrapenning: {formatCurrency(benefitIncome)}
                                     </div>
                                   </div>
                                 );

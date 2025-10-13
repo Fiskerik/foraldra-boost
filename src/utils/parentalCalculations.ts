@@ -643,6 +643,11 @@ function convertLegacyResult(
   }
 
   const parentCalendarDays: Record<'parent1' | 'parent2', number> = { parent1: 0, parent2: 0 };
+  const initialBothDays = mergedPeriods
+    .filter(period => period.isInitialTenDayPeriod)
+    .reduce((sum, period) => {
+      return sum + Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
+    }, 0);
   const accumulateParentDays = (period: LeavePeriod) => {
     const days = Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
     if (period.parent === 'parent1') {
@@ -657,8 +662,36 @@ function convertLegacyResult(
 
   mergedPeriods.forEach(accumulateParentDays);
 
-  const targetParent1Days = Math.max(0, Math.round(context.preferredParent1Months * 30));
-  const targetParent2Days = Math.max(0, Math.round(context.preferredParent2Months * 30));
+  const totalPreferredMonths = context.preferredParent1Months + context.preferredParent2Months;
+  const averageTargetParent1Days = Math.max(0, Math.round(context.preferredParent1Months * 30));
+  const averageTargetParent2Days = Math.max(0, Math.round(context.preferredParent2Months * 30));
+
+  let targetParent1Days = averageTargetParent1Days;
+  let targetParent2Days = averageTargetParent2Days;
+
+  if (timelineLimit) {
+    const totalTimelineDays = Math.max(1, differenceInCalendarDays(timelineLimit, baseStartDate) + 1);
+    const exclusiveTimelineDays = Math.max(0, totalTimelineDays - initialBothDays);
+
+    if (exclusiveTimelineDays > 0) {
+      if (totalPreferredMonths > 0) {
+        const parent1Share = context.preferredParent1Months / totalPreferredMonths;
+        const parent1ExclusiveTarget = Math.round(exclusiveTimelineDays * parent1Share);
+        const parent2ExclusiveTarget = exclusiveTimelineDays - parent1ExclusiveTarget;
+        targetParent1Days = Math.max(targetParent1Days, parent1ExclusiveTarget + initialBothDays);
+        targetParent2Days = Math.max(targetParent2Days, parent2ExclusiveTarget + initialBothDays);
+      } else {
+        const halfExclusive = Math.round(exclusiveTimelineDays / 2);
+        targetParent1Days = Math.max(targetParent1Days, halfExclusive + initialBothDays);
+        targetParent2Days = Math.max(targetParent2Days, exclusiveTimelineDays - halfExclusive + initialBothDays);
+      }
+    }
+  }
+
+  const getParentShortfall = () => ({
+    parent1: targetParent1Days - parentCalendarDays.parent1,
+    parent2: targetParent2Days - parentCalendarDays.parent2,
+  });
 
   const getGlobalLastEndDate = () => {
     let latest: Date | null = null;
@@ -747,6 +780,39 @@ function convertLegacyResult(
 
   appendFiller('parent1', targetParent1Days - parentCalendarDays.parent1);
   appendFiller('parent2', targetParent2Days - parentCalendarDays.parent2);
+
+  if (timelineLimit) {
+    let safetyCounter = 0;
+    while (safetyCounter < 4) {
+      const latest = getGlobalLastEndDate();
+      if (!latest) {
+        break;
+      }
+
+      const remaining = differenceInCalendarDays(startOfDay(timelineLimit), startOfDay(latest));
+      if (remaining <= 0) {
+        break;
+      }
+
+      const shortfall = getParentShortfall();
+      let fillerParent: 'parent1' | 'parent2';
+
+      if (shortfall.parent1 > shortfall.parent2 && shortfall.parent1 > 0) {
+        fillerParent = 'parent1';
+      } else if (shortfall.parent2 > shortfall.parent1 && shortfall.parent2 > 0) {
+        fillerParent = 'parent2';
+      } else if (shortfall.parent1 > 0) {
+        fillerParent = 'parent1';
+      } else if (shortfall.parent2 > 0) {
+        fillerParent = 'parent2';
+      } else {
+        fillerParent = context.preferredParent1Months >= context.preferredParent2Months ? 'parent1' : 'parent2';
+      }
+
+      appendFiller(fillerParent, remaining);
+      safetyCounter += 1;
+    }
+  }
 
   mergedPeriods.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
