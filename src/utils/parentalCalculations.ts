@@ -438,7 +438,9 @@ function addSegment(
   }
   
   const otherDailyIncome = otherParentIncomeForPeriod / Math.max(1, effectiveCalendarDays);
-  const totalPeriodIncome = (leaveMonthlyIncome / 30) * effectiveCalendarDays + otherParentIncomeForPeriod;
+  // When benefitLevel is 'none', there's no benefit income for the leave parent
+  const effectiveLeaveMonthlyIncome = benefitLevel === 'none' ? 0 : leaveMonthlyIncome;
+  const totalPeriodIncome = (effectiveLeaveMonthlyIncome / 30) * effectiveCalendarDays + otherParentIncomeForPeriod;
   const dailyIncome = totalPeriodIncome / Math.max(1, effectiveCalendarDays);
   // dailyBenefit should only represent actual parental benefits (föräldrapenning + föräldralön)
   // For periods with benefitLevel 'none', there's no benefit, so dailyBenefit should be 0
