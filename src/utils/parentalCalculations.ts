@@ -36,6 +36,8 @@ export interface LeavePeriod {
   startDate: Date;
   endDate: Date;
   daysCount: number;
+  benefitDaysUsed: number;
+  calendarDays: number;
   dailyBenefit: number;
   dailyIncome: number;
   benefitLevel: 'parental-salary' | 'high' | 'low' | 'none';
@@ -50,6 +52,8 @@ const PARENTAL_BENEFIT_CEILING = 49000;
 const HIGH_BENEFIT_DAYS = 390;
 const LOW_BENEFIT_DAYS = 90;
 export const TOTAL_BENEFIT_DAYS = HIGH_BENEFIT_DAYS + LOW_BENEFIT_DAYS;
+const INITIAL_SHARED_WORKING_DAYS = 10;
+const INITIAL_SHARED_CALENDAR_DAYS = 14;
 const MAX_PARENTAL_BENEFIT_PER_DAY = 1250;
 const HIGH_BENEFIT_RATE = 0.8;
 const SGI_RATE = 0.97;
@@ -186,6 +190,8 @@ interface ConversionContext {
   parent2: ParentData;
   parent1NetIncome: number;
   parent2NetIncome: number;
+  parent1LeaveDailyIncome: number;
+  parent2LeaveDailyIncome: number;
   baseStartDate: Date;
   adjustedTotalMonths: number;
   requestedDaysPerWeek: number;
@@ -400,6 +406,8 @@ function addSegment(
 
   const ratio = effectiveCalendarDays / calendarDays;
   const adjustedDaysCount = Math.max(1, Math.round(daysCount * ratio));
+  const benefitDaysUsed = adjustedDaysCount;
+  const calendarDaysUsed = effectiveCalendarDays;
   
   // Calculate if this is a full month or partial month period
   // A period is considered "full month" if it starts on day 1 and ends on the last day of a month
@@ -440,7 +448,9 @@ function addSegment(
     parent,
     startDate,
     endDate,
-    daysCount: adjustedDaysCount,
+    daysCount: benefitDaysUsed,
+    benefitDaysUsed,
+    calendarDays: calendarDaysUsed,
     dailyBenefit,
     dailyIncome,
     benefitLevel,
@@ -482,29 +492,46 @@ function convertLegacyResult(
     parent2: null,
     both: null,
   };
-  // Add initial 10 days (both parents) from child's birth
-  let initialEndDate = addDays(baseStartDate, 9); // 10 days total (0-9)
+  // Add initial simultaneous period (2 x 10 days)
+  const plannedInitialEnd = addDays(baseStartDate, INITIAL_SHARED_CALENDAR_DAYS - 1);
+  let initialEndDate = startOfDay(plannedInitialEnd);
   if (timelineLimit && initialEndDate.getTime() > timelineLimit.getTime()) {
     initialEndDate = startOfDay(timelineLimit);
   }
-  const parent1NetDaily = context.parent1NetIncome / 30;
-  const parent2NetDaily = context.parent2NetIncome / 30;
+
   const initialCalendarDays = Math.max(1, differenceInCalendarDays(initialEndDate, baseStartDate) + 1);
-  const initialDaysCount = Math.min(10, initialCalendarDays);
+  const initialWorkingDays = initialCalendarDays > 0 ? INITIAL_SHARED_WORKING_DAYS : 0;
+  const initialBenefitDaysUsed = initialWorkingDays * 2;
+  const combinedLeaveDailyIncome = context.parent1LeaveDailyIncome + context.parent2LeaveDailyIncome;
+  const totalInitialBenefitIncome = combinedLeaveDailyIncome * initialWorkingDays;
+  const averageBenefitPerBenefitDay = initialBenefitDaysUsed > 0
+    ? totalInitialBenefitIncome / initialBenefitDaysUsed
+    : 0;
+  const averageCalendarDailyIncome = initialCalendarDays > 0
+    ? totalInitialBenefitIncome / initialCalendarDays
+    : 0;
+  const estimatedDaysPerWeek = initialCalendarDays > 0
+    ? Math.min(7, Math.max(1, Math.round((initialWorkingDays / initialCalendarDays) * 7)))
+    : 0;
 
   periods.push({
     parent: 'both',
     startDate: new Date(baseStartDate),
     endDate: initialEndDate,
-    daysCount: initialDaysCount,
-    dailyBenefit: 0,
-    dailyIncome: parent1NetDaily + parent2NetDaily,
-    benefitLevel: 'none',
-    daysPerWeek: 0,
-    otherParentDailyIncome: parent2NetDaily,
+    daysCount: initialBenefitDaysUsed,
+    benefitDaysUsed: initialBenefitDaysUsed,
+    calendarDays: initialCalendarDays,
+    dailyBenefit: averageBenefitPerBenefitDay,
+    dailyIncome: averageCalendarDailyIncome,
+    benefitLevel: 'high',
+    daysPerWeek: estimatedDaysPerWeek,
+    otherParentDailyIncome: 0,
+    otherParentMonthlyIncome: 0,
     isInitialTenDayPeriod: true,
   });
   parentLastEndDates.both = new Date(initialEndDate);
+
+  const sharedInitialWorkingDays = initialWorkingDays;
 
   const parent1EarliestStart = startOfDay(addDays(initialEndDate, 1));
   const parent2EarliestStartCandidate = startOfDay(
@@ -599,10 +626,11 @@ function convertLegacyResult(
     resolveDaysPerWeek(legacyResult.plan1Overlap?.dagarPerVecka)
   );
   const allowSimultaneousSegments = context.simultaneousMonths > 0;
+  const simultaneousOverlapDays = allowSimultaneousSegments ? overlapDaysUsed : 0;
 
-  const usedInkomstDays1 = plan1ExtraDays + plan1NoExtraDays;
+  const usedInkomstDays1 = plan1ExtraDays + plan1NoExtraDays + sharedInitialWorkingDays + simultaneousOverlapDays;
   const usedMinDays1 = totalPlan1MinDays;
-  const usedInkomstDays2 = plan2ExtraDays + plan2NoExtraDays + overlapDaysUsed;
+  const usedInkomstDays2 = plan2ExtraDays + plan2NoExtraDays + sharedInitialWorkingDays + simultaneousOverlapDays;
   const usedMinDays2 = totalPlan2MinDays;
 
   const totalDaysUsed =
@@ -831,7 +859,9 @@ function convertLegacyResult(
     ) {
       // Merge with previous period
       last.endDate = period.endDate;
+      last.calendarDays += period.calendarDays;
       last.daysCount += period.daysCount;
+      last.benefitDaysUsed += period.benefitDaysUsed;
     } else {
       mergedPeriods.push({ ...period });
     }
@@ -841,10 +871,10 @@ function convertLegacyResult(
   const initialBothDays = mergedPeriods
     .filter(period => period.isInitialTenDayPeriod)
     .reduce((sum, period) => {
-      return sum + Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
+      return sum + (period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1));
     }, 0);
   const accumulateParentDays = (period: LeavePeriod) => {
-    const days = Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
+    const days = period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
     if (period.parent === 'parent1') {
       parentCalendarDays.parent1 += days;
     } else if (period.parent === 'parent2') {
@@ -968,6 +998,8 @@ function convertLegacyResult(
       startDate,
       endDate,
       daysCount: effectiveDays,
+      benefitDaysUsed: effectiveDays,
+      calendarDays: Math.max(1, differenceInCalendarDays(endDate, startDate) + 1),
       dailyBenefit: 0,
       dailyIncome: ownDailyIncome + otherParentDailyIncome,
       benefitLevel: 'none',
@@ -1020,13 +1052,23 @@ function convertLegacyResult(
     }
   }
 
-  mergedPeriods.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  const sortedByStart = [...mergedPeriods].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  const initialSegments = sortedByStart.filter(period => period.isInitialTenDayPeriod);
+  const parent1Segments = sortedByStart.filter(period => period.parent === 'parent1');
+  const bothSegments = sortedByStart.filter(period => period.parent === 'both' && !period.isInitialTenDayPeriod);
+  const parent2Segments = sortedByStart.filter(period => period.parent === 'parent2');
+  const orderedForSequencing = [
+    ...initialSegments,
+    ...parent1Segments,
+    ...bothSegments,
+    ...parent2Segments,
+  ];
 
   const sequentialPeriods: LeavePeriod[] = [];
   let cursor = startOfDay(baseStartDate);
   const limitDate = timelineLimit ? startOfDay(timelineLimit) : null;
 
-  for (const period of mergedPeriods) {
+  for (const period of orderedForSequencing) {
     if (limitDate && cursor.getTime() > limitDate.getTime()) {
       break;
     }
@@ -1040,8 +1082,8 @@ function convertLegacyResult(
       startDate = new Date(cursor);
     }
 
-    const plannedDays = Math.max(1, Math.round(period.daysCount));
-    let endDate = startOfDay(addDays(startDate, plannedDays - 1));
+    const plannedCalendarDays = Math.max(1, period.calendarDays || Math.round(period.daysCount));
+    let endDate = startOfDay(addDays(startDate, plannedCalendarDays - 1));
 
     if (limitDate && endDate.getTime() > limitDate.getTime()) {
       endDate = new Date(limitDate);
@@ -1051,12 +1093,18 @@ function convertLegacyResult(
       continue;
     }
 
-    const actualDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+    const actualCalendarDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+    const plannedBenefitDays = period.benefitDaysUsed ?? period.daysCount;
+    const plannedCalendarReference = period.calendarDays || plannedCalendarDays;
+    const calendarRatio = plannedCalendarReference > 0 ? actualCalendarDays / plannedCalendarReference : 1;
+    const adjustedBenefitDays = Math.max(1, Math.round(plannedBenefitDays * calendarRatio));
     const adjustedPeriod: LeavePeriod = {
       ...period,
       startDate,
       endDate,
-      daysCount: actualDays,
+      daysCount: adjustedBenefitDays,
+      benefitDaysUsed: adjustedBenefitDays,
+      calendarDays: actualCalendarDays,
     };
 
     sequentialPeriods.push(adjustedPeriod);
@@ -1090,7 +1138,7 @@ function convertLegacyResult(
           };
 
           mergedPeriods.forEach(period => {
-            const days = Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
+            const days = period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
             if (period.parent === 'parent1') {
               recomputedParentDays.parent1 += days;
             } else if (period.parent === 'parent2') {
@@ -1128,6 +1176,8 @@ function convertLegacyResult(
             startDate: fillerStart,
             endDate: startOfDay(limitDate),
             daysCount: fillerDays,
+            benefitDaysUsed: fillerDays,
+            calendarDays: Math.max(1, differenceInCalendarDays(startOfDay(limitDate), fillerStart) + 1),
             dailyBenefit: 0,
             dailyIncome: fillerOwnDailyIncome + fillerOtherParentDailyIncome,
             benefitLevel: 'none',
@@ -1146,7 +1196,9 @@ function convertLegacyResult(
             Math.abs((trailing.otherParentDailyIncome || 0) - (fillerPeriod.otherParentDailyIncome || 0)) < 1
           ) {
             trailing.endDate = fillerPeriod.endDate;
+            trailing.calendarDays += fillerPeriod.calendarDays;
             trailing.daysCount += fillerPeriod.daysCount;
+            trailing.benefitDaysUsed += fillerPeriod.benefitDaysUsed;
           } else {
             mergedPeriods.push(fillerPeriod);
           }
@@ -1168,12 +1220,12 @@ function convertLegacyResult(
     }
   }
 
-  const totalIncome = mergedPeriods.reduce((sum, period) => sum + period.dailyIncome * period.daysCount, 0);
+  const totalIncome = mergedPeriods.reduce((sum, period) => sum + period.dailyIncome * (period.calendarDays ?? period.daysCount), 0);
   const benefitDaysUsed = mergedPeriods.reduce((sum, period) => {
     if (period.benefitLevel === 'none') {
       return sum;
     }
-    return sum + period.daysCount;
+    return sum + (period.benefitDaysUsed ?? period.daysCount);
   }, 0);
   clampedDaysUsed = Math.min(TOTAL_BENEFIT_DAYS, Math.max(0, Math.round(benefitDaysUsed)));
   daysSaved = Math.max(0, TOTAL_BENEFIT_DAYS - clampedDaysUsed);
@@ -1305,6 +1357,8 @@ export function optimizeLeave(
     parent2,
     parent1NetIncome: calc1.netIncome,
     parent2NetIncome: calc2.netIncome,
+    parent1LeaveDailyIncome: calc1.parentalBenefitPerDay + calc1.parentalSalaryPerDay,
+    parent2LeaveDailyIncome: calc2.parentalBenefitPerDay + calc2.parentalSalaryPerDay,
     baseStartDate,
     adjustedTotalMonths,
     requestedDaysPerWeek: normalizedDaysPerWeek,
