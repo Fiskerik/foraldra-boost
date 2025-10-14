@@ -823,8 +823,14 @@ function optimizeParentalLeaveLegacy(preferences, inputs) {
             }
         }
 
+        // For "longer" strategy: Parent 1's min days should come BEFORE Parent 2 starts
+        // For other strategies: keep existing behavior
+        const plan1MinStartWeek = strategy === "longer" 
+            ? plan1ExtraWeeks + plan1NoExtraWeeksTotal  // Parent 1 min days immediately after Parent 1's income days
+            : plan1ExtraWeeks + plan1NoExtraWeeksTotal; // Default: same position
+
         plan1MinDagar = {
-            startWeek: plan1ExtraWeeks + plan1NoExtraWeeksTotal,
+            startWeek: plan1MinStartWeek,
             weeks: minDagarWeeks1,
             dagarPerVecka: dagarPerVecka1NoExtra || dagarPerVecka1,
             inkomst: Math.round(
@@ -878,8 +884,18 @@ function optimizeParentalLeaveLegacy(preferences, inputs) {
         plan2ExtraWeeks = extra2 > 0 ? weeks2 : 0;
         plan2NoExtraWeeksTotal = plan2ExtraWeeks > 0 ? weeks2NoExtra : totalWeeks2;
 
+        // For "longer" strategy: Parent 2 should start AFTER all of Parent 1's days (including min days)
+        // Calculate how many weeks Parent 1's min days will take
+        const parent1MinWeeksEstimate = användaMinDagar1 > 0 
+            ? Math.max(1, Math.round(användaMinDagar1 / Math.max(dagarPerVecka1NoExtra || dagarPerVecka1, 1)))
+            : 0;
+        
+        const plan2StartWeek = strategy === "longer"
+            ? plan1ExtraWeeks + plan1NoExtraWeeksTotal + parent1MinWeeksEstimate // After ALL Parent 1 periods
+            : plan1ExtraWeeks + plan1NoExtraWeeksTotal; // Default: after Parent 1's income days only
+
         plan2 = {
-            startWeek: plan1ExtraWeeks + plan1NoExtraWeeksTotal,
+            startWeek: plan2StartWeek,
             weeks: plan2ExtraWeeks,
             dagarPerVecka: dagarPerVecka2,
             inkomst: Math.round(beräknaMånadsinkomst(dag2, dagarPerVecka2, extra2, barnbidrag, tillägg)),
