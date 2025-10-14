@@ -45,7 +45,9 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
   const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
     const startDate = new Date(period.startDate);
     const endDate = new Date(period.endDate);
-    const totalBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
+    // Only treat actual compensated days as benefit days; periods with benefitLevel 'none' should not allocate benefit days
+    const rawBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
+    const totalBenefitDays = period.benefitLevel === 'none' ? 0 : rawBenefitDays;
 
     const segments: MonthlyBreakdown[] = [];
     let cursor = new Date(startDate);
@@ -85,27 +87,28 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     segments.forEach((segment, index) => {
       if (remainingBenefitDays <= 0) {
         segment.benefitDays = 0;
-        segment.monthlyIncome = 0;
-        return;
+        // Do not return; still compute working parent's income even with zero benefit days
+      } else {
+        const weight = segment.calendarDays / totalCalendarDays;
+        const rawShare = totalBenefitDays * weight + carryOver;
+        let allocated = index === segments.length - 1 ? remainingBenefitDays : Math.floor(rawShare);
+
+        if (allocated < 0) {
+          allocated = 0;
+        }
+
+        if (allocated === 0 && remainingBenefitDays > 0 && index !== segments.length - 1) {
+          allocated = 1;
+        }
+
+        if (allocated > remainingBenefitDays) {
+          allocated = remainingBenefitDays;
+        }
+
+        segment.benefitDays = allocated;
+        remainingBenefitDays -= allocated;
+        carryOver = rawShare - allocated;
       }
-
-      const weight = segment.calendarDays / totalCalendarDays;
-      const rawShare = totalBenefitDays * weight + carryOver;
-      let allocated = index === segments.length - 1 ? remainingBenefitDays : Math.floor(rawShare);
-
-      if (allocated < 0) {
-        allocated = 0;
-      }
-
-      if (allocated === 0 && remainingBenefitDays > 0 && index !== segments.length - 1) {
-        allocated = 1;
-      }
-
-      if (allocated > remainingBenefitDays) {
-        allocated = remainingBenefitDays;
-      }
-
-      segment.benefitDays = allocated;
       
       // Calculate monthly income for this segment using fixed monthly salary for working parent
       // and capping parental benefits to 30 days per full month
@@ -113,25 +116,35 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       const monthStart = startOfMonth(segment.startDate);
       const monthEndDate = endOfMonth(monthStart);
       const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
-      const baseMonthlyIncome = period.parent === "both" ? 0 : period.otherParentMonthlyIncome || 0;
+
+      // Prefer monthly base from legacy; fallback to daily base (e.g., for filler 'none' periods)
+      const monthlyBaseFromOther = period.parent === 'both' ? 0 : (period.otherParentMonthlyIncome || 0);
+      const dailyBaseFromOther = period.parent === 'both' ? 0 : (period.otherParentDailyIncome || 0);
+      const computedMonthlyBase = monthlyBaseFromOther > 0
+        ? monthlyBaseFromOther
+        : (dailyBaseFromOther > 0 ? dailyBaseFromOther * 30 : 0);
+
       const isFullMonthSegment =
         segment.calendarDays >= monthLength &&
         segment.startDate.getDate() === 1 &&
         segment.endDate.getDate() === monthEndDate.getDate();
 
-      // Working parent's monthly income: full month fixed, partial prorated by calendar days
+      // Working parent's monthly income
       let otherParentIncome = 0;
-      if (period.parent !== "both" && baseMonthlyIncome > 0) {
+      if (period.parent !== 'both' && computedMonthlyBase > 0) {
         if (isFullMonthSegment) {
-          otherParentIncome = baseMonthlyIncome;
+          // If we only have a daily rate, show fixed 30-day month value for consistency
+          otherParentIncome = monthlyBaseFromOther > 0 ? computedMonthlyBase : dailyBaseFromOther * 30;
         } else {
-          otherParentIncome = baseMonthlyIncome * (segment.calendarDays / monthLength);
+          otherParentIncome = monthlyBaseFromOther > 0
+            ? computedMonthlyBase * (segment.calendarDays / monthLength)
+            : dailyBaseFromOther * segment.calendarDays;
         }
       }
 
       // Parental benefit: use allocated benefit days, with a max of 30 days for full months
       let benefitIncome = 0;
-      if (benefitDaily > 0) {
+      if (benefitDaily > 0 && segment.benefitDays > 0) {
         const benefitDaysForMonth = isFullMonthSegment ? Math.min(segment.benefitDays, 30) : segment.benefitDays;
         benefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
       }
@@ -139,18 +152,11 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       // Compose monthly totals
       segment.benefitIncome = benefitIncome;
       segment.otherParentIncome = otherParentIncome;
-      segment.leaveParentIncome = benefitIncome;
+      segment.leaveParentIncome = benefitIncome; // leave parent only shows compensated income in breakdown
       segment.monthlyIncome = otherParentIncome + benefitIncome;
       segment.daysPerWeekValue = normalizedDaysPerWeek;
-      segment.otherParentMonthlyBase = baseMonthlyIncome;
-
-      remainingBenefitDays -= allocated;
-      carryOver = rawShare - allocated;
+      segment.otherParentMonthlyBase = monthlyBaseFromOther > 0 ? monthlyBaseFromOther : (dailyBaseFromOther > 0 ? dailyBaseFromOther * 30 : 0);
     });
-
-    if (remainingBenefitDays !== 0 && segments.length > 0) {
-      segments[segments.length - 1].benefitDays += remainingBenefitDays;
-    }
 
     return segments;
   };
