@@ -186,6 +186,7 @@ interface ConversionContext {
   parent2: ParentData;
   parent1NetIncome: number;
   parent2NetIncome: number;
+  baseStartDate: Date;
   adjustedTotalMonths: number;
   requestedDaysPerWeek: number;
   preferredParent1Months: number;
@@ -266,6 +267,7 @@ interface SegmentContext {
   baseStartDate: Date;
   timelineLimit?: Date | null;
   parentLastEndDates: Record<'parent1' | 'parent2' | 'both', Date | null>;
+  parentEarliestStart: Record<'parent1' | 'parent2' | 'both', Date | null>;
 }
 
 function addSegment(
@@ -286,7 +288,7 @@ function addSegment(
     forceRecomputeWeeks,
   } = config;
 
-  const { baseStartDate, parentLastEndDates } = context;
+  const { baseStartDate, parentLastEndDates, parentEarliestStart } = context;
 
   if (!plan || usedDays <= 0) {
     return;
@@ -322,6 +324,11 @@ function addSegment(
   const offsetDays = Number.isFinite(startWeek) ? Math.max(0, Math.round(startWeek * 7)) : 0;
   let startDate = startOfDay(addDays(baseStartDate, offsetDays));
 
+  const earliestStart = parentEarliestStart[parent];
+  if (earliestStart && startDate.getTime() < earliestStart.getTime()) {
+    startDate = startOfDay(earliestStart);
+  }
+
   // Ensure periods don't overlap by checking all relevant previous periods
   const lastEnd = parentLastEndDates[parent];
   const bothEnd = parent !== 'both' ? parentLastEndDates.both : null;
@@ -342,6 +349,10 @@ function addSegment(
     if (potentialStart.getTime() > startDate.getTime()) {
       startDate = potentialStart;
     }
+  }
+
+  if (earliestStart && startDate.getTime() < earliestStart.getTime()) {
+    startDate = startOfDay(earliestStart);
   }
 
   const { timelineLimit: limit } = context;
@@ -427,8 +438,8 @@ function convertLegacyResult(
     return limit;
   };
 
-  const baseStartDate = startOfDay(new Date());
-  const shouldLimitTimeline = meta.key === 'maximize-income';
+  const baseStartDate = startOfDay(context.baseStartDate);
+  const shouldLimitTimeline = context.adjustedTotalMonths > 0;
   const rawTimelineLimit =
     shouldLimitTimeline && context.adjustedTotalMonths > 0
       ? computeLimitDate(baseStartDate, context.adjustedTotalMonths)
@@ -463,6 +474,28 @@ function convertLegacyResult(
     isInitialTenDayPeriod: true,
   });
   parentLastEndDates.both = new Date(initialEndDate);
+
+  const parent1EarliestStart = startOfDay(addDays(initialEndDate, 1));
+  const parent2EarliestStartCandidate = startOfDay(
+    computeLimitDate(parent1EarliestStart, Math.max(0, context.preferredParent1Months))
+  );
+  const parent2EarliestStart =
+    parent2EarliestStartCandidate.getTime() < parent1EarliestStart.getTime()
+      ? parent1EarliestStart
+      : parent2EarliestStartCandidate;
+
+  const parentEarliestStart: Record<'parent1' | 'parent2' | 'both', Date | null> = {
+    parent1: parent1EarliestStart,
+    parent2: parent2EarliestStart,
+    both: parent1EarliestStart,
+  };
+
+  const segmentContext: SegmentContext = {
+    baseStartDate,
+    timelineLimit,
+    parentLastEndDates,
+    parentEarliestStart,
+  };
 
   const preferFullWeek = meta.key === 'maximize-income';
   const preferredDaysPerWeek = preferFullWeek ? 7 : undefined;
@@ -556,7 +589,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: overlapParent1Monthly + overlapParent2Monthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit, parentLastEndDates });
+    }, segmentContext);
   }
 
   if (plan1ExtraDays > 0) {
@@ -573,7 +606,7 @@ function convertLegacyResult(
       leaveMonthlyIncome,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit, parentLastEndDates });
+    }, segmentContext);
   }
 
   if (plan1NoExtraDays > 0) {
@@ -592,7 +625,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit, parentLastEndDates });
+    }, segmentContext);
   }
 
   const totalPlan1MinDays = plan1MinDays + plan1MinContinuationDays;
@@ -612,7 +645,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit, parentLastEndDates });
+    }, segmentContext);
   }
 
   if (plan2ExtraDays > 0) {
@@ -629,7 +662,7 @@ function convertLegacyResult(
       leaveMonthlyIncome,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit, parentLastEndDates });
+    }, segmentContext);
   }
 
   if (plan2NoExtraDays > 0) {
@@ -648,7 +681,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit, parentLastEndDates });
+    }, segmentContext);
   }
 
   const totalPlan2MinDays = plan2MinDays + plan2MinContinuationDays;
@@ -668,7 +701,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, { baseStartDate, timelineLimit, parentLastEndDates });
+    }, segmentContext);
   }
 
   // No filler periods - we strictly adhere to the total months specified
@@ -781,6 +814,15 @@ function convertLegacyResult(
         ? startOfDay(addDays(globalLastEnd, 1))
         : startOfDay(baseStartDate);
 
+    const earliestStart = parentEarliestStart[parent];
+    const ensureEarliestStart = () => {
+      if (earliestStart && startDate.getTime() < earliestStart.getTime()) {
+        startDate = startOfDay(earliestStart);
+      }
+    };
+
+    ensureEarliestStart();
+
     if (timelineLimit) {
       const latestStart = startOfDay(addDays(timelineLimit, 1 - effectiveDays));
       if (startDate.getTime() > latestStart.getTime()) {
@@ -792,6 +834,8 @@ function convertLegacyResult(
       if (startDate.getTime() < baseStartDate.getTime()) {
         startDate = startOfDay(baseStartDate);
       }
+
+      ensureEarliestStart();
 
       const remainingDays = differenceInCalendarDays(timelineLimit, startDate) + 1;
       if (remainingDays <= 0) {
@@ -1057,11 +1101,14 @@ export function optimizeLeave(
     strategy: strategyKey,
   });
 
+  const baseStartDate = startOfDay(new Date());
+
   const conversionContext: ConversionContext = {
     parent1,
     parent2,
     parent1NetIncome: calc1.netIncome,
     parent2NetIncome: calc2.netIncome,
+    baseStartDate,
     adjustedTotalMonths,
     requestedDaysPerWeek: normalizedDaysPerWeek,
     preferredParent1Months,
