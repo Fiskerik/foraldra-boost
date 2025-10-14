@@ -403,7 +403,9 @@ function addSegment(
   const otherDailyIncome = otherParentIncomeForPeriod / Math.max(1, effectiveCalendarDays);
   const totalPeriodIncome = (leaveMonthlyIncome / 30) * effectiveCalendarDays + otherParentIncomeForPeriod;
   const dailyIncome = totalPeriodIncome / Math.max(1, effectiveCalendarDays);
-  const dailyBenefit = benefitMonthly / 30;
+  // dailyBenefit should only represent actual parental benefits (föräldrapenning + föräldralön)
+  // For periods with benefitLevel 'none', there's no benefit, so dailyBenefit should be 0
+  const dailyBenefit = benefitLevel === 'none' ? 0 : benefitMonthly / 30;
 
   periods.push({
     parent,
