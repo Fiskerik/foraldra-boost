@@ -52,6 +52,7 @@ const PARENTAL_BENEFIT_CEILING = 49000;
 const HIGH_BENEFIT_DAYS = 390;
 const LOW_BENEFIT_DAYS = 90;
 export const TOTAL_BENEFIT_DAYS = HIGH_BENEFIT_DAYS + LOW_BENEFIT_DAYS;
+const RESERVED_HIGH_BENEFIT_DAYS_PER_PARENT = 90;
 const INITIAL_SHARED_WORKING_DAYS = 10;
 const INITIAL_SHARED_CALENDAR_DAYS = 14;
 const MAX_PARENTAL_BENEFIT_PER_DAY = 1250;
@@ -88,8 +89,12 @@ function deriveParentDayAllocation(parent1Months: number, parent2Months: number)
   const safeParent2Months = Math.max(0, parent2Months);
   const totalPreferredMonths = safeParent1Months + safeParent2Months;
 
+  const baseReserved = Math.min(RESERVED_HIGH_BENEFIT_DAYS_PER_PARENT, Math.floor(HIGH_BENEFIT_DAYS / 2));
+  const transferable = Math.max(0, HIGH_BENEFIT_DAYS - baseReserved * 2);
+
   if (totalPreferredMonths <= 0) {
-    const halfIncome = Math.round(HIGH_BENEFIT_DAYS / 2);
+    const halfTransferable = Math.round(transferable / 2);
+    const halfIncome = baseReserved + halfTransferable;
     const halfLow = Math.round(LOW_BENEFIT_DAYS / 2);
 
     return {
@@ -101,12 +106,14 @@ function deriveParentDayAllocation(parent1Months: number, parent2Months: number)
   }
 
   const parent1Share = safeParent1Months / totalPreferredMonths;
-  const parent1IncomeDays = Math.max(0, Math.round(HIGH_BENEFIT_DAYS * parent1Share));
+  const parent1Transferable = Math.round(transferable * parent1Share);
+  const parent1IncomeDays = Math.max(baseReserved, Math.min(baseReserved + transferable, baseReserved + parent1Transferable));
+  const parent2IncomeDays = Math.max(baseReserved, HIGH_BENEFIT_DAYS - parent1IncomeDays);
   const parent1LowDays = Math.max(0, Math.round(LOW_BENEFIT_DAYS * parent1Share));
 
   return {
     parent1IncomeDays,
-    parent2IncomeDays: Math.max(0, HIGH_BENEFIT_DAYS - parent1IncomeDays),
+    parent2IncomeDays,
     parent1LowDays,
     parent2LowDays: Math.max(0, LOW_BENEFIT_DAYS - parent1LowDays),
   };
