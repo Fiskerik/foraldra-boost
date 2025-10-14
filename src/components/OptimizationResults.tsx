@@ -45,7 +45,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
   const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
     const startDate = new Date(period.startDate);
     const endDate = new Date(period.endDate);
-    const totalBenefitDays = Math.max(0, Math.round(period.daysCount));
+    const totalBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
 
     const segments: MonthlyBreakdown[] = [];
     let cursor = new Date(startDate);
@@ -464,7 +464,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                     const expandKey = `${index}-${groupIndex}`;
                     const isExpanded = expandedPeriods[expandKey];
                     const hasMultipleMonths = monthlyBreakdown.length > 1;
-                    const totalDaysUsed = group.periods.reduce((sum, segment) => sum + segment.daysCount, 0);
+                    const totalDaysUsed = group.periods.reduce((sum, segment) => sum + (segment.benefitDaysUsed ?? segment.daysCount), 0);
                     const isInitialTenDayGroup =
                       group.parent === 'both' && group.periods.every(segment => segment.isInitialTenDayPeriod);
                     const totalDaysLabel = isInitialTenDayGroup ? '2 x 10 dagar' : `${totalDaysUsed} dagar`;
