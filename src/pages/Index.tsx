@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ParentIncomeCard } from "@/components/ParentIncomeCard";
 import { MunicipalitySelect } from "@/components/MunicipalitySelect";
@@ -14,6 +14,7 @@ import {
   calculateMaxLeaveMonths,
 } from "@/utils/parentalCalculations";
 import { Baby, Sparkles } from "lucide-react";
+import { calculateStrategyIncomeSummary, StrategyIncomeSummary } from "@/utils/incomeSummary";
 import { toast } from "sonner";
 
 const Index = () => {
@@ -141,6 +142,19 @@ const Index = () => {
     }
   };
 
+  const strategyIncomeSummaries = useMemo<StrategyIncomeSummary[]>(() => {
+    if (!optimizationResults) {
+      return [];
+    }
+
+    return optimizationResults.map(result => calculateStrategyIncomeSummary(result.periods));
+  }, [optimizationResults]);
+
+  const selectedIncomeSummary =
+    optimizationResults && strategyIncomeSummaries[selectedStrategyIndex]
+      ? strategyIncomeSummaries[selectedStrategyIndex]
+      : undefined;
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-gradient-hero text-white py-12 px-4 shadow-soft">
@@ -245,6 +259,7 @@ const Index = () => {
             totalIncome={optimizationResults[selectedStrategyIndex]?.totalIncome}
             daysUsed={optimizationResults[selectedStrategyIndex]?.daysUsed}
             daysSaved={optimizationResults[selectedStrategyIndex]?.daysSaved}
+            strategyIncomeSummary={selectedIncomeSummary}
             onHouseholdIncomeChange={handleHouseholdIncomeChange}
             onDaysPerWeekChange={handleDaysPerWeekChange}
             onTotalMonthsChange={handleTotalMonthsChange}

@@ -4,8 +4,8 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, LeavePeriod, calculateMaxLeaveMonths, TOTAL_BENEFIT_DAYS } from "@/utils/parentalCalculations";
+import { StrategyIncomeSummary, calculateStrategyIncomeSummary } from "@/utils/incomeSummary";
 import { TrendingUp, Calendar, Clock, Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
-import { addDays, startOfDay, startOfMonth, endOfMonth, differenceInCalendarDays } from "date-fns";
 
 interface InteractiveSlidersProps {
   householdIncome: number;
@@ -17,6 +17,7 @@ interface InteractiveSlidersProps {
   totalIncome?: number;
   daysUsed?: number;
   daysSaved?: number;
+  strategyIncomeSummary?: StrategyIncomeSummary;
   onHouseholdIncomeChange: (value: number) => void;
   onDaysPerWeekChange: (days: number) => void;
   onTotalMonthsChange: (months: number) => void;
@@ -32,84 +33,35 @@ export function InteractiveSliders({
   totalIncome,
   daysUsed,
   daysSaved,
+  strategyIncomeSummary,
   onHouseholdIncomeChange,
   onDaysPerWeekChange,
   onTotalMonthsChange,
 }: InteractiveSlidersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  
-  const { lowestMonthlyIncome, hasEligibleMonths } = useMemo(() => {
-    if (periods.length === 0) {
-      return { lowestMonthlyIncome: currentHouseholdIncome, hasEligibleMonths: false };
+
+  const computedSummary = useMemo<StrategyIncomeSummary>(() => {
+    if (strategyIncomeSummary) {
+      return strategyIncomeSummary;
     }
+    return calculateStrategyIncomeSummary(periods);
+  }, [strategyIncomeSummary, periods]);
 
-    const relevantPeriods = periods.filter(period =>
-      period.benefitLevel !== "none" || period.isInitialTenDayPeriod || period.isPreferenceFiller
-    );
+  const hasEligibleMonths =
+    computedSummary.hasEligibleFullMonths &&
+    computedSummary.lowestFullMonthIncome !== null &&
+    Number.isFinite(computedSummary.lowestFullMonthIncome);
 
-    if (relevantPeriods.length === 0) {
-      return { lowestMonthlyIncome: currentHouseholdIncome, hasEligibleMonths: false };
-    }
-
-    const monthlyTotals = new Map<
-      string,
-      { totalIncome: number; calendarDays: number; monthLength: number }
-    >();
-
-    relevantPeriods.forEach(period => {
-      const periodStart = startOfDay(new Date(period.startDate));
-      const periodEnd = startOfDay(new Date(period.endDate));
-
-      let segmentStart = new Date(periodStart);
-
-      while (segmentStart.getTime() <= periodEnd.getTime()) {
-        const monthStart = startOfMonth(segmentStart);
-        const monthEnd = endOfMonth(monthStart);
-        const segmentEnd = periodEnd.getTime() < monthEnd.getTime() ? periodEnd : monthEnd;
-        const segmentDays = Math.max(1, differenceInCalendarDays(segmentEnd, segmentStart) + 1);
-        const monthKey = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
-        const monthLength = differenceInCalendarDays(monthEnd, monthStart) + 1;
-
-        const existing = monthlyTotals.get(monthKey);
-        if (existing) {
-          existing.totalIncome += period.dailyIncome * segmentDays;
-          existing.calendarDays += segmentDays;
-          existing.monthLength = monthLength;
-        } else {
-          monthlyTotals.set(monthKey, {
-            totalIncome: period.dailyIncome * segmentDays,
-            calendarDays: segmentDays,
-            monthLength,
-          });
-        }
-
-        segmentStart = addDays(segmentEnd, 1);
-      }
-    });
-
-    const eligibleEntries = Array.from(monthlyTotals.values()).filter(
-      entry => entry.calendarDays >= entry.monthLength
-    );
-
-    if (eligibleEntries.length === 0) {
-      return { lowestMonthlyIncome: currentHouseholdIncome, hasEligibleMonths: false };
-    }
-
-    const lowestIncome = eligibleEntries.reduce((min, entry) => {
-      return entry.totalIncome < min ? entry.totalIncome : min;
-    }, Infinity);
-
-    if (!Number.isFinite(lowestIncome)) {
-      return { lowestMonthlyIncome: currentHouseholdIncome, hasEligibleMonths: false };
-    }
-
-    return { lowestMonthlyIncome: lowestIncome, hasEligibleMonths: true };
-  }, [periods, currentHouseholdIncome]);
+  const lowestMonthlyIncome = hasEligibleMonths && computedSummary.lowestFullMonthIncome !== null
+    ? computedSummary.lowestFullMonthIncome
+    : currentHouseholdIncome;
 
   const isBelowMinimum = hasEligibleMonths && lowestMonthlyIncome < householdIncome;
 
   // Calculate break-point on income slider - show where the lowest month is
-  const incomeBreakPoint = hasEligibleMonths ? lowestMonthlyIncome : null;
+  const incomeBreakPoint = hasEligibleMonths && computedSummary.lowestFullMonthIncome !== null
+    ? computedSummary.lowestFullMonthIncome
+    : null;
   const incomeBreakPointPercent = incomeBreakPoint !== null
     ? Math.max(0, Math.min(100, (incomeBreakPoint / Math.max(maxHouseholdIncome, 1)) * 100))
     : null;

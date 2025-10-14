@@ -211,21 +211,42 @@ function computeDaysFromPlan(plan: LegacyPlan, fallbackDaysPerWeek: number): num
   return Math.round(weeks * daysPerWeek);
 }
 
-function extractDays(plan: LegacyPlan, property: string, fallbackDaysPerWeek: number): number {
+function extractDays(
+  plan: LegacyPlan,
+  property: string,
+  fallbackDaysPerWeek: number,
+  allowFallback: boolean = true
+): number {
   if (!plan) return 0;
-  const stored = toNumber(plan[property as keyof typeof plan]);
-  if (stored > 0) {
-    return Math.round(stored);
+
+  const rawValue = plan[property as keyof typeof plan];
+
+  if (rawValue !== undefined && rawValue !== null) {
+    const stored = toNumber(rawValue);
+    if (stored > 0) {
+      return Math.round(stored);
+    }
+
+    if (!allowFallback) {
+      return 0;
+    }
+  } else if (!allowFallback) {
+    return 0;
   }
+
+  if (!allowFallback) {
+    return 0;
+  }
+
   return computeDaysFromPlan(plan, fallbackDaysPerWeek);
 }
 
 function getInkomstDays(plan: LegacyPlan, fallbackDaysPerWeek: number): number {
-  return extractDays(plan, 'användaInkomstDagar', fallbackDaysPerWeek);
+  return extractDays(plan, 'användaInkomstDagar', fallbackDaysPerWeek, true);
 }
 
 function getMinDays(plan: LegacyPlan, fallbackDaysPerWeek: number): number {
-  return extractDays(plan, 'användaMinDagar', fallbackDaysPerWeek);
+  return extractDays(plan, 'användaMinDagar', fallbackDaysPerWeek, false);
 }
 
 interface SegmentConfig {
