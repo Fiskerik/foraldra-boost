@@ -48,6 +48,21 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     // Only treat actual compensated days as benefit days; periods with benefitLevel 'none' should not allocate benefit days
     const rawBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
     const totalBenefitDays = period.benefitLevel === 'none' ? 0 : rawBenefitDays;
+    
+    // Debug logging for May-Aug 2026 periods
+    if (startDate.getFullYear() === 2026 && startDate.getMonth() >= 4 && startDate.getMonth() <= 7) {
+      console.log('May-Aug 2026 Period Debug:', {
+        parent: period.parent,
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        endDate: format(endDate, 'yyyy-MM-dd'),
+        benefitLevel: period.benefitLevel,
+        dailyBenefit: period.dailyBenefit,
+        otherParentMonthlyIncome: period.otherParentMonthlyIncome,
+        otherParentDailyIncome: period.otherParentDailyIncome,
+        totalBenefitDays,
+        rawBenefitDays
+      });
+    }
 
     const segments: MonthlyBreakdown[] = [];
     let cursor = new Date(startDate);
@@ -140,6 +155,23 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             ? computedMonthlyBase * (segment.calendarDays / monthLength)
             : dailyBaseFromOther * segment.calendarDays;
         }
+      }
+      
+      // Debug logging for May-Aug 2026 segments
+      if (segment.startDate.getFullYear() === 2026 && segment.startDate.getMonth() >= 4 && segment.startDate.getMonth() <= 7) {
+        console.log('May-Aug 2026 Segment Calculation:', {
+          monthStart: format(segment.startDate, 'yyyy-MM-dd'),
+          monthEnd: format(segment.endDate, 'yyyy-MM-dd'),
+          parent: period.parent,
+          benefitLevel: period.benefitLevel,
+          computedMonthlyBase,
+          monthlyBaseFromOther,
+          dailyBaseFromOther,
+          otherParentIncome,
+          benefitDaily,
+          segmentBenefitDays: segment.benefitDays,
+          isFullMonthSegment
+        });
       }
 
       // Parental benefit: use allocated benefit days, with a max of 30 days for full months
@@ -612,12 +644,25 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                         )}
                                       </div>
                                     )}
-                                    <div className="text-muted-foreground italic">
+                                     <div className="text-muted-foreground italic">
                                       Föräldrapenning: {formatCurrency(benefitIncome)}
                                     </div>
                                   </div>
                                 );
                               })}
+                              {/* Add household income summary at the bottom */}
+                              {monthlyBreakdown.length > 0 && (
+                                <div className="mt-3 p-2 bg-primary/10 rounded border border-primary/20">
+                                  <div className="text-sm font-semibold">
+                                    Total hushållsinkomst (alla månader): {formatCurrency(
+                                      monthlyBreakdown.reduce((sum, month) => {
+                                        const aggregatedInfo = aggregatedMonthMap.get(month.monthKey);
+                                        return sum + (aggregatedInfo?.totalIncome ?? month.monthlyIncome);
+                                      }, 0)
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
 
