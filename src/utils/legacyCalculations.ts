@@ -439,14 +439,18 @@ function optimizeParentalLeaveLegacy(preferences, inputs) {
     let totalDagarBehövda1 = weeks1 * dagarPerVecka1;
     let totalDagarBehövda2 = weeks2 * dagarPerVecka2;
 
+    // Transfer days from Parent 2 to Parent 1 if needed (respecting 90-day reserve)
     if (includePartner && totalDagarBehövda1 > förälder1InkomstDagar) {
         const minDagarBehövda2 = weeks2 * dagarPerVecka2;
-        const överförbaraDagar2 = Math.max(0, förälder2InkomstDagar - 90 - minDagarBehövda2 - 10);
+        // Parent 2 must keep at least 90 reserved high-benefit days
+        const överförbaraDagar2 = Math.max(0, förälder2InkomstDagar - 90 - minDagarBehövda2);
         const överförDagar = Math.min(överförbaraDagar2, totalDagarBehövda1 - förälder1InkomstDagar);
-        förälder2InkomstDagar -= överförDagar;
-        förälder1InkomstDagar += överförDagar;
-        totalDagarBehövda1 = weeks1 * dagarPerVecka1;
-        genomförbarhet.transferredDays += överförDagar;
+        if (överförDagar > 0) {
+            förälder2InkomstDagar -= överförDagar;
+            förälder1InkomstDagar += överförDagar;
+            totalDagarBehövda1 = weeks1 * dagarPerVecka1;
+            genomförbarhet.transferredDays += överförDagar;
+        }
     }
 
     if (totalDagarBehövda1 > förälder1InkomstDagar) {
@@ -741,9 +745,10 @@ function optimizeParentalLeaveLegacy(preferences, inputs) {
                     (önskadeDagar - (dagarPerVecka1NoExtra || dagarPerVecka1)) * plan1NoExtraWeeksTotal;
                 if (extraDagar > 0) {
                     const minBehov2 = weeks2 * dagarPerVecka2;
+                    // Parent 2 must keep at least 90 reserved high-benefit days
                     const överförbara = Math.max(
                         0,
-                        förälder2InkomstDagar - 90 - minBehov2 - 10
+                        förälder2InkomstDagar - 90 - minBehov2
                     );
                     const blockStorlek = Math.max(1, plan1NoExtraWeeksTotal);
                     const möjligaLån = Math.min(överförbara, extraDagar);
