@@ -338,9 +338,38 @@ function addSegment(
 
   const ratio = effectiveCalendarDays / calendarDays;
   const adjustedDaysCount = Math.max(1, Math.round(daysCount * ratio));
-  const otherDailyIncome = otherParentMonthlyIncome / 30;
-  const householdMonthlyIncome = leaveMonthlyIncome + otherParentMonthlyIncome;
-  const dailyIncome = householdMonthlyIncome / 30;
+  
+  // Calculate if this is a full month or partial month period
+  // A period is considered "full month" if it starts on day 1 and ends on the last day of a month
+  const periodStartDay = startDate.getDate();
+  const periodEndDay = endDate.getDate();
+  const periodStartMonth = startDate.getMonth();
+  const periodEndMonth = endDate.getMonth();
+  const periodStartYear = startDate.getFullYear();
+  const periodEndYear = endDate.getFullYear();
+  
+  // Get the last day of the end month
+  const lastDayOfEndMonth = new Date(periodEndYear, periodEndMonth + 1, 0).getDate();
+  
+  // Check if this period covers full month(s) or is partial
+  const isFullMonthPeriod = periodStartDay === 1 && periodEndDay === lastDayOfEndMonth;
+  
+  // Calculate other parent's income contribution
+  let otherParentIncomeForPeriod: number;
+  if (isFullMonthPeriod) {
+    // Full month(s): use full monthly salary regardless of days
+    const monthsInPeriod = (periodEndYear - periodStartYear) * 12 + (periodEndMonth - periodStartMonth) + 1;
+    otherParentIncomeForPeriod = otherParentMonthlyIncome * monthsInPeriod;
+  } else {
+    // Partial month: prorate the salary based on days in the month
+    const daysInMonth = new Date(periodStartYear, periodStartMonth + 1, 0).getDate();
+    const daysInPeriod = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+    otherParentIncomeForPeriod = otherParentMonthlyIncome * (daysInPeriod / daysInMonth);
+  }
+  
+  const otherDailyIncome = otherParentIncomeForPeriod / Math.max(1, effectiveCalendarDays);
+  const totalPeriodIncome = (leaveMonthlyIncome / 30) * effectiveCalendarDays + otherParentIncomeForPeriod;
+  const dailyIncome = totalPeriodIncome / Math.max(1, effectiveCalendarDays);
   const dailyBenefit = benefitMonthly / 30;
 
   periods.push({
