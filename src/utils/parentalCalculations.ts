@@ -41,6 +41,7 @@ export interface LeavePeriod {
   benefitLevel: 'parental-salary' | 'high' | 'low' | 'none';
   daysPerWeek?: number;
   otherParentDailyIncome?: number;
+  otherParentMonthlyIncome?: number;
   isInitialTenDayPeriod?: boolean;
   isPreferenceFiller?: boolean;
 }
@@ -382,6 +383,7 @@ function addSegment(
     benefitLevel,
     daysPerWeek: Math.round(dagarPerVecka),
     otherParentDailyIncome: parent === 'both' ? 0 : otherDailyIncome,
+    otherParentMonthlyIncome: parent === 'both' ? 0 : otherParentMonthlyIncome,
   });
 
   parentLastEndDates[parent] = new Date(endDate);
