@@ -958,6 +958,96 @@ function convertLegacyResult(
 
   mergedPeriods.splice(0, mergedPeriods.length, ...sequentialPeriods);
 
+  if (timelineLimit) {
+    const limitDate = startOfDay(timelineLimit);
+    const lastSequentialPeriod = mergedPeriods[mergedPeriods.length - 1] ?? null;
+    const lastSequentialEnd = lastSequentialPeriod
+      ? startOfDay(lastSequentialPeriod.endDate)
+      : null;
+
+    if (!lastSequentialEnd || lastSequentialEnd.getTime() < limitDate.getTime()) {
+      const fillerStartBase = lastSequentialPeriod
+        ? startOfDay(addDays(lastSequentialPeriod.endDate, 1))
+        : startOfDay(baseStartDate);
+      const fillerStart = fillerStartBase.getTime() < baseStartDate.getTime()
+        ? startOfDay(baseStartDate)
+        : fillerStartBase;
+
+      if (fillerStart.getTime() <= limitDate.getTime()) {
+        const fillerDays = differenceInCalendarDays(limitDate, fillerStart) + 1;
+
+        if (fillerDays > 0) {
+          const recomputedParentDays: Record<'parent1' | 'parent2', number> = {
+            parent1: 0,
+            parent2: 0,
+          };
+
+          mergedPeriods.forEach(period => {
+            const days = Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
+            if (period.parent === 'parent1') {
+              recomputedParentDays.parent1 += days;
+            } else if (period.parent === 'parent2') {
+              recomputedParentDays.parent2 += days;
+            } else if (period.parent === 'both') {
+              recomputedParentDays.parent1 += days;
+              recomputedParentDays.parent2 += days;
+            }
+          });
+
+          const shortfallAfterSequential = {
+            parent1: targetParent1Days - recomputedParentDays.parent1,
+            parent2: targetParent2Days - recomputedParentDays.parent2,
+          };
+
+          let fillerParent: 'parent1' | 'parent2' = 'parent1';
+
+          if (shortfallAfterSequential.parent1 <= 0 && shortfallAfterSequential.parent2 > 0) {
+            fillerParent = 'parent2';
+          } else if (shortfallAfterSequential.parent2 <= 0 && shortfallAfterSequential.parent1 > 0) {
+            fillerParent = 'parent1';
+          } else if (shortfallAfterSequential.parent2 > shortfallAfterSequential.parent1) {
+            fillerParent = 'parent2';
+          }
+
+          const fillerOtherParentDailyIncome = fillerParent === 'parent1'
+            ? context.parent2NetIncome / 30
+            : context.parent1NetIncome / 30;
+          const fillerOwnDailyIncome = fillerParent === 'parent1'
+            ? context.parent1NetIncome / 30
+            : context.parent2NetIncome / 30;
+
+          const fillerPeriod: LeavePeriod = {
+            parent: fillerParent,
+            startDate: fillerStart,
+            endDate: startOfDay(limitDate),
+            daysCount: fillerDays,
+            dailyBenefit: 0,
+            dailyIncome: fillerOwnDailyIncome + fillerOtherParentDailyIncome,
+            benefitLevel: 'none',
+            daysPerWeek: lastSequentialPeriod?.daysPerWeek ?? 7,
+            otherParentDailyIncome: fillerOtherParentDailyIncome,
+            isPreferenceFiller: true,
+          };
+
+          const trailing = mergedPeriods[mergedPeriods.length - 1];
+          if (
+            trailing &&
+            trailing.parent === fillerPeriod.parent &&
+            trailing.benefitLevel === fillerPeriod.benefitLevel &&
+            trailing.daysPerWeek === fillerPeriod.daysPerWeek &&
+            Math.abs(trailing.dailyIncome - fillerPeriod.dailyIncome) < 1 &&
+            Math.abs((trailing.otherParentDailyIncome || 0) - (fillerPeriod.otherParentDailyIncome || 0)) < 1
+          ) {
+            trailing.endDate = fillerPeriod.endDate;
+            trailing.daysCount += fillerPeriod.daysCount;
+          } else {
+            mergedPeriods.push(fillerPeriod);
+          }
+        }
+      }
+    }
+  }
+
   if (mergedPeriods.length > 0) {
     const expectedStart = baseStartDate;
     const earliest = mergedPeriods[0];
