@@ -32,6 +32,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     otherParentIncome: number;
     benefitIncome: number;
     daysPerWeekValue: number;
+    otherParentMonthlyBase: number;
   }
 
   interface MonthlyBreakdownEntry extends MonthlyBreakdown {
@@ -67,6 +68,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         otherParentIncome: 0,
         benefitIncome: 0,
         daysPerWeekValue: normalizedDaysPerWeek,
+        otherParentMonthlyBase: period.parent === 'both' ? 0 : period.otherParentMonthlyIncome || 0,
       });
 
       cursor = addDays(monthEnd, 1);
@@ -109,16 +111,35 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       // dailyIncome is the household daily income rate
       // Multiply by actual calendar days to get the income for this segment
       const dailyIncomeRate = period.dailyIncome;
-      const otherParentDaily = period.otherParentDailyIncome ?? 0;
-      const leaveParentDaily = dailyIncomeRate - otherParentDaily;
       const benefitDaily = period.dailyBenefit;
       const actualMonthlyIncome = dailyIncomeRate * segment.calendarDays;
+      const monthStart = startOfMonth(segment.startDate);
+      const monthEndDate = endOfMonth(monthStart);
+      const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
+      const baseMonthlyIncome = period.parent === "both" ? 0 : period.otherParentMonthlyIncome || 0;
+      const isFullMonthSegment =
+        segment.calendarDays >= monthLength &&
+        segment.startDate.getDate() === 1 &&
+        segment.endDate.getDate() === monthEndDate.getDate();
+
+      let otherParentIncome = 0;
+      if (period.parent !== "both" && baseMonthlyIncome > 0) {
+        if (isFullMonthSegment) {
+          otherParentIncome = baseMonthlyIncome;
+        } else {
+          otherParentIncome = baseMonthlyIncome * (segment.calendarDays / monthLength);
+        }
+      }
+
+      const leaveParentIncome = actualMonthlyIncome - otherParentIncome;
+
       segment.monthlyIncome = actualMonthlyIncome;
-      segment.leaveParentIncome = leaveParentDaily * segment.calendarDays;
-      segment.otherParentIncome = otherParentDaily * segment.calendarDays;
+      segment.leaveParentIncome = leaveParentIncome > 0 ? leaveParentIncome : 0;
+      segment.otherParentIncome = otherParentIncome;
       segment.benefitIncome = benefitDaily * segment.calendarDays;
       segment.daysPerWeekValue = normalizedDaysPerWeek;
-      
+      segment.otherParentMonthlyBase = baseMonthlyIncome;
+
       remainingBenefitDays -= allocated;
       carryOver = rawShare - allocated;
     });
@@ -175,6 +196,9 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         existing.benefitIncome += segment.benefitIncome;
         if (!existing.daysPerWeekValues.includes(segment.daysPerWeekValue)) {
           existing.daysPerWeekValues.push(segment.daysPerWeekValue);
+        }
+        if (segment.otherParentMonthlyBase > existing.otherParentMonthlyBase) {
+          existing.otherParentMonthlyBase = segment.otherParentMonthlyBase;
         }
       });
 
@@ -402,29 +426,29 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                       ? uniqueDaysPerWeekLabels[0]
                       : `Varierar: ${uniqueDaysPerWeekLabels.join(' → ')}`;
 
-                    const totalCalendarDays = group.periods.reduce((sum, segment) => {
-                      const days = Math.max(1, differenceInCalendarDays(segment.endDate, segment.startDate) + 1);
-                      return sum + days;
-                    }, 0);
-                    const totalHouseholdIncome = group.periods.reduce((sum, segment) => {
-                      const days = Math.max(1, differenceInCalendarDays(segment.endDate, segment.startDate) + 1);
-                      return sum + segment.dailyIncome * days;
-                    }, 0);
-                    const totalBenefitIncome = group.periods.reduce((sum, segment) => {
-                      const days = Math.max(1, differenceInCalendarDays(segment.endDate, segment.startDate) + 1);
-                      return sum + segment.dailyBenefit * days;
-                    }, 0);
-                    const totalOtherIncome = group.periods.reduce((sum, segment) => {
-                      const days = Math.max(1, differenceInCalendarDays(segment.endDate, segment.startDate) + 1);
-                      return sum + (segment.otherParentDailyIncome || 0) * days;
-                    }, 0);
-
-                    const householdMonthlyIncome = totalCalendarDays > 0 ? (totalHouseholdIncome / totalCalendarDays) * 30 : 0;
-                    const leaveBenefitMonthly = totalCalendarDays > 0 ? (totalBenefitIncome / totalCalendarDays) * 30 : 0;
-                    const otherParentMonthlyIncome = totalCalendarDays > 0 ? (totalOtherIncome / totalCalendarDays) * 30 : 0;
-                    const leaveParentMonthlyIncome = householdMonthlyIncome - otherParentMonthlyIncome;
-
                     const monthlyBreakdown = groupMonthlyBreakdowns[groupIndex];
+                    const totalCalendarDays = monthlyBreakdown.reduce((sum, month) => sum + month.calendarDays, 0);
+                    const totalHouseholdIncome = monthlyBreakdown.reduce(
+                      (sum, month) => sum + month.monthlyIncome,
+                      0
+                    );
+                    const totalBenefitIncome = monthlyBreakdown.reduce(
+                      (sum, month) => sum + month.benefitIncome,
+                      0
+                    );
+                    const totalOtherIncome = monthlyBreakdown.reduce(
+                      (sum, month) => sum + month.otherParentIncome,
+                      0
+                    );
+                    const effectiveMonths = monthlyBreakdown.length > 0 ? monthlyBreakdown.length : 1;
+
+                    const householdMonthlyIncome =
+                      effectiveMonths > 0 ? totalHouseholdIncome / effectiveMonths : 0;
+                    const leaveBenefitMonthly =
+                      effectiveMonths > 0 ? totalBenefitIncome / effectiveMonths : 0;
+                    const otherParentMonthlyIncome =
+                      effectiveMonths > 0 ? totalOtherIncome / effectiveMonths : 0;
+                    const leaveParentMonthlyIncome = householdMonthlyIncome - otherParentMonthlyIncome;
                     const periodTotalIncome = monthlyBreakdown.reduce((sum, month) => sum + month.monthlyIncome, 0);
                     const periodContainsLowest = lowestAggregatedKey
                       ? monthlyBreakdown.some(month => {
@@ -527,6 +551,18 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                   group.parent === 'both' ? month.monthlyIncome : month.leaveParentIncome;
                                 const workingIncome = group.parent === 'both' ? 0 : month.otherParentIncome;
                                 const benefitIncome = month.benefitIncome;
+                                const baseWorkingIncome = month.otherParentMonthlyBase;
+                                const monthLength = month.monthLength;
+                                const isFullMonthWorking =
+                                  month.calendarDays >= monthLength &&
+                                  month.startDate.getDate() === 1 &&
+                                  month.endDate.getDate() === monthLength;
+                                const shouldShowProration =
+                                  group.parent !== 'both' &&
+                                  baseWorkingIncome > 0 &&
+                                  workingIncome > 0 &&
+                                  monthLength > 0 &&
+                                  !isFullMonthWorking;
                                 return (
                                   <div
                                     key={`${month.startDate.toISOString()}-${monthIdx}`}
@@ -559,6 +595,11 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                     {group.parent !== 'both' && (
                                       <div className="text-muted-foreground">
                                         {workingParentLabel}: {formatCurrency(workingIncome)}
+                                        {shouldShowProration && (
+                                          <span className="ml-1">
+                                            ({formatCurrency(baseWorkingIncome)} × {month.calendarDays}/{monthLength})
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                     <div className="text-muted-foreground italic">
