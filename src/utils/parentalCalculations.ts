@@ -428,8 +428,11 @@ function convertLegacyResult(
   };
 
   const baseStartDate = startOfDay(new Date());
+  const shouldLimitTimeline = meta.key === 'maximize-income';
   const rawTimelineLimit =
-    context.adjustedTotalMonths > 0 ? computeLimitDate(baseStartDate, context.adjustedTotalMonths) : null;
+    shouldLimitTimeline && context.adjustedTotalMonths > 0
+      ? computeLimitDate(baseStartDate, context.adjustedTotalMonths)
+      : null;
   const timelineLimit =
     rawTimelineLimit && rawTimelineLimit.getTime() < baseStartDate.getTime() ? new Date(baseStartDate) : rawTimelineLimit;
   const parentLastEndDates: Record<'parent1' | 'parent2' | 'both', Date | null> = {
@@ -1066,13 +1069,22 @@ export function optimizeLeave(
     simultaneousMonths,
   };
 
-  const saveDayAllocation = deriveParentDayAllocation(preferredParent1Months, preferredParent2Months);
+  const dayAllocation = deriveParentDayAllocation(preferredParent1Months, preferredParent2Months);
+  const allocationInputs = {
+    förälder1InkomstDagar: dayAllocation.parent1IncomeDays,
+    förälder2InkomstDagar: dayAllocation.parent2IncomeDays,
+    förälder1MinDagar: dayAllocation.parent1LowDays,
+    förälder2MinDagar: dayAllocation.parent2LowDays,
+  };
+
   const saveInputs = {
     ...baseInputs,
-    förälder1InkomstDagar: saveDayAllocation.parent1IncomeDays,
-    förälder2InkomstDagar: saveDayAllocation.parent2IncomeDays,
-    förälder1MinDagar: saveDayAllocation.parent1LowDays,
-    förälder2MinDagar: saveDayAllocation.parent2LowDays,
+    ...allocationInputs,
+  };
+
+  const maximizeInputs = {
+    ...baseInputs,
+    ...allocationInputs,
   };
 
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
@@ -1096,7 +1108,7 @@ export function optimizeLeave(
   incomeTargets.forEach((target) => {
     candidateStrategyKeys.forEach((strategyKey) => {
       const preferences = buildPreferences(strategyKey, target, allowFullWeekForMax);
-      const legacyResult = optimizeParentalLeave(preferences, baseInputs);
+      const legacyResult = optimizeParentalLeave(preferences, maximizeInputs);
       const converted = convertLegacyResult(maximizeMeta, legacyResult, conversionContext);
       maximizeCandidates.push(converted);
     });
@@ -1104,7 +1116,7 @@ export function optimizeLeave(
 
   if (maximizeCandidates.length === 0) {
     const fallbackPreferences = buildPreferences(maximizeMeta.legacyKey, minHouseholdIncome, allowFullWeekForMax);
-    const fallbackLegacy = optimizeParentalLeave(fallbackPreferences, baseInputs);
+    const fallbackLegacy = optimizeParentalLeave(fallbackPreferences, maximizeInputs);
     maximizeCandidates.push(convertLegacyResult(maximizeMeta, fallbackLegacy, conversionContext));
   }
 
@@ -1124,7 +1136,7 @@ export function optimizeLeave(
   // Always push for maximum days used
   const pushTarget = Math.round(combinedNetIncome * 1.5);
   const extraPreferences = buildPreferences('maximize_parental_salary', pushTarget, allowFullWeekForMax);
-  const extraLegacy = optimizeParentalLeave(extraPreferences, baseInputs);
+  const extraLegacy = optimizeParentalLeave(extraPreferences, maximizeInputs);
   const extraResult = convertLegacyResult(maximizeMeta, extraLegacy, conversionContext);
   maximizeResult = pickBetter(maximizeResult, extraResult);
 
