@@ -199,7 +199,36 @@ type LegacyPlan = Record<string, unknown> | undefined;
 type LegacyResult = Record<string, any>;
 
 function toNumber(value: unknown): number {
-  return isFiniteNumber(value) ? value : 0;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return 0;
+    }
+
+    const withoutSpacing = trimmed.replace(/[\s\u00A0_]/g, '');
+    let normalized = withoutSpacing.replace(/,/g, '.');
+
+    const dotMatches = normalized.match(/\./g);
+    if (dotMatches && dotMatches.length > 1) {
+      const lastDotIndex = normalized.lastIndexOf('.');
+      normalized =
+        normalized.slice(0, lastDotIndex).replace(/\./g, '') + normalized.slice(lastDotIndex);
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  if (typeof value === 'bigint') {
+    const converted = Number(value);
+    return Number.isFinite(converted) ? converted : 0;
+  }
+
+  return 0;
 }
 
 function computeDaysFromPlan(plan: LegacyPlan, fallbackDaysPerWeek: number): number {
