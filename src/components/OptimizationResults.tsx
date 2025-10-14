@@ -107,12 +107,9 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
 
       segment.benefitDays = allocated;
       
-      // Calculate monthly income for this segment
-      // dailyIncome is the household daily income rate
-      // Multiply by actual calendar days to get the income for this segment
-      const dailyIncomeRate = period.dailyIncome;
+      // Calculate monthly income for this segment using fixed monthly salary for working parent
+      // and capping parental benefits to 30 days per full month
       const benefitDaily = period.dailyBenefit;
-      const actualMonthlyIncome = dailyIncomeRate * segment.calendarDays;
       const monthStart = startOfMonth(segment.startDate);
       const monthEndDate = endOfMonth(monthStart);
       const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
@@ -122,6 +119,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         segment.startDate.getDate() === 1 &&
         segment.endDate.getDate() === monthEndDate.getDate();
 
+      // Working parent's monthly income: full month fixed, partial prorated by calendar days
       let otherParentIncome = 0;
       if (period.parent !== "both" && baseMonthlyIncome > 0) {
         if (isFullMonthSegment) {
@@ -131,12 +129,18 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         }
       }
 
-      const leaveParentIncome = actualMonthlyIncome - otherParentIncome;
+      // Parental benefit: use allocated benefit days, with a max of 30 days for full months
+      let benefitIncome = 0;
+      if (benefitDaily > 0) {
+        const benefitDaysForMonth = isFullMonthSegment ? Math.min(segment.benefitDays, 30) : segment.benefitDays;
+        benefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
+      }
 
-      segment.monthlyIncome = actualMonthlyIncome;
-      segment.leaveParentIncome = leaveParentIncome > 0 ? leaveParentIncome : 0;
+      // Compose monthly totals
+      segment.benefitIncome = benefitIncome;
       segment.otherParentIncome = otherParentIncome;
-      segment.benefitIncome = benefitDaily * segment.calendarDays;
+      segment.leaveParentIncome = benefitIncome;
+      segment.monthlyIncome = otherParentIncome + benefitIncome;
       segment.daysPerWeekValue = normalizedDaysPerWeek;
       segment.otherParentMonthlyBase = baseMonthlyIncome;
 
