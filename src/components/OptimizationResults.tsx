@@ -307,23 +307,24 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             monthLength: number;
           }>();
 
-          groupMonthlyBreakdowns.forEach(months => {
-            months.forEach(month => {
-              const existing = aggregatedMonthMap.get(month.monthKey);
+          // Build household totals from ALL periods (including 'none') so working income always counts
+          const allMonthlyEntries = createMonthlyBreakdownEntries(result.periods);
 
-              if (!existing) {
-                aggregatedMonthMap.set(month.monthKey, {
-                  totalIncome: month.monthlyIncome,
-                  totalCalendarDays: month.calendarDays,
-                  monthStart: month.monthStart,
-                  monthLength: month.monthLength,
-                });
-                return;
-              }
+          allMonthlyEntries.forEach(month => {
+            const existing = aggregatedMonthMap.get(month.monthKey);
 
-              existing.totalIncome += month.monthlyIncome;
-              existing.totalCalendarDays += month.calendarDays;
-            });
+            if (!existing) {
+              aggregatedMonthMap.set(month.monthKey, {
+                totalIncome: month.monthlyIncome,
+                totalCalendarDays: month.calendarDays,
+                monthStart: month.monthStart,
+                monthLength: month.monthLength,
+              });
+              return;
+            }
+
+            existing.totalIncome += month.monthlyIncome;
+            existing.totalCalendarDays += month.calendarDays;
           });
 
           const eligibleAggregatedEntries = Array.from(aggregatedMonthMap.entries()).filter(([, info]) =>
