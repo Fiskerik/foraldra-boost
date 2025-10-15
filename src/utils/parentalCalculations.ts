@@ -743,15 +743,6 @@ function convertLegacyResult(
       forceRecomputeWeeks: forceFullWeekScheduling,
     };
     addSegment(periods, segment, segmentContext);
-    
-    // Mark periods with transferred days from parent 2 if applicable
-    if (context.transferredToParent1 && context.transferredToParent1 > 0) {
-      const lastPeriod = periods[periods.length - 1];
-      if (lastPeriod && lastPeriod.parent === 'parent1' && !lastPeriod.transferredDays) {
-        lastPeriod.transferredDays = context.transferredToParent1;
-        lastPeriod.transferredFromParent = 'parent2';
-      }
-    }
   }
 
   if (totalPlan1MinDays > 0 && activePlan1MinPlan) {
@@ -833,15 +824,6 @@ function convertLegacyResult(
       forceRecomputeWeeks: forceFullWeekScheduling,
     };
     addSegment(periods, segment, segmentContext);
-    
-    // Mark periods with transferred days from parent 1 if applicable
-    if (context.transferredToParent2 && context.transferredToParent2 > 0) {
-      const lastPeriod = periods[periods.length - 1];
-      if (lastPeriod && lastPeriod.parent === 'parent2' && !lastPeriod.transferredDays) {
-        lastPeriod.transferredDays = context.transferredToParent2;
-        lastPeriod.transferredFromParent = 'parent1';
-      }
-    }
   }
 
   if (totalPlan2MinDays > 0 && activePlan2MinPlan) {
@@ -1402,12 +1384,6 @@ export function optimizeLeave(
 
   const dayAllocation = deriveParentDayAllocation(preferredParent1Months, preferredParent2Months);
   
-  // Calculate transferred days based on the 90-day reserved rule
-  // Each parent has 90 reserved high-benefit days that cannot be transferred
-  // Remaining high-benefit days (390 - 180 = 210) can be transferred
-  const transferredToParent1 = Math.max(0, dayAllocation.parent1IncomeDays - RESERVED_HIGH_BENEFIT_DAYS_PER_PARENT);
-  const transferredToParent2 = Math.max(0, dayAllocation.parent2IncomeDays - RESERVED_HIGH_BENEFIT_DAYS_PER_PARENT);
-  
   const allocationInputs = {
     förälder1InkomstDagar: dayAllocation.parent1IncomeDays,
     förälder2InkomstDagar: dayAllocation.parent2IncomeDays,
@@ -1428,11 +1404,7 @@ export function optimizeLeave(
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
   const savePreferences = buildPreferences(saveDaysMeta.legacyKey, minHouseholdIncome, allowFullWeekForSave);
   const saveLegacyResult = optimizeParentalLeave(savePreferences, saveInputs);
-  const saveResult = convertLegacyResult(saveDaysMeta, saveLegacyResult, {
-    ...conversionContext,
-    transferredToParent1,
-    transferredToParent2,
-  });
+  const saveResult = convertLegacyResult(saveDaysMeta, saveLegacyResult, conversionContext);
 
   const maximizeMeta = strategies.find((strategy) => strategy.key === 'maximize-income')!;
 
@@ -1451,11 +1423,7 @@ export function optimizeLeave(
     candidateStrategyKeys.forEach((strategyKey) => {
       const preferences = buildPreferences(strategyKey, target, allowFullWeekForMax);
       const legacyResult = optimizeParentalLeave(preferences, maximizeInputs);
-      const converted = convertLegacyResult(maximizeMeta, legacyResult, {
-        ...conversionContext,
-        transferredToParent1,
-        transferredToParent2,
-      });
+      const converted = convertLegacyResult(maximizeMeta, legacyResult, conversionContext);
       maximizeCandidates.push(converted);
     });
   });
@@ -1463,11 +1431,7 @@ export function optimizeLeave(
   if (maximizeCandidates.length === 0) {
     const fallbackPreferences = buildPreferences(maximizeMeta.legacyKey, minHouseholdIncome, allowFullWeekForMax);
     const fallbackLegacy = optimizeParentalLeave(fallbackPreferences, maximizeInputs);
-    maximizeCandidates.push(convertLegacyResult(maximizeMeta, fallbackLegacy, {
-      ...conversionContext,
-      transferredToParent1,
-      transferredToParent2,
-    }));
+    maximizeCandidates.push(convertLegacyResult(maximizeMeta, fallbackLegacy, conversionContext));
   }
 
   const pickBetter = (best: OptimizationResult, current: OptimizationResult) => {
@@ -1487,11 +1451,7 @@ export function optimizeLeave(
   const pushTarget = Math.round(combinedNetIncome * 1.5);
   const extraPreferences = buildPreferences('maximize_parental_salary', pushTarget, allowFullWeekForMax);
   const extraLegacy = optimizeParentalLeave(extraPreferences, maximizeInputs);
-  const extraResult = convertLegacyResult(maximizeMeta, extraLegacy, {
-    ...conversionContext,
-    transferredToParent1,
-    transferredToParent2,
-  });
+  const extraResult = convertLegacyResult(maximizeMeta, extraLegacy, conversionContext);
   maximizeResult = pickBetter(maximizeResult, extraResult);
 
   return [saveResult, maximizeResult];
