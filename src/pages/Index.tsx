@@ -33,7 +33,16 @@ const Index = () => {
   const [optimizationResults, setOptimizationResults] = useState<OptimizationResult[] | null>(null);
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
 
-  const parent2Months = totalMonths - parent1Months;
+  type OptimizeOverrides = {
+    totalMonths?: number;
+    parent1Months?: number;
+    householdIncome?: number;
+    daysPerWeek?: number;
+    simultaneousLeave?: boolean;
+    simultaneousMonths?: number;
+  };
+
+  const parent2Months = Math.max(totalMonths - parent1Months, 0);
   const maxHouseholdIncome = parent1Income + parent2Income;
   const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
 
@@ -52,13 +61,24 @@ const Index = () => {
   const calc1 = calculateAvailableIncome(parent1Data);
   const calc2 = calculateAvailableIncome(parent2Data);
 
-  const handleOptimize = (silent = false) => {
+  const handleOptimize = (
+    options: { silent?: boolean; overrides?: OptimizeOverrides } = {}
+  ) => {
+    const { silent = false, overrides = {} } = options;
+    const effectiveTotalMonths = overrides.totalMonths ?? totalMonths;
+    const effectiveParent1Months = overrides.parent1Months ?? parent1Months;
+    const effectiveParent2Months = Math.max(0, effectiveTotalMonths - effectiveParent1Months);
+    const effectiveHouseholdIncome = overrides.householdIncome ?? householdIncome;
+    const effectiveDaysPerWeek = overrides.daysPerWeek ?? daysPerWeek;
+    const effectiveSimultaneousLeave = overrides.simultaneousLeave ?? simultaneousLeave;
+    const effectiveSimultaneousMonths = overrides.simultaneousMonths ?? simultaneousMonths;
+
     if (!municipality) {
       if (!silent) toast.error("Vänligen välj kommun");
       return;
     }
 
-    if (totalMonths <= 0) {
+    if (effectiveTotalMonths <= 0) {
       if (!silent) toast.error("Vänligen ange antal månader lediga");
       return;
     }
@@ -66,12 +86,12 @@ const Index = () => {
     const results = optimizeLeave(
       parent1Data,
       parent2Data,
-      totalMonths,
-      parent1Months,
-      parent2Months,
-      householdIncome,
-      daysPerWeek,
-      simultaneousLeave ? simultaneousMonths : 0
+      effectiveTotalMonths,
+      effectiveParent1Months,
+      effectiveParent2Months,
+      effectiveHouseholdIncome,
+      effectiveDaysPerWeek,
+      effectiveSimultaneousLeave ? effectiveSimultaneousMonths : 0
     );
 
     setOptimizationResults(results);
@@ -88,14 +108,14 @@ const Index = () => {
   const handleHouseholdIncomeChange = (value: number) => {
     setHouseholdIncome(value);
     if (optimizationResults) {
-      setTimeout(() => handleOptimize(true), 100);
+      handleOptimize({ silent: true, overrides: { householdIncome: value } });
     }
   };
 
   const handleDistributionChange = (value: number) => {
     setParent1Months(value);
     if (optimizationResults) {
-      setTimeout(() => handleOptimize(true), 100);
+      handleOptimize({ silent: true, overrides: { parent1Months: value } });
     }
   };
 
@@ -103,6 +123,7 @@ const Index = () => {
     const clampedDays = Math.max(1, Math.min(7, Math.round(value)));
     const newMaxMonths = calculateMaxLeaveMonths(clampedDays);
     const adjustedTotalMonths = Math.min(Math.max(totalMonths, 0), newMaxMonths);
+    const adjustedParent1Months = Math.min(parent1Months, adjustedTotalMonths);
 
     setDaysPerWeek(clampedDays);
 
@@ -115,12 +136,22 @@ const Index = () => {
     }
 
     const maxSimultaneous = Math.floor(adjustedTotalMonths / 2);
+    const adjustedSimultaneousMonths = Math.min(simultaneousMonths, maxSimultaneous);
+
     if (simultaneousMonths > maxSimultaneous) {
       setSimultaneousMonths(maxSimultaneous);
     }
 
     if (optimizationResults) {
-      setTimeout(() => handleOptimize(true), 100);
+      handleOptimize({
+        silent: true,
+        overrides: {
+          daysPerWeek: clampedDays,
+          totalMonths: adjustedTotalMonths,
+          parent1Months: adjustedParent1Months,
+          simultaneousMonths: simultaneousLeave ? adjustedSimultaneousMonths : simultaneousMonths,
+        },
+      });
     }
   };
 
@@ -128,6 +159,8 @@ const Index = () => {
     const safeValue = Math.max(0, value);
     const allowedMax = calculateMaxLeaveMonths(daysPerWeek);
     const constrainedValue = Math.min(safeValue, allowedMax);
+    const adjustedParent1Months = Math.min(parent1Months, constrainedValue);
+    const adjustedSimultaneousMonths = Math.min(simultaneousMonths, Math.floor(constrainedValue / 2));
 
     setTotalMonths(constrainedValue);
     // Adjust parent months to stay within bounds
@@ -138,7 +171,52 @@ const Index = () => {
       setSimultaneousMonths(Math.floor(constrainedValue / 2));
     }
     if (optimizationResults) {
-      setTimeout(() => handleOptimize(true), 100);
+      handleOptimize({
+        silent: true,
+        overrides: {
+          totalMonths: constrainedValue,
+          parent1Months: adjustedParent1Months,
+          simultaneousMonths: simultaneousLeave ? adjustedSimultaneousMonths : simultaneousMonths,
+        },
+      });
+    }
+  };
+
+  const handleSimultaneousLeaveChange = (value: boolean) => {
+    setSimultaneousLeave(value);
+    const maxAllowed = Math.floor(totalMonths / 2);
+    const nextSimultaneousMonths = value ? Math.min(simultaneousMonths, maxAllowed) : 0;
+
+    if (value) {
+      if (simultaneousMonths > maxAllowed) {
+        setSimultaneousMonths(nextSimultaneousMonths);
+      }
+    } else {
+      setSimultaneousMonths(0);
+    }
+
+    if (optimizationResults) {
+      handleOptimize({
+        silent: true,
+        overrides: {
+          simultaneousLeave: value,
+          simultaneousMonths: nextSimultaneousMonths,
+        },
+      });
+    }
+  };
+
+  const handleSimultaneousMonthsChange = (value: number) => {
+    const safeValue = Math.max(0, Math.min(value, Math.floor(totalMonths / 2)));
+    setSimultaneousMonths(safeValue);
+
+    if (optimizationResults) {
+      handleOptimize({
+        silent: true,
+        overrides: {
+          simultaneousMonths: safeValue,
+        },
+      });
     }
   };
 
@@ -238,12 +316,12 @@ const Index = () => {
           maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
           maxLeaveMonths={maxLeaveMonths}
           onTotalMonthsChange={handleTotalMonthsChange}
-          onDistributionChange={setParent1Months}
-          onMinIncomeChange={setHouseholdIncome}
+          onDistributionChange={handleDistributionChange}
+          onMinIncomeChange={handleHouseholdIncomeChange}
           simultaneousLeave={simultaneousLeave}
           simultaneousMonths={simultaneousMonths}
-          onSimultaneousLeaveChange={setSimultaneousLeave}
-          onSimultaneousMonthsChange={setSimultaneousMonths}
+          onSimultaneousLeaveChange={handleSimultaneousLeaveChange}
+          onSimultaneousMonthsChange={handleSimultaneousMonthsChange}
         />
 
         <div className="flex justify-center pt-2 md:pt-6">
