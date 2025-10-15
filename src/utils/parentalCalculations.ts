@@ -569,24 +569,20 @@ function convertLegacyResult(
   };
 
   const preferFullWeek = meta.key === 'maximize-income';
-  const preferredDaysPerWeek = preferFullWeek ? 7 : undefined;
+  const preferredDaysPerWeek = preferFullWeek ? 7 : context.requestedDaysPerWeek;
   const forceFullWeekScheduling = preferFullWeek;
 
   const resolveDaysPerWeek = (...values: unknown[]): number => {
-    for (const value of values) {
-      const candidate = toNumber(value);
-      if (candidate > 0) {
-        if (preferFullWeek) {
-          return Math.max(candidate, 7);
-        }
-        return candidate;
-      }
-    }
+    // Always use the user's requested days per week
     const normalized = Math.max(1, Math.round(context.requestedDaysPerWeek));
-    if (preferFullWeek) {
-      return Math.max(normalized, 7);
+    
+    // For maximize-income, prefer 7 days if user requested 5+ days
+    if (preferFullWeek && normalized >= 5) {
+      return 7;
     }
-    return normalized > 0 ? normalized : 5;
+    
+    // Otherwise, respect the user's choice
+    return normalized;
   };
 
   const dag1 = toNumber(legacyResult.dag1);

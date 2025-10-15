@@ -11,48 +11,53 @@ export function calculateStrategyIncomeSummary(periods: LeavePeriod[]): Strategy
     return { lowestFullMonthIncome: null, hasEligibleFullMonths: false };
   }
 
-  const relevantPeriods = periods.filter(period =>
-    period.benefitLevel !== "none" || period.isInitialTenDayPeriod || period.isPreferenceFiller
-  );
+  // Include all periods for income calculation
+  const relevantPeriods = periods;
 
   if (relevantPeriods.length === 0) {
     return { lowestFullMonthIncome: null, hasEligibleFullMonths: false };
   }
 
-  const monthlyTotals = new Map<string, { totalIncome: number; calendarDays: number; monthLength: number }>();
+  const monthlyTotals = new Map<string, { totalIncome: number; coveredDays: Set<string>; monthLength: number }>();
 
   relevantPeriods.forEach(period => {
     const periodStart = startOfDay(new Date(period.startDate));
     const periodEnd = startOfDay(new Date(period.endDate));
 
-    let segmentStart = new Date(periodStart);
-    while (segmentStart.getTime() <= periodEnd.getTime()) {
-      const monthStart = startOfMonth(segmentStart);
-      const monthEnd = endOfMonth(monthStart);
-      const segmentEnd = periodEnd.getTime() < monthEnd.getTime() ? periodEnd : monthEnd;
-      const segmentDays = Math.max(1, differenceInCalendarDays(segmentEnd, segmentStart) + 1);
+    // Iterate through each day in the period
+    let currentDay = new Date(periodStart);
+    while (currentDay.getTime() <= periodEnd.getTime()) {
+      const monthStart = startOfMonth(currentDay);
       const monthKey = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
+      const monthEnd = endOfMonth(monthStart);
       const monthLength = differenceInCalendarDays(monthEnd, monthStart) + 1;
+      const dayKey = `${currentDay.getFullYear()}-${currentDay.getMonth()}-${currentDay.getDate()}`;
 
       const existing = monthlyTotals.get(monthKey);
       if (existing) {
-        existing.totalIncome += period.dailyIncome * segmentDays;
-        existing.calendarDays += segmentDays;
+        // Only count each day once, even if multiple periods cover it
+        if (!existing.coveredDays.has(dayKey)) {
+          existing.totalIncome += period.dailyIncome;
+          existing.coveredDays.add(dayKey);
+        }
         existing.monthLength = monthLength;
       } else {
+        const coveredDays = new Set<string>();
+        coveredDays.add(dayKey);
         monthlyTotals.set(monthKey, {
-          totalIncome: period.dailyIncome * segmentDays,
-          calendarDays: segmentDays,
+          totalIncome: period.dailyIncome,
+          coveredDays,
           monthLength,
         });
       }
 
-      segmentStart = addDays(segmentEnd, 1);
+      currentDay = addDays(currentDay, 1);
     }
   });
 
+  // Filter for months that are fully covered
   const eligibleEntries = Array.from(monthlyTotals.values()).filter(
-    entry => entry.calendarDays >= entry.monthLength
+    entry => entry.coveredDays.size >= entry.monthLength
   );
 
   if (eligibleEntries.length === 0) {
