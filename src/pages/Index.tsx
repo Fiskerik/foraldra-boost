@@ -157,22 +157,22 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-gradient-hero text-white py-12 px-4 shadow-soft">
-        <div className="container mx-auto max-w-5xl text-center space-y-4">
-          <div className="flex items-center justify-center gap-3">
-            <Baby className="h-12 w-12" />
-            <h1 className="text-4xl md:text-5xl font-bold">
+      <header className="bg-gradient-hero text-white py-6 md:py-12 px-3 md:px-4 shadow-soft">
+        <div className="container mx-auto max-w-5xl text-center space-y-2 md:space-y-4">
+          <div className="flex items-center justify-center gap-2 md:gap-3">
+            <Baby className="h-8 md:h-12 w-8 md:w-12" />
+            <h1 className="text-2xl md:text-5xl font-bold">
               Föräldrapenningskalkylator
             </h1>
           </div>
-          <p className="text-xl opacity-90">
+          <p className="text-sm md:text-xl opacity-90">
             Optimera er föräldraledighet för bästa ekonomi
           </p>
         </div>
       </header>
 
-      <main className="container mx-auto max-w-5xl px-4 py-12 space-y-8 pb-32">
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <main className="container mx-auto max-w-5xl px-3 md:px-4 py-6 md:py-12 space-y-4 md:space-y-8 pb-32">
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
           <ParentIncomeCard
             parentNumber={1}
             income={parent1Income}
@@ -225,19 +225,19 @@ const Index = () => {
           onSimultaneousMonthsChange={setSimultaneousMonths}
         />
 
-        <div className="flex justify-center pt-6">
+        <div className="flex justify-center pt-3 md:pt-6">
           <Button
             onClick={() => handleOptimize()}
             size="lg"
-            className="text-lg px-8 py-6 shadow-soft bg-gradient-hero hover:opacity-90 transition-opacity"
+            className="text-sm md:text-lg px-6 md:px-8 py-4 md:py-6 shadow-soft bg-gradient-hero hover:opacity-90 transition-opacity"
           >
-            <Sparkles className="mr-2 h-5 w-5" />
+            <Sparkles className="mr-2 h-4 md:h-5 w-4 md:w-5" />
             Optimera
           </Button>
         </div>
 
         {optimizationResults && (
-          <div id="results" className="pt-12">
+          <div id="results" className="pt-6 md:pt-12">
             <OptimizationResults
               results={optimizationResults}
               minHouseholdIncome={householdIncome}
@@ -267,8 +267,8 @@ const Index = () => {
         )}
       </main>
 
-      <footer className="bg-muted py-8 mt-20">
-        <div className="container mx-auto max-w-5xl px-4 text-center text-sm text-muted-foreground">
+      <footer className="bg-muted py-4 md:py-8 mt-10 md:mt-20">
+        <div className="container mx-auto max-w-5xl px-3 md:px-4 text-center text-xs md:text-sm text-muted-foreground">
           <p>
             Kalkylatorn ger en uppskattning baserad på gällande regler för föräldrapenning.
             Kontakta Försäkringskassan för exakta beräkningar.

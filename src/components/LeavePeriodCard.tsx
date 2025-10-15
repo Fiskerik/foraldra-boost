@@ -104,13 +104,13 @@ export function LeavePeriodCard({
 
   return (
     <Card className="shadow-card">
-      <CardHeader>
-        <CardTitle className="text-2xl">Ledighetsperiod</CardTitle>
+      <CardHeader className="p-3 md:p-6">
+        <CardTitle className="text-lg md:text-2xl">Ledighetsperiod</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-8">
-        <div className="space-y-3">
-          <Label htmlFor="total-months" className="text-base font-medium flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
+      <CardContent className="space-y-4 md:space-y-8 p-3 md:p-6">
+        <div className="space-y-2 md:space-y-3">
+          <Label htmlFor="total-months" className="text-xs md:text-base font-medium flex items-center gap-2">
+            <Calendar className="h-3 md:h-4 w-3 md:w-4" />
             Hur länge vill ni vara lediga?
           </Label>
           <Input
@@ -121,29 +121,29 @@ export function LeavePeriodCard({
             value={monthsInputValue}
             onChange={(e) => handleMonthsInputChange(e.target.value)}
             onBlur={handleMonthsInputBlur}
-            className="text-lg font-semibold"
+            className="text-sm md:text-lg font-semibold"
           />
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs md:text-sm text-muted-foreground">
             Ange antal månader (upp till {formattedMaxLeaveMonths} månader baserat på {TOTAL_BENEFIT_DAYS} dagar)
           </p>
         </div>
 
         {totalMonths > 0 && (
           <>
-            <div className="space-y-4">
-              <Label className="text-base font-medium flex items-center gap-2">
-                <Users className="h-4 w-4" />
+            <div className="space-y-3 md:space-y-4">
+              <Label className="text-xs md:text-base font-medium flex items-center gap-2">
+                <Users className="h-3 md:h-4 w-3 md:w-4" />
                 Hur vill ni dela upp ledigheten?
               </Label>
-              <div className="space-y-3">
-                <div className="relative h-12 rounded-full overflow-hidden bg-parent2">
+              <div className="space-y-2 md:space-y-3">
+                <div className="relative h-8 md:h-12 rounded-full overflow-hidden bg-parent2">
                   <div
                     className="absolute top-0 left-0 h-full bg-parent1 transition-all duration-300"
                     style={{
                       width: `${(parent1Months / totalMonths) * 100}%`,
                     }}
                   />
-                  <div className="absolute inset-0 flex items-center justify-between px-6 text-sm font-bold text-white">
+                  <div className="absolute inset-0 flex items-center justify-between px-3 md:px-6 text-xs md:text-sm font-bold text-white">
                     <span className="z-10">Förälder 1</span>
                     <span className="z-10">Förälder 2</span>
                   </div>
@@ -156,7 +156,7 @@ export function LeavePeriodCard({
                   onValueChange={(values) => onDistributionChange(values[0])}
                   className="[&_[role=slider]]:bg-primary [&_[role=slider]]:border-primary"
                 />
-                <div className="flex justify-between text-sm font-medium">
+                <div className="flex justify-between text-xs md:text-sm font-medium">
                   <span className="text-parent1">
                     {parent1Months.toFixed(1)} månader
                   </span>
@@ -167,10 +167,10 @@ export function LeavePeriodCard({
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-2 text-base">
-                  <Users className="h-4 w-4" />
+                <Label className="flex items-center gap-2 text-xs md:text-base">
+                  <Users className="h-3 md:h-4 w-3 md:w-4" />
                   Vill ni vara hemma samtidigt?
                 </Label>
                 <Switch
@@ -180,8 +180,8 @@ export function LeavePeriodCard({
               </div>
               
               {simultaneousLeave && (
-                <div className="space-y-2 pl-6 animate-fade-in">
-                  <Label>Antal månader samtidigt</Label>
+                <div className="space-y-2 pl-4 md:pl-6 animate-fade-in">
+                  <Label className="text-xs md:text-sm">Antal månader samtidigt</Label>
                   <Input
                     type="number"
                     min={0}
@@ -196,9 +196,9 @@ export function LeavePeriodCard({
               )}
             </div>
 
-            <div className="space-y-3">
-              <Label htmlFor="min-income" className="text-base font-medium flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
+            <div className="space-y-2 md:space-y-3">
+              <Label htmlFor="min-income" className="text-xs md:text-base font-medium flex items-center gap-2">
+                <DollarSign className="h-3 md:h-4 w-3 md:w-4" />
                 Hushållets minimum inkomst per månad (netto)
               </Label>
               <div className="space-y-2">
@@ -212,7 +212,7 @@ export function LeavePeriodCard({
                   className="slider-single"
                 />
                 <div className="text-right">
-                  <span className="text-xl font-bold text-accent">
+                  <span className="text-base md:text-xl font-bold text-accent">
                     {new Intl.NumberFormat('sv-SE', {
                       style: 'currency',
                       currency: 'SEK',

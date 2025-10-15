@@ -41,14 +41,14 @@ export function MunicipalitySelect({
 
   return (
     <Card className="shadow-card">
-      <CardHeader className={headerClass}>
-        <CardTitle className={`text-${parentClass}`}>
+      <CardHeader className={`${headerClass} p-3 md:p-6`}>
+        <CardTitle className={`text-${parentClass} text-base md:text-lg`}>
           {titleText}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-3">
-          <Label htmlFor={`municipality-${parentNumber}`} className="text-base font-medium">
+      <CardContent className="space-y-3 md:space-y-4 p-3 md:p-6">
+        <div className="space-y-2 md:space-y-3">
+          <Label htmlFor={`municipality-${parentNumber}`} className="text-xs md:text-base font-medium">
             Välj kommun
           </Label>
           <Popover open={open} onOpenChange={setOpen}>
@@ -106,10 +106,10 @@ export function MunicipalitySelect({
         </div>
 
         {currentMunicipality && (
-          <div className="p-4 bg-muted rounded-lg">
+          <div className="p-2 md:p-4 bg-muted rounded-lg">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Skattesats:</span>
-              <span className={`text-lg font-bold text-${parentClass}`}>
+              <span className="text-xs md:text-sm font-medium">Skattesats:</span>
+              <span className={`text-base md:text-lg font-bold text-${parentClass}`}>
                 {currentMunicipality.taxRate}%
               </span>
             </div>
