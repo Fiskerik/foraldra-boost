@@ -14,13 +14,17 @@ export function AvailableIncomeDisplay({
   parent1AvailableIncome,
   parent2AvailableIncome,
 }: AvailableIncomeDisplayProps) {
+  // Check if parents have collective agreement (föräldralön) based on if available income > benefit income
+  const parent1HasParentalSalary = parent1AvailableIncome > (parent1NetIncome * 0.8);
+  const parent2HasParentalSalary = parent2AvailableIncome > (parent2NetIncome * 0.8);
+  
   return (
     <Card className="shadow-card bg-gradient-hero text-primary-foreground">
       <CardHeader className="p-2 md:p-6">
         <CardTitle className="text-sm md:text-2xl">Disponibel inkomst</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 md:space-y-6 p-2 md:p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
+        <div className="grid grid-cols-2 gap-3 md:gap-6">
           <div className="space-y-2 md:space-y-3">
             <h3 className="text-xs md:text-lg font-semibold opacity-90">Förälder 1</h3>
             <div className="space-y-1 md:space-y-2 bg-white/10 rounded-lg p-2 md:p-4">
@@ -34,6 +38,11 @@ export function AvailableIncomeDisplay({
                   {formatCurrency(parent1AvailableIncome)}
                 </span>
               </div>
+              {parent1HasParentalSalary && (
+                <div className="text-[8px] md:text-xs opacity-70 italic mt-0.5 md:mt-1">
+                  * Estimerad föräldralön inkluderat
+                </div>
+              )}
             </div>
           </div>
 
@@ -50,6 +59,11 @@ export function AvailableIncomeDisplay({
                   {formatCurrency(parent2AvailableIncome)}
                 </span>
               </div>
+              {parent2HasParentalSalary && (
+                <div className="text-[8px] md:text-xs opacity-70 italic mt-0.5 md:mt-1">
+                  * Estimerad föräldralön inkluderat
+                </div>
+              )}
             </div>
           </div>
         </div>

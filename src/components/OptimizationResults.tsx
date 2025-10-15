@@ -370,7 +370,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             <Card
               key={index}
               className={`shadow-soft transition-all ${
-                selectedIndex === index
+                selectedIndex === index && isExpanded
                   ? 'ring-2 md:ring-4 ring-primary shadow-xl'
                   : ''
             }`}
@@ -521,6 +521,10 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                       group.parent === 'both' && group.periods.every(segment => segment.isInitialTenDayPeriod);
                     const totalDaysLabel = isInitialTenDayGroup ? '2 x 10 dagar' : `${totalDaysUsed} dagar`;
                     const periodRangeLabel = formatPeriod({ ...firstPeriod, endDate: lastPeriod.endDate });
+                    
+                    // Check if any period in this group has transferred days
+                    const transferredDaysPeriod = group.periods.find(p => p.transferredDays && p.transferredDays > 0);
+                    const hasTransferredDays = !!transferredDaysPeriod;
 
                     return (
                       <div
@@ -568,6 +572,14 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                           <div className="text-muted-foreground">
                             Uttag: {daysPerWeekLabel}
                           </div>
+                          {hasTransferredDays && transferredDaysPeriod && (
+                            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/30 rounded border border-blue-200 dark:border-blue-800">
+                              <div className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                📅 Överförde {transferredDaysPeriod.transferredDays} dagar från{' '}
+                                {transferredDaysPeriod.transferredFromParent === 'parent1' ? 'Förälder 1' : 'Förälder 2'}
+                              </div>
+                            </div>
+                          )}
 
                           {isExpanded && hasMultipleMonths && (
                             <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
@@ -704,8 +716,8 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                               </div>
                             </div>
                           )}
-                          <div className="font-semibold text-sm mt-2 pt-2 border-t border-border">
-                            Periodinkomst: {formatCurrency(periodTotalIncome)}
+                           <div className="font-semibold text-sm mt-2 pt-2 border-t border-border">
+                            Periodinkomst: {formatCurrency(totalHouseholdIncome)}
                           </div>
                         </div>
                       </div>
