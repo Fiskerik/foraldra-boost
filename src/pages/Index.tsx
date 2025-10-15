@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ParentIncomeCard } from "@/components/ParentIncomeCard";
 import { MunicipalitySelect } from "@/components/MunicipalitySelect";
@@ -154,6 +154,27 @@ const Index = () => {
     optimizationResults && strategyIncomeSummaries[selectedStrategyIndex]
       ? strategyIncomeSummaries[selectedStrategyIndex]
       : undefined;
+
+  useEffect(() => {
+    if (!selectedIncomeSummary?.hasEligibleFullMonths) {
+      return;
+    }
+
+    const minimumIncome = selectedIncomeSummary.lowestFullMonthIncome;
+
+    if (minimumIncome === null || !Number.isFinite(minimumIncome)) {
+      return;
+    }
+
+    const roundedMinimum = Math.round(minimumIncome);
+
+    setHouseholdIncome(prevIncome => {
+      if (prevIncome >= roundedMinimum) {
+        return prevIncome;
+      }
+      return roundedMinimum;
+    });
+  }, [selectedIncomeSummary]);
 
   return (
     <div className="min-h-screen bg-background">
