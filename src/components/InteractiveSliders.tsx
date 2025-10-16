@@ -70,6 +70,46 @@ export function InteractiveSliders({
     ? Math.max(0, Math.min(100, (incomeBreakPoint / Math.max(maxHouseholdIncome, 1)) * 100))
     : null;
 
+  // Calculate recommended days per week if income requirement is below lowest month
+  const recommendedDaysPerWeek = useMemo(() => {
+    if (!isBelowMinimum || !hasEligibleMonths) return null;
+    
+    // Find the period with the lowest income (typically Parent 2's period)
+    let lowestIncomePeriod = periods[0];
+    let lowestMonthlyIncome = Infinity;
+    
+    for (const period of periods) {
+      const monthlyIncome = (period.dailyIncome * 30);
+      if (monthlyIncome < lowestMonthlyIncome && monthlyIncome > 0) {
+        lowestMonthlyIncome = monthlyIncome;
+        lowestIncomePeriod = period;
+      }
+    }
+    
+    if (!lowestIncomePeriod || !lowestIncomePeriod.otherParentMonthlyIncome) return null;
+    
+    // Calculate the gap between desired income and other parent's working income
+    const incomeGap = householdIncome - lowestIncomePeriod.otherParentMonthlyIncome;
+    
+    if (incomeGap <= 0) return null; // No gap means current setup is fine
+    
+    // Estimate daily benefit (simplified - using 1250 * 0.698 as average)
+    const estimatedDailyBenefit = 1250 * 0.698;
+    
+    // Calculate how many days per month we need
+    const daysPerMonthNeeded = incomeGap / estimatedDailyBenefit;
+    
+    // Convert to days per week (4.33 weeks per month)
+    const daysPerWeekNeeded = daysPerMonthNeeded / 4.33;
+    
+    // Round up to nearest whole day
+    return Math.ceil(Math.max(1, Math.min(7, daysPerWeekNeeded)));
+  }, [isBelowMinimum, hasEligibleMonths, householdIncome, periods]);
+
+  const recommendedDaysPercent = recommendedDaysPerWeek !== null
+    ? ((recommendedDaysPerWeek - 1) / 6) * 100
+    : null;
+
   const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
   const monthsSliderMax = Math.max(maxLeaveMonths, totalMonths, 1);
 
@@ -106,7 +146,7 @@ export function InteractiveSliders({
 
           {/* Expandable Content */}
           {isExpanded && (
-            <div className="p-3 space-y-3">
+            <div className="p-3 space-y-3 max-h-[85vh] md:max-h-none overflow-y-auto">
             {/* Mobile KPI Row */}
             <div className="grid grid-cols-3 gap-2 md:hidden">
               <div className="bg-primary/10 border border-primary/30 rounded p-2">
@@ -216,12 +256,12 @@ export function InteractiveSliders({
                   {daysPerWeek} {daysPerWeek === 1 ? 'dag' : 'dagar'}
                 </span>
               </div>
-              {isBelowMinimum && (
+              {isBelowMinimum && recommendedDaysPerWeek && (
                 <div className="text-[10px] text-muted-foreground">
-                  Öka uttag per vecka för att nå inkomstmålet snabbare
+                  Rekommenderat: {recommendedDaysPerWeek} dagar/vecka för att nå {formatCurrency(householdIncome)}
                 </div>
               )}
-              <div className="relative">
+              <div className="relative pt-1 pb-8">
                 <Slider
                   value={[daysPerWeek]}
                   onValueChange={(values) => onDaysPerWeekChange(values[0])}
@@ -230,22 +270,29 @@ export function InteractiveSliders({
                   step={1}
                   className="py-2"
                 />
+                <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
+                {recommendedDaysPercent !== null && recommendedDaysPerWeek !== null && isBelowMinimum && (
+                  <div
+                    className="pointer-events-none absolute left-0 right-0 bottom-4"
+                    title={`Rekommenderat: ${recommendedDaysPerWeek} dagar/vecka`}
+                  >
+                    <div
+                      className="absolute flex flex-col items-center"
+                      style={{
+                        left: `${recommendedDaysPercent}%`,
+                        transform: "translateX(-50%)",
+                      }}
+                    >
+                      <div className="h-3 w-px bg-green-500" />
+                      <div className="mt-1 rounded bg-green-100/90 px-1 text-[9px] font-semibold text-green-700 shadow-sm whitespace-nowrap">
+                        {recommendedDaysPerWeek}d
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Recalculate button - only show when there are unapplied changes */}
-            {hasUnappliedChanges && (
-              <div className="pt-2 animate-fade-in">
-                <Button 
-                  onClick={onRecalculate} 
-                  className="w-full bg-gradient-hero hover:opacity-90 transition-opacity"
-                  size="sm"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Räkna om med nya förutsättningar
-                </Button>
-              </div>
-            )}
           </div>
           )}
         </Card>
