@@ -72,14 +72,19 @@ export function InteractiveSliders({
 
   // Calculate recommended days per week if income requirement is below lowest month
   const recommendedDaysPerWeek = useMemo(() => {
-    if (!isBelowMinimum || !hasEligibleMonths) return null;
+    if (!isBelowMinimum || !hasEligibleMonths || computedSummary.lowestFullMonthIncome === null) return null;
     
-    // Find the period with the lowest income (typically Parent 2's period)
+    // Find the period that corresponds to the lowest full month income
     let lowestIncomePeriod = periods[0];
     let lowestMonthlyIncome = Infinity;
     
     for (const period of periods) {
-      const monthlyIncome = (period.dailyIncome * 30);
+      const monthlyIncome = period.dailyIncome * 30;
+      if (Math.abs(monthlyIncome - computedSummary.lowestFullMonthIncome) < 100) {
+        lowestIncomePeriod = period;
+        lowestMonthlyIncome = monthlyIncome;
+        break;
+      }
       if (monthlyIncome < lowestMonthlyIncome && monthlyIncome > 0) {
         lowestMonthlyIncome = monthlyIncome;
         lowestIncomePeriod = period;
@@ -93,18 +98,18 @@ export function InteractiveSliders({
     
     if (incomeGap <= 0) return null; // No gap means current setup is fine
     
-    // Estimate daily benefit (simplified - using 1250 * 0.698 as average)
-    const estimatedDailyBenefit = 1250 * 0.698;
+    // Use actual daily benefit from the period (this is the actual calculated benefit)
+    const dailyBenefit = lowestIncomePeriod.dailyBenefit || (1250 * 0.698);
     
     // Calculate how many days per month we need
-    const daysPerMonthNeeded = incomeGap / estimatedDailyBenefit;
+    const daysPerMonthNeeded = incomeGap / dailyBenefit;
     
     // Convert to days per week (4.33 weeks per month)
     const daysPerWeekNeeded = daysPerMonthNeeded / 4.33;
     
     // Round up to nearest whole day
     return Math.ceil(Math.max(1, Math.min(7, daysPerWeekNeeded)));
-  }, [isBelowMinimum, hasEligibleMonths, householdIncome, periods]);
+  }, [isBelowMinimum, hasEligibleMonths, householdIncome, periods, computedSummary.lowestFullMonthIncome]);
 
   const recommendedDaysPercent = recommendedDaysPerWeek !== null
     ? ((recommendedDaysPerWeek - 1) / 6) * 100
@@ -146,7 +151,7 @@ export function InteractiveSliders({
 
           {/* Expandable Content */}
           {isExpanded && (
-            <div className="p-3 space-y-3 max-h-[85vh] md:max-h-none overflow-y-auto">
+            <div className="p-3 space-y-3 max-h-[70vh] overflow-y-auto">
             {/* Mobile KPI Row */}
             <div className="grid grid-cols-3 gap-2 md:hidden">
               <div className="bg-primary/10 border border-primary/30 rounded p-2">
@@ -174,12 +179,6 @@ export function InteractiveSliders({
                   {formatCurrency(householdIncome)}
                 </span>
               </div>
-              {isBelowMinimum && (
-                <div className="flex items-center gap-1 text-[10px] text-destructive">
-                  <AlertTriangle className="h-3 w-3" />
-                  <span>Lägsta månaden: {formatCurrency(lowestMonthlyIncome)}. Sänk kravet eller öka uttag/vecka.</span>
-                </div>
-              )}
               {hasUnappliedChanges && (
                 <div className="flex items-center gap-1 text-[10px] text-destructive font-medium animate-fade-in">
                   <AlertTriangle className="h-3 w-3" />
@@ -198,20 +197,14 @@ export function InteractiveSliders({
                 <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
                 {incomeBreakPointPercent !== null && incomeBreakPoint !== null && (
                   <div
-                    className="pointer-events-none absolute left-0 right-0 bottom-4"
-                    title={`Lägsta månad: ${formatCurrency(incomeBreakPoint)}`}
+                    className="absolute left-0 right-0 bottom-4 cursor-pointer transition-transform hover:scale-110"
+                    style={{ left: `${incomeBreakPointPercent}%`, transform: "translateX(-50%)" }}
+                    onClick={() => onHouseholdIncomeChange(Math.round(incomeBreakPoint))}
+                    title={`Klicka för att sänka till ${formatCurrency(incomeBreakPoint)}`}
                   >
-                    <div
-                      className="absolute flex flex-col items-center"
-                      style={{
-                        left: `${incomeBreakPointPercent}%`,
-                        transform: "translateX(-50%)",
-                      }}
-                    >
-                      <div className="h-3 w-px bg-amber-500" />
-                      <div className="mt-1 rounded bg-amber-100/90 px-1 text-[9px] font-semibold text-amber-700 shadow-sm whitespace-nowrap">
-                        {formatCurrency(incomeBreakPoint)}
-                      </div>
+                    <div className="h-3 w-px bg-amber-500" />
+                    <div className="mt-1 rounded bg-amber-100/90 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 shadow-sm whitespace-nowrap">
+                      ▼ {formatCurrency(incomeBreakPoint)}
                     </div>
                   </div>
                 )}
@@ -228,11 +221,6 @@ export function InteractiveSliders({
                   {formattedTotalMonths} {totalMonths === 1 ? 'månad' : 'månader'}
                 </span>
               </div>
-              {isBelowMinimum && (
-                <div className="text-[10px] text-muted-foreground">
-                  Minska antalet månader lediga för att öka inkomsten per månad
-                </div>
-              )}
               <Slider
                 value={[totalMonths]}
                 onValueChange={(values) => onTotalMonthsChange(values[0])}
@@ -256,11 +244,6 @@ export function InteractiveSliders({
                   {daysPerWeek} {daysPerWeek === 1 ? 'dag' : 'dagar'}
                 </span>
               </div>
-              {isBelowMinimum && recommendedDaysPerWeek && (
-                <div className="text-[10px] text-muted-foreground">
-                  Rekommenderat: {recommendedDaysPerWeek} dagar/vecka för att nå {formatCurrency(householdIncome)}
-                </div>
-              )}
               <div className="relative pt-1 pb-8">
                 <Slider
                   value={[daysPerWeek]}
@@ -273,25 +256,29 @@ export function InteractiveSliders({
                 <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
                 {recommendedDaysPercent !== null && recommendedDaysPerWeek !== null && isBelowMinimum && (
                   <div
-                    className="pointer-events-none absolute left-0 right-0 bottom-4"
-                    title={`Rekommenderat: ${recommendedDaysPerWeek} dagar/vecka`}
+                    className="absolute left-0 right-0 bottom-4 cursor-pointer transition-transform hover:scale-110"
+                    style={{ left: `${recommendedDaysPercent}%`, transform: "translateX(-50%)" }}
+                    onClick={() => onDaysPerWeekChange(recommendedDaysPerWeek)}
+                    title={`Klicka för att använda ${recommendedDaysPerWeek} dagar/vecka`}
                   >
-                    <div
-                      className="absolute flex flex-col items-center"
-                      style={{
-                        left: `${recommendedDaysPercent}%`,
-                        transform: "translateX(-50%)",
-                      }}
-                    >
-                      <div className="h-3 w-px bg-green-500" />
-                      <div className="mt-1 rounded bg-green-100/90 px-1 text-[9px] font-semibold text-green-700 shadow-sm whitespace-nowrap">
-                        {recommendedDaysPerWeek}d
-                      </div>
+                    <div className="h-3 w-px bg-green-500" />
+                    <div className="mt-1 rounded bg-green-100/90 px-1.5 py-0.5 text-[9px] font-semibold text-green-700 shadow-sm whitespace-nowrap">
+                      ▼ {recommendedDaysPerWeek}d
                     </div>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Warning message at the bottom */}
+            {isBelowMinimum && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3 animate-fade-in">
+                <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                <p className="text-xs text-amber-800">
+                  Målet går inte ihop • Tryck på en av de gröna pilarna <span className="text-green-600 font-bold">▼</span> för att justera din plan
+                </p>
+              </div>
+            )}
 
           </div>
           )}
