@@ -16,16 +16,6 @@ import {
 import { Baby, Sparkles } from "lucide-react";
 import { calculateStrategyIncomeSummary, StrategyIncomeSummary } from "@/utils/incomeSummary";
 import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 const Index = () => {
   const [parent1Income, setParent1Income] = useState(30000);
@@ -43,8 +33,7 @@ const Index = () => {
   const [optimizationResults, setOptimizationResults] = useState<OptimizationResult[] | null>(null);
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
   const [userHasManuallySetIncome, setUserHasManuallySetIncome] = useState(false);
-  const [showRecalculateDialog, setShowRecalculateDialog] = useState(false);
-  const [pendingIncomeChange, setPendingIncomeChange] = useState<number | null>(null);
+  const [hasUnappliedIncomeChange, setHasUnappliedIncomeChange] = useState(false);
 
   type OptimizeOverrides = {
     totalMonths?: number;
@@ -122,24 +111,15 @@ const Index = () => {
     setHouseholdIncome(value);
     setUserHasManuallySetIncome(true);
     
-    // Show dialog asking if user wants to recalculate
+    // Mark that there's an unapplied change
     if (optimizationResults) {
-      setPendingIncomeChange(value);
-      setShowRecalculateDialog(true);
+      setHasUnappliedIncomeChange(true);
     }
   };
 
-  const handleRecalculateConfirm = () => {
-    if (pendingIncomeChange !== null) {
-      handleOptimize({ silent: true, overrides: { householdIncome: pendingIncomeChange } });
-    }
-    setShowRecalculateDialog(false);
-    setPendingIncomeChange(null);
-  };
-
-  const handleRecalculateCancel = () => {
-    setShowRecalculateDialog(false);
-    setPendingIncomeChange(null);
+  const handleRecalculate = () => {
+    handleOptimize({ silent: true, overrides: { householdIncome } });
+    setHasUnappliedIncomeChange(false);
   };
 
   const handleDistributionChange = (value: number) => {
@@ -157,6 +137,7 @@ const Index = () => {
 
     setDaysPerWeek(clampedDays);
     setUserHasManuallySetIncome(false); // Reset flag when planning parameters change
+    setHasUnappliedIncomeChange(false); // Clear unapplied changes when recalculating
 
     if (totalMonths !== adjustedTotalMonths) {
       setTotalMonths(adjustedTotalMonths);
@@ -195,6 +176,7 @@ const Index = () => {
 
     setTotalMonths(constrainedValue);
     setUserHasManuallySetIncome(false); // Reset flag when planning parameters change
+    setHasUnappliedIncomeChange(false); // Clear unapplied changes when recalculating
     // Adjust parent months to stay within bounds
     if (parent1Months > constrainedValue) {
       setParent1Months(constrainedValue);
@@ -396,9 +378,11 @@ const Index = () => {
             daysUsed={optimizationResults[selectedStrategyIndex]?.daysUsed}
             daysSaved={optimizationResults[selectedStrategyIndex]?.daysSaved}
             strategyIncomeSummary={selectedIncomeSummary}
+            hasUnappliedChanges={hasUnappliedIncomeChange}
             onHouseholdIncomeChange={handleHouseholdIncomeChange}
             onDaysPerWeekChange={handleDaysPerWeekChange}
             onTotalMonthsChange={handleTotalMonthsChange}
+            onRecalculate={handleRecalculate}
           />
         )}
       </main>
@@ -411,25 +395,6 @@ const Index = () => {
           </p>
         </div>
       </footer>
-
-      <AlertDialog open={showRecalculateDialog} onOpenChange={setShowRecalculateDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Räkna om strategin?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Förutsättningarna har ändrats. Vill du räkna om planeringen med den nya miniminivån?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleRecalculateCancel}>
-              Nej, behåll
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleRecalculateConfirm}>
-              Ja, räkna om
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };

@@ -18,9 +18,11 @@ interface InteractiveSlidersProps {
   daysUsed?: number;
   daysSaved?: number;
   strategyIncomeSummary?: StrategyIncomeSummary;
+  hasUnappliedChanges: boolean;
   onHouseholdIncomeChange: (value: number) => void;
   onDaysPerWeekChange: (days: number) => void;
   onTotalMonthsChange: (months: number) => void;
+  onRecalculate: () => void;
 }
 
 export function InteractiveSliders({
@@ -34,9 +36,11 @@ export function InteractiveSliders({
   daysUsed,
   daysSaved,
   strategyIncomeSummary,
+  hasUnappliedChanges,
   onHouseholdIncomeChange,
   onDaysPerWeekChange,
   onTotalMonthsChange,
+  onRecalculate,
 }: InteractiveSlidersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -102,7 +106,7 @@ export function InteractiveSliders({
 
           {/* Expandable Content */}
           {isExpanded && (
-            <div className="p-3 space-y-3 max-h-[40vh] overflow-y-auto">
+            <div className="p-3 space-y-3">
             {/* Mobile KPI Row */}
             <div className="grid grid-cols-3 gap-2 md:hidden">
               <div className="bg-primary/10 border border-primary/30 rounded p-2">
@@ -134,6 +138,12 @@ export function InteractiveSliders({
                 <div className="flex items-center gap-1 text-[10px] text-destructive">
                   <AlertTriangle className="h-3 w-3" />
                   <span>Lägsta månaden: {formatCurrency(lowestMonthlyIncome)}. Sänk kravet eller öka uttag/vecka.</span>
+                </div>
+              )}
+              {hasUnappliedChanges && (
+                <div className="flex items-center gap-1 text-[10px] text-destructive font-medium animate-fade-in">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span>Förutsättningarna har ändrats</span>
                 </div>
               )}
               <div className="relative pt-1 pb-8">
@@ -222,6 +232,20 @@ export function InteractiveSliders({
                 />
               </div>
             </div>
+
+            {/* Recalculate button - only show when there are unapplied changes */}
+            {hasUnappliedChanges && (
+              <div className="pt-2 animate-fade-in">
+                <Button 
+                  onClick={onRecalculate} 
+                  className="w-full bg-gradient-hero hover:opacity-90 transition-opacity"
+                  size="sm"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Räkna om med nya förutsättningar
+                </Button>
+              </div>
+            )}
           </div>
           )}
         </Card>
