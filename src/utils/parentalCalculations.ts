@@ -29,6 +29,10 @@ export interface OptimizationResult {
   daysUsed: number;
   daysSaved: number;
   averageMonthlyIncome: number;
+  highBenefitDaysUsed?: number;
+  lowBenefitDaysUsed?: number;
+  highBenefitDaysSaved?: number;
+  lowBenefitDaysSaved?: number;
 }
 
 export interface LeavePeriod {
@@ -1232,6 +1236,22 @@ function convertLegacyResult(
   }
 
   const totalIncome = mergedPeriods.reduce((sum, period) => sum + period.dailyIncome * (period.calendarDays ?? period.daysCount), 0);
+  
+  // Calculate days used by benefit level
+  const highBenefitDaysUsed = mergedPeriods.reduce((sum, period) => {
+    if (period.benefitLevel === 'high' || period.benefitLevel === 'parental-salary') {
+      return sum + (period.benefitDaysUsed ?? period.daysCount);
+    }
+    return sum;
+  }, 0);
+  
+  const lowBenefitDaysUsed = mergedPeriods.reduce((sum, period) => {
+    if (period.benefitLevel === 'low') {
+      return sum + (period.benefitDaysUsed ?? period.daysCount);
+    }
+    return sum;
+  }, 0);
+  
   const benefitDaysUsed = mergedPeriods.reduce((sum, period) => {
     if (period.benefitLevel === 'none') {
       return sum;
@@ -1240,6 +1260,11 @@ function convertLegacyResult(
   }, 0);
   clampedDaysUsed = Math.min(TOTAL_BENEFIT_DAYS, Math.max(0, Math.round(benefitDaysUsed)));
   daysSaved = Math.max(0, TOTAL_BENEFIT_DAYS - clampedDaysUsed);
+  
+  const clampedHighBenefitDaysUsed = Math.min(HIGH_BENEFIT_DAYS, Math.max(0, Math.round(highBenefitDaysUsed)));
+  const clampedLowBenefitDaysUsed = Math.min(LOW_BENEFIT_DAYS, Math.max(0, Math.round(lowBenefitDaysUsed)));
+  const highBenefitDaysSaved = Math.max(0, HIGH_BENEFIT_DAYS - clampedHighBenefitDaysUsed);
+  const lowBenefitDaysSaved = Math.max(0, LOW_BENEFIT_DAYS - clampedLowBenefitDaysUsed);
 
   const coverageRanges = mergedPeriods
     .map(period => ({
@@ -1294,6 +1319,10 @@ function convertLegacyResult(
     daysUsed: clampedDaysUsed,
     daysSaved,
     averageMonthlyIncome,
+    highBenefitDaysUsed: clampedHighBenefitDaysUsed,
+    lowBenefitDaysUsed: clampedLowBenefitDaysUsed,
+    highBenefitDaysSaved,
+    lowBenefitDaysSaved,
   };
 }
 

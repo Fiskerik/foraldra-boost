@@ -419,6 +419,12 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                       Dagar använda
                     </div>
                     <div className="text-xs md:text-xl font-bold">{result.daysUsed}</div>
+                    {result.highBenefitDaysUsed !== undefined && result.lowBenefitDaysUsed !== undefined && (
+                      <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-0">
+                        <div>Vanliga: {result.highBenefitDaysUsed}</div>
+                        <div>Lägstanivå: {result.lowBenefitDaysUsed}</div>
+                      </div>
+                    )}
                   </div>
                   <div className="p-1.5 md:p-4 bg-accent/10 rounded-lg border border-accent/20">
                     <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 flex items-center gap-0.5 md:gap-1">
@@ -426,6 +432,12 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                       Dagar sparade
                     </div>
                     <div className="text-xs md:text-xl font-bold text-accent">{result.daysSaved}</div>
+                    {result.highBenefitDaysSaved !== undefined && result.lowBenefitDaysSaved !== undefined && (
+                      <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-0">
+                        <div>Vanliga: {result.highBenefitDaysSaved}</div>
+                        <div>Lägstanivå: {result.lowBenefitDaysSaved}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardHeader>
