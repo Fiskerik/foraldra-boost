@@ -16,6 +16,16 @@ import {
 import { Baby, Sparkles } from "lucide-react";
 import { calculateStrategyIncomeSummary, StrategyIncomeSummary } from "@/utils/incomeSummary";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Index = () => {
   const [parent1Income, setParent1Income] = useState(30000);
@@ -33,6 +43,8 @@ const Index = () => {
   const [optimizationResults, setOptimizationResults] = useState<OptimizationResult[] | null>(null);
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
   const [userHasManuallySetIncome, setUserHasManuallySetIncome] = useState(false);
+  const [showRecalculateDialog, setShowRecalculateDialog] = useState(false);
+  const [pendingIncomeChange, setPendingIncomeChange] = useState<number | null>(null);
 
   type OptimizeOverrides = {
     totalMonths?: number;
@@ -109,7 +121,25 @@ const Index = () => {
   const handleHouseholdIncomeChange = (value: number) => {
     setHouseholdIncome(value);
     setUserHasManuallySetIncome(true);
-    // Don't recalculate strategy - household income is just a visualization threshold
+    
+    // Show dialog asking if user wants to recalculate
+    if (optimizationResults) {
+      setPendingIncomeChange(value);
+      setShowRecalculateDialog(true);
+    }
+  };
+
+  const handleRecalculateConfirm = () => {
+    if (pendingIncomeChange !== null) {
+      handleOptimize({ silent: true, overrides: { householdIncome: pendingIncomeChange } });
+    }
+    setShowRecalculateDialog(false);
+    setPendingIncomeChange(null);
+  };
+
+  const handleRecalculateCancel = () => {
+    setShowRecalculateDialog(false);
+    setPendingIncomeChange(null);
   };
 
   const handleDistributionChange = (value: number) => {
@@ -381,6 +411,25 @@ const Index = () => {
           </p>
         </div>
       </footer>
+
+      <AlertDialog open={showRecalculateDialog} onOpenChange={setShowRecalculateDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Räkna om strategin?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Förutsättningarna har ändrats. Vill du räkna om planeringen med den nya miniminivån?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleRecalculateCancel}>
+              Nej, behåll
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleRecalculateConfirm}>
+              Ja, räkna om
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
