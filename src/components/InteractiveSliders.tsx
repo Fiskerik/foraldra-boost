@@ -206,10 +206,10 @@ export function InteractiveSliders({
                     onClick={() => onHouseholdIncomeChange(Math.round(incomeBreakPoint))}
                     title={`Klicka för att sänka till ${formatCurrency(incomeBreakPoint)}`}
                   >
-                    <div className="h-5 w-1 bg-amber-500" />
-                    <div className="mt-0.5 rounded bg-amber-100/90 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 shadow-sm whitespace-nowrap pointer-events-none">
-                      ▼
-                    </div>
+              <div className="h-5 w-1 bg-amber-500" />
+              <div className="mt-0.5 text-[14px] font-bold text-amber-600 pointer-events-none leading-none">
+                ▼
+              </div>
                   </div>
                 )}
               </div>
@@ -265,10 +265,10 @@ export function InteractiveSliders({
                     onClick={() => onDaysPerWeekChange(recommendedDaysPerWeek)}
                     title={`Klicka för att använda ${recommendedDaysPerWeek} dagar/vecka`}
                   >
-                    <div className="h-5 w-1 bg-green-500" />
-                    <div className="mt-0.5 rounded bg-green-100/90 px-1.5 py-0.5 text-[9px] font-semibold text-green-700 shadow-sm whitespace-nowrap pointer-events-none">
-                      ▼
-                    </div>
+              <div className="h-5 w-1 bg-green-500" />
+              <div className="mt-0.5 text-[14px] font-bold text-green-600 pointer-events-none leading-none">
+                ▼
+              </div>
                   </div>
                 )}
               </div>

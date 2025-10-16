@@ -467,10 +467,10 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                         return 'Föräldralön (90%)';
                       }
                       if (segment.benefitLevel === 'high') {
-                        return 'Hög föräldrapenning (80%)';
+                        return 'Föräldrapenning (80%)';
                       }
                       if (segment.benefitLevel === 'low') {
-                        return 'Låg föräldrapenning';
+                        return 'Lägstanivå (180 kr/dag)';
                       }
                       return segment.isPreferenceFiller || segment.isInitialTenDayPeriod
                         ? 'Ingen ersättning'
@@ -637,8 +637,13 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                         : 'bg-muted/30'
                                     }`}
                                   >
-                                    <div className="font-medium">
-                                      {format(month.startDate, 'd')} - {format(month.endDate, 'd MMM yyyy')}
+                                     <div className="font-medium flex items-center gap-2">
+                                      <span>{format(month.startDate, 'd')} - {format(month.endDate, 'd MMM yyyy')}</span>
+                                      {group.periods.some(p => p.benefitLevel === 'low') && (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-orange-100 dark:bg-orange-900/30 border-orange-400">
+                                          Lägstanivå
+                                        </Badge>
+                                      )}
                                     </div>
                                     <div className="text-muted-foreground">
                                       {month.calendarDays} kalenderdagar • {
@@ -649,12 +654,17 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                       Hushållets inkomst: {formatCurrency(aggregatedIncome)}
                                       {isLowest && <span className="ml-1 text-[9px]">(lägst)</span>}
                                     </div>
-                                    <div className="font-medium">
-                                      {leaveParentLabel}: {formatCurrency(leaveIncome)}
-                                      {group.parent !== 'both' && (
-                                        <span className="ml-1 text-muted-foreground">{daysPerWeekText}</span>
-                                      )}
-                                    </div>
+                                     <div className="font-medium">
+                                       {leaveParentLabel}: {formatCurrency(leaveIncome)}
+                                       {group.parent !== 'both' && (
+                                         <span className="ml-1 text-muted-foreground">{daysPerWeekText}</span>
+                                       )}
+                                       {group.periods.some(p => p.benefitLevel === 'low') && benefitIncome > 0 && (
+                                         <span className="ml-1 text-[9px] text-orange-600 dark:text-orange-400">
+                                           (inkl. lägstanivå)
+                                         </span>
+                                       )}
+                                     </div>
                                     {group.parent !== 'both' && (
                                       <div className="text-muted-foreground">
                                         {workingParentLabel}: {formatCurrency(workingIncome)}
