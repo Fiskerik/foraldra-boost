@@ -74,8 +74,8 @@ export function InteractiveSliders({
     : totalMonths.toFixed(1);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-in-bottom flex justify-center px-4 pb-4 pointer-events-none">
-      <div className="w-full max-w-5xl pointer-events-auto">
+    <div className="fixed bottom-0 left-0 right-0 z-40 animate-slide-in-bottom flex justify-center px-4 pb-4">
+      <div className="w-full max-w-5xl">
         <Card className="w-full rounded-t-2xl rounded-b-none border-t-2 border-x-0 border-b-0 bg-card/95 backdrop-blur-lg shadow-2xl">
           {/* Header - Always visible */}
           <div className="flex items-center justify-between p-3 border-b cursor-pointer hover:bg-accent/5 transition-colors" onClick={() => setIsExpanded(!isExpanded)}>
