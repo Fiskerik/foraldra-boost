@@ -32,6 +32,7 @@ const Index = () => {
   const [daysPerWeek, setDaysPerWeek] = useState(5);
   const [optimizationResults, setOptimizationResults] = useState<OptimizationResult[] | null>(null);
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
+  const [userHasManuallySetIncome, setUserHasManuallySetIncome] = useState(false);
 
   type OptimizeOverrides = {
     totalMonths?: number;
@@ -107,9 +108,8 @@ const Index = () => {
 
   const handleHouseholdIncomeChange = (value: number) => {
     setHouseholdIncome(value);
-    if (optimizationResults) {
-      handleOptimize({ silent: true, overrides: { householdIncome: value } });
-    }
+    setUserHasManuallySetIncome(true);
+    // Don't recalculate strategy - household income is just a visualization threshold
   };
 
   const handleDistributionChange = (value: number) => {
@@ -126,6 +126,7 @@ const Index = () => {
     const adjustedParent1Months = Math.min(parent1Months, adjustedTotalMonths);
 
     setDaysPerWeek(clampedDays);
+    setUserHasManuallySetIncome(false); // Reset flag when planning parameters change
 
     if (totalMonths !== adjustedTotalMonths) {
       setTotalMonths(adjustedTotalMonths);
@@ -163,6 +164,7 @@ const Index = () => {
     const adjustedSimultaneousMonths = Math.min(simultaneousMonths, Math.floor(constrainedValue / 2));
 
     setTotalMonths(constrainedValue);
+    setUserHasManuallySetIncome(false); // Reset flag when planning parameters change
     // Adjust parent months to stay within bounds
     if (parent1Months > constrainedValue) {
       setParent1Months(constrainedValue);
@@ -234,6 +236,11 @@ const Index = () => {
       : undefined;
 
   useEffect(() => {
+    // Only auto-adjust if user hasn't manually set income
+    if (userHasManuallySetIncome) {
+      return;
+    }
+
     if (!selectedIncomeSummary?.hasEligibleFullMonths) {
       return;
     }
@@ -252,7 +259,7 @@ const Index = () => {
       }
       return roundedMinimum;
     });
-  }, [selectedIncomeSummary]);
+  }, [selectedIncomeSummary, userHasManuallySetIncome]);
 
   return (
     <div className="min-h-screen bg-background">
