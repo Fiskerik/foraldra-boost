@@ -289,7 +289,7 @@ const Index = () => {
         </div>
       </header>
 
-      <main className={`container mx-auto max-w-5xl px-2 md:px-4 py-4 md:py-12 space-y-3 md:space-y-8 ${optimizationResults ? 'pb-96' : 'pb-32'}`}>
+      <main className={`container mx-auto max-w-5xl px-2 md:px-4 py-4 md:py-12 space-y-3 md:space-y-8 ${optimizationResults ? 'pb-[500px] md:pb-[450px]' : 'pb-32'}`}>
         <section className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-6">
           <ParentIncomeCard
             parentNumber={1}

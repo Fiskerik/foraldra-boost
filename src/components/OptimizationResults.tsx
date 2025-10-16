@@ -96,6 +96,9 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       return [];
     }
 
+    const daysPerWeek = period.daysPerWeek && period.daysPerWeek > 0 ? period.daysPerWeek : 7;
+    const expectedBenefitDaysPerMonth = daysPerWeek * 4.33;
+
     const totalCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
     let remainingBenefitDays = totalBenefitDays;
     let carryOver = 0;
@@ -103,27 +106,31 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     segments.forEach((segment, index) => {
       if (remainingBenefitDays <= 0) {
         segment.benefitDays = 0;
-        // Do not return; still compute working parent's income even with zero benefit days
       } else {
-        const weight = segment.calendarDays / totalCalendarDays;
-        const rawShare = totalBenefitDays * weight + carryOver;
-        let allocated = index === segments.length - 1 ? remainingBenefitDays : Math.floor(rawShare);
-
-        if (allocated < 0) {
-          allocated = 0;
+        const monthStart = startOfMonth(segment.startDate);
+        const monthEndDate = endOfMonth(monthStart);
+        const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
+        const isFullMonth = segment.calendarDays >= monthLength;
+        
+        let allocated: number;
+        if (isFullMonth) {
+          // Full month: use expectedBenefitDaysPerMonth (max 30)
+          allocated = Math.min(
+            Math.round(expectedBenefitDaysPerMonth),
+            30,
+            remainingBenefitDays
+          );
+        } else {
+          // Partial month: proportional based on how much of the month it is
+          const proportion = segment.calendarDays / monthLength;
+          allocated = Math.min(
+            Math.round(expectedBenefitDaysPerMonth * proportion),
+            remainingBenefitDays
+          );
         }
-
-        if (allocated === 0 && remainingBenefitDays > 0 && index !== segments.length - 1) {
-          allocated = 1;
-        }
-
-        if (allocated > remainingBenefitDays) {
-          allocated = remainingBenefitDays;
-        }
-
-        segment.benefitDays = allocated;
-        remainingBenefitDays -= allocated;
-        carryOver = rawShare - allocated;
+        
+        segment.benefitDays = Math.max(0, allocated);
+        remainingBenefitDays -= segment.benefitDays;
       }
       
       // Calculate monthly income for this segment using fixed monthly salary for working parent
