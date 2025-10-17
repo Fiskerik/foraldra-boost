@@ -396,7 +396,12 @@ function ensureMinimumIncomePerMonth(
 
     let owner: 'parent1' | 'parent2';
 
-    if (parentDayTotals.parent1 > parentDayTotals.parent2 + 0.5) {
+    const monthKey = format(monthStart, 'yyyy-MM');
+    const preAssignedOwner = context.monthOwnership?.get(monthKey);
+
+    if (preAssignedOwner) {
+      owner = preAssignedOwner;
+    } else if (parentDayTotals.parent1 > parentDayTotals.parent2 + 0.5) {
       owner = 'parent1';
     } else if (parentDayTotals.parent2 > parentDayTotals.parent1 + 0.5) {
       owner = 'parent2';
@@ -408,7 +413,9 @@ function ensureMinimumIncomePerMonth(
       owner = 'parent1';
     }
 
-    remainingPreferredMonths[owner] = Math.max(0, remainingPreferredMonths[owner] - 1);
+    if (remainingPreferredMonths[owner] > 0) {
+      remainingPreferredMonths[owner] -= 1;
+    }
 
     const usedDaysPerWeek = Math.min(7, Math.max(0, Math.round(parentMaxDaysPerWeek[owner] || 0)));
     const capacityDaysPerWeek = Math.max(0, 7 - usedDaysPerWeek);
@@ -622,6 +629,7 @@ interface ConversionContext {
   simultaneousMonths: number;
   transferredToParent1?: number;
   transferredToParent2?: number;
+  monthOwnership?: Map<string, 'parent1' | 'parent2'>;
 }
 
 type LegacyPlan = Record<string, unknown> | undefined;
@@ -1512,6 +1520,56 @@ function convertLegacyResult(
     parent1: Math.max(0, context.parent1HighTotalDays - usedHighDaysByParent.parent1),
     parent2: Math.max(0, context.parent2HighTotalDays - usedHighDaysByParent.parent2),
   };
+
+  const monthOwnershipMap = new Map<string, 'parent1' | 'parent2'>();
+  const timelineStart = startOfDay(baseStartDate);
+  const timelineEndDate = timelineLimit
+    ? startOfDay(timelineLimit)
+    : startOfDay(addMonths(timelineStart, 15));
+
+  let ownershipCursor = new Date(timelineStart);
+  while (ownershipCursor.getTime() <= timelineEndDate.getTime()) {
+    const monthKey = format(ownershipCursor, 'yyyy-MM');
+    const monthStart = startOfDay(ownershipCursor);
+    const rawMonthEnd = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
+    const monthEnd = rawMonthEnd.getTime() > timelineEndDate.getTime() ? new Date(timelineEndDate) : rawMonthEnd;
+
+    const parentDayTotals: Record<'parent1' | 'parent2', number> = { parent1: 0, parent2: 0 };
+
+    for (const period of mergedPeriods) {
+      const periodStart = startOfDay(period.startDate);
+      const periodEnd = startOfDay(period.endDate);
+
+      if (periodEnd.getTime() < monthStart.getTime() || periodStart.getTime() > monthEnd.getTime()) {
+        continue;
+      }
+
+      const overlapStart = periodStart.getTime() > monthStart.getTime() ? periodStart : monthStart;
+      const overlapEnd = periodEnd.getTime() < monthEnd.getTime() ? periodEnd : monthEnd;
+      const overlapDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+
+      if (overlapDays <= 0) {
+        continue;
+      }
+
+      if (period.parent === 'parent1' || period.parent === 'parent2') {
+        parentDayTotals[period.parent] += overlapDays;
+      } else if (period.parent === 'both') {
+        parentDayTotals.parent1 += overlapDays;
+        parentDayTotals.parent2 += overlapDays;
+      }
+    }
+
+    if (parentDayTotals.parent1 > parentDayTotals.parent2 + 0.5) {
+      monthOwnershipMap.set(monthKey, 'parent1');
+    } else if (parentDayTotals.parent2 > parentDayTotals.parent1 + 0.5) {
+      monthOwnershipMap.set(monthKey, 'parent2');
+    }
+
+    ownershipCursor = startOfDay(addMonths(monthStart, 1));
+  }
+
+  context.monthOwnership = monthOwnershipMap;
 
   ensureMinimumIncomePerMonth(mergedPeriods, context, remainingLowDays, remainingHighDays, timelineLimit ?? null);
 
