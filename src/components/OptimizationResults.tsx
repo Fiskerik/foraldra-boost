@@ -133,12 +133,15 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         remainingBenefitDays -= segment.benefitDays;
       }
       
-      // Calculate monthly income for this segment using fixed monthly salary for working parent
-      // and capping parental benefits to 30 days per full month
+      // Calculate monthly income for this segment using the period's daily income to ensure
+      // the full household income is represented, while still breaking out the benefit and
+      // working parent contributions for display.
       const benefitDaily = period.dailyBenefit;
       const monthStart = startOfMonth(segment.startDate);
       const monthEndDate = endOfMonth(monthStart);
       const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
+
+      const totalSegmentIncome = Math.max(0, Math.round((period.dailyIncome || 0) * segment.calendarDays));
 
       // Prefer monthly base from legacy; fallback to daily base (e.g., for filler 'none' periods)
       const monthlyBaseFromOther = period.parent === 'both' ? 0 : (period.otherParentMonthlyIncome || 0);
@@ -152,50 +155,59 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         segment.startDate.getDate() === 1 &&
         segment.endDate.getDate() === monthEndDate.getDate();
 
-      // Working parent's monthly income
-      let otherParentIncome = 0;
-      if (period.parent !== 'both' && computedMonthlyBase > 0) {
-        if (isFullMonthSegment) {
-          // If we only have a daily rate, show fixed 30-day month value for consistency
-          otherParentIncome = monthlyBaseFromOther > 0 ? computedMonthlyBase : dailyBaseFromOther * 30;
-        } else {
-          otherParentIncome = monthlyBaseFromOther > 0
-            ? computedMonthlyBase * (segment.calendarDays / monthLength)
-            : dailyBaseFromOther * segment.calendarDays;
-        }
-      }
-      
-      // Debug logging for May-Aug 2026 segments
-      if (segment.startDate.getFullYear() === 2026 && segment.startDate.getMonth() >= 4 && segment.startDate.getMonth() <= 7) {
-        console.log('May-Aug 2026 Segment Calculation:', {
-          monthStart: format(segment.startDate, 'yyyy-MM-dd'),
-          monthEnd: format(segment.endDate, 'yyyy-MM-dd'),
-          parent: period.parent,
-          benefitLevel: period.benefitLevel,
-          computedMonthlyBase,
-          monthlyBaseFromOther,
-          dailyBaseFromOther,
-          otherParentIncome,
-          benefitDaily,
-          segmentBenefitDays: segment.benefitDays,
-          isFullMonthSegment
-        });
-      }
-
       // Parental benefit: use allocated benefit days, with a max of 30 days for full months
       let benefitIncome = 0;
       if (benefitDaily > 0 && segment.benefitDays > 0) {
         const benefitDaysForMonth = isFullMonthSegment ? Math.min(segment.benefitDays, 30) : segment.benefitDays;
         benefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
       }
+      benefitIncome = Math.min(totalSegmentIncome, Math.max(0, Math.round(benefitIncome)));
+
+      // Working parent's monthly income (clamped so total matches household income)
+      let otherParentIncome = 0;
+      if (period.parent !== 'both') {
+        let baseOtherIncome = 0;
+        if (computedMonthlyBase > 0) {
+          baseOtherIncome = isFullMonthSegment
+            ? computedMonthlyBase
+            : computedMonthlyBase * (segment.calendarDays / monthLength);
+        } else if (dailyBaseFromOther > 0) {
+          baseOtherIncome = dailyBaseFromOther * segment.calendarDays;
+        }
+
+        const maxAllowedOtherIncome = period.benefitLevel === 'none'
+          ? totalSegmentIncome
+          : Math.max(0, totalSegmentIncome - benefitIncome);
+
+        otherParentIncome = Math.min(
+          Math.max(0, Math.round(baseOtherIncome)),
+          Math.max(0, Math.round(maxAllowedOtherIncome))
+        );
+      }
+
+      // Leave parent's income representation for the breakdown
+      let leaveParentIncome: number;
+      if (period.parent === 'both') {
+        leaveParentIncome = totalSegmentIncome;
+      } else if (period.benefitLevel === 'none') {
+        leaveParentIncome = Math.max(0, totalSegmentIncome - otherParentIncome);
+      } else {
+        leaveParentIncome = benefitIncome;
+        const combinedDisplayed = otherParentIncome + benefitIncome;
+        if (combinedDisplayed < totalSegmentIncome) {
+          leaveParentIncome += totalSegmentIncome - combinedDisplayed;
+        }
+      }
 
       // Compose monthly totals
       segment.benefitIncome = benefitIncome;
       segment.otherParentIncome = otherParentIncome;
-      segment.leaveParentIncome = benefitIncome; // leave parent only shows compensated income in breakdown
-      segment.monthlyIncome = otherParentIncome + benefitIncome;
+      segment.leaveParentIncome = Math.max(0, Math.round(leaveParentIncome));
+      segment.monthlyIncome = totalSegmentIncome;
       segment.daysPerWeekValue = normalizedDaysPerWeek;
-      segment.otherParentMonthlyBase = monthlyBaseFromOther > 0 ? monthlyBaseFromOther : (dailyBaseFromOther > 0 ? dailyBaseFromOther * 30 : 0);
+      segment.otherParentMonthlyBase = monthlyBaseFromOther > 0
+        ? monthlyBaseFromOther
+        : (dailyBaseFromOther > 0 ? dailyBaseFromOther * 30 : 0);
     });
 
     return segments;
@@ -304,6 +316,16 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             period.benefitLevel !== 'none' || period.isInitialTenDayPeriod || period.isPreferenceFiller
           );
           const periodGroups = groupConsecutivePeriods(filteredPeriods);
+
+          const initialTenDayGroupIndex = periodGroups.findIndex(group =>
+            group.periods.length > 0 && group.periods.every(period => period.isInitialTenDayPeriod)
+          );
+
+          if (initialTenDayGroupIndex > 0) {
+            const [initialGroup] = periodGroups.splice(initialTenDayGroupIndex, 1);
+            periodGroups.unshift(initialGroup);
+          }
+
           const groupMonthlyBreakdowns = periodGroups.map(group =>
             createMonthlyBreakdownEntries(group.periods)
           );
