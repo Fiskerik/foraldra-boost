@@ -83,6 +83,208 @@ export function calculateMaxLeaveMonths(
 }
 export const WEEKS_PER_MONTH = 4.33;
 
+function clampDaysPerWeek(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  if (value <= 0) {
+    return 0;
+  }
+
+  if (value >= 7) {
+    return 7;
+  }
+
+  return Math.min(7, Math.max(1, Math.ceil(value)));
+}
+
+interface MonthlySegment {
+  start: Date;
+  end: Date;
+  calendarDays: number;
+  daysInMonth: number;
+  proportion: number;
+}
+
+function splitIntoMonthlySegments(start: Date, end: Date): MonthlySegment[] {
+  const normalizedStart = startOfDay(start);
+  const normalizedEnd = startOfDay(end);
+  if (normalizedStart.getTime() > normalizedEnd.getTime()) {
+    return [];
+  }
+
+  const segments: MonthlySegment[] = [];
+  let cursor = new Date(normalizedStart);
+
+  while (cursor.getTime() <= normalizedEnd.getTime()) {
+    const year = cursor.getFullYear();
+    const month = cursor.getMonth();
+    const monthStart = startOfDay(new Date(year, month, 1));
+    const monthEnd = startOfDay(new Date(year, month + 1, 0));
+    const segmentEnd = monthEnd.getTime() > normalizedEnd.getTime() ? new Date(normalizedEnd) : monthEnd;
+    const calendarDays = Math.max(1, differenceInCalendarDays(segmentEnd, cursor) + 1);
+    const daysInMonth = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
+    const proportion = Math.min(1, Math.max(0, calendarDays / daysInMonth));
+
+    segments.push({
+      start: new Date(cursor),
+      end: segmentEnd,
+      calendarDays,
+      daysInMonth,
+      proportion,
+    });
+
+    cursor = startOfDay(addDays(segmentEnd, 1));
+  }
+
+  return segments;
+}
+
+type RemainingBenefitDays = Record<'parent1' | 'parent2', number>;
+
+interface TopUpOptions {
+  parent: 'parent1' | 'parent2';
+  start: Date;
+  end: Date;
+  context: ConversionContext;
+  baseDaysPerWeek: number;
+  remainingLowDays: RemainingBenefitDays;
+  remainingHighDays: RemainingBenefitDays;
+}
+
+function createTopUpPeriods({
+  parent,
+  start,
+  end,
+  context,
+  baseDaysPerWeek,
+  remainingLowDays,
+  remainingHighDays,
+}: TopUpOptions): LeavePeriod[] {
+  const normalizedStart = startOfDay(start);
+  const normalizedEnd = startOfDay(end);
+
+  if (normalizedStart.getTime() > normalizedEnd.getTime()) {
+    return [];
+  }
+
+  const segments = splitIntoMonthlySegments(normalizedStart, normalizedEnd);
+  if (!segments.length) {
+    return [];
+  }
+
+  const otherParentKey = parent === 'parent1' ? 'parent2' : 'parent1';
+  const otherParentNetMonthly = otherParentKey === 'parent1' ? context.parent1NetIncome : context.parent2NetIncome;
+  const lowDailyNet = parent === 'parent1' ? context.parent1MinDailyNet : context.parent2MinDailyNet;
+  const highDailyNet = parent === 'parent1' ? context.parent1HighDailyNet : context.parent2HighDailyNet;
+  const normalizedBase = Math.min(7, Math.max(0, Number.isFinite(baseDaysPerWeek) ? baseDaysPerWeek : 0));
+  const results: LeavePeriod[] = [];
+
+  for (const segment of segments) {
+    const proportion = segment.proportion;
+    const requiredIncome = context.minHouseholdIncome * proportion;
+    const monthOtherIncomeTotal = otherParentNetMonthly * proportion;
+    let deficit = Math.max(0, requiredIncome - monthOtherIncomeTotal);
+    let remainingCapacity = Math.max(0, Math.round((7 - normalizedBase) * WEEKS_PER_MONTH * proportion));
+    let remainingCalendarDays = segment.calendarDays;
+    let remainingOtherIncome = monthOtherIncomeTotal;
+    let cursor = new Date(segment.start);
+
+    const pushPeriod = (
+      benefitLevel: LeavePeriod['benefitLevel'],
+      benefitDaysUsed: number,
+      dailyBenefit: number,
+      calendarDays: number,
+      daysPerWeekValue: number,
+      allocatedOtherIncome: number
+    ) => {
+      if (calendarDays <= 0) {
+        return;
+      }
+
+      const startDate = startOfDay(cursor);
+      const endDate = startOfDay(addDays(startDate, calendarDays - 1));
+      const safeOtherIncome = Math.max(0, Math.min(remainingOtherIncome, allocatedOtherIncome));
+      remainingOtherIncome = Math.max(0, remainingOtherIncome - safeOtherIncome);
+      const totalIncome = safeOtherIncome + dailyBenefit * benefitDaysUsed;
+      const dailyIncome = calendarDays > 0 ? totalIncome / calendarDays : 0;
+      const effectiveDaysPerWeek = benefitLevel === 'none' ? Math.max(1, Math.round(daysPerWeekValue || normalizedBase || 1)) : daysPerWeekValue;
+
+      results.push({
+        parent,
+        startDate,
+        endDate,
+        daysCount: benefitLevel === 'none' ? calendarDays : benefitDaysUsed,
+        benefitDaysUsed: benefitLevel === 'none' ? calendarDays : benefitDaysUsed,
+        calendarDays,
+        dailyBenefit: benefitLevel === 'none' ? 0 : dailyBenefit,
+        dailyIncome,
+        benefitLevel,
+        daysPerWeek: Math.min(7, Math.max(benefitLevel === 'none' ? effectiveDaysPerWeek : daysPerWeekValue, 1)),
+        otherParentDailyIncome: safeOtherIncome && calendarDays > 0 ? safeOtherIncome / calendarDays : 0,
+        otherParentMonthlyIncome: safeOtherIncome,
+        isPreferenceFiller: true,
+      });
+
+      cursor = startOfDay(addDays(endDate, 1));
+      remainingCalendarDays = Math.max(0, remainingCalendarDays - calendarDays);
+    };
+
+    if (deficit > 0 && remainingCapacity > 0 && lowDailyNet > 0 && remainingLowDays[parent] > 0) {
+      const needLow = Math.ceil(deficit / lowDailyNet);
+      const takeLowCandidate = Math.min(needLow, remainingLowDays[parent], remainingCapacity);
+      const takeLow = Math.max(0, Math.floor(takeLowCandidate));
+
+      if (takeLow > 0) {
+        const daysPerWeek = clampDaysPerWeek(takeLow / (WEEKS_PER_MONTH * Math.max(proportion, 0.01)));
+        const weeksUsed = daysPerWeek > 0 ? takeLow / daysPerWeek : 0;
+        const calendarDaysForLow = Math.min(
+          remainingCalendarDays,
+          Math.max(1, Math.round(weeksUsed * 7))
+        );
+        const otherIncomeForLow = monthOtherIncomeTotal * (calendarDaysForLow / segment.calendarDays);
+
+        pushPeriod('low', takeLow, lowDailyNet, calendarDaysForLow, daysPerWeek, otherIncomeForLow);
+
+        remainingLowDays[parent] = Math.max(0, remainingLowDays[parent] - takeLow);
+        remainingCapacity = Math.max(0, remainingCapacity - takeLow);
+        deficit = Math.max(0, deficit - takeLow * lowDailyNet);
+      }
+    }
+
+    if (deficit > 0 && remainingCapacity > 0 && highDailyNet > 0 && remainingHighDays[parent] > 0) {
+      const needHigh = Math.ceil(deficit / highDailyNet);
+      const takeHighCandidate = Math.min(needHigh, remainingHighDays[parent], remainingCapacity);
+      const takeHigh = Math.max(0, Math.floor(takeHighCandidate));
+
+      if (takeHigh > 0) {
+        const daysPerWeek = clampDaysPerWeek(takeHigh / (WEEKS_PER_MONTH * Math.max(proportion, 0.01)));
+        const weeksUsed = daysPerWeek > 0 ? takeHigh / daysPerWeek : 0;
+        const calendarDaysForHigh = Math.min(
+          remainingCalendarDays,
+          Math.max(1, Math.round(weeksUsed * 7))
+        );
+        const otherIncomeForHigh = monthOtherIncomeTotal * (calendarDaysForHigh / segment.calendarDays);
+
+        pushPeriod('high', takeHigh, highDailyNet, calendarDaysForHigh, daysPerWeek, otherIncomeForHigh);
+
+        remainingHighDays[parent] = Math.max(0, remainingHighDays[parent] - takeHigh);
+        remainingCapacity = Math.max(0, remainingCapacity - takeHigh);
+        deficit = Math.max(0, deficit - takeHigh * highDailyNet);
+      }
+    }
+
+    if (remainingCalendarDays > 0) {
+      const otherIncomeForNone = Math.max(0, remainingOtherIncome);
+      pushPeriod('none', remainingCalendarDays, 0, remainingCalendarDays, normalizedBase, otherIncomeForNone);
+      deficit = 0;
+    }
+  }
+
+  return results;
+}
+
 interface ParentDayAllocation {
   parent1IncomeDays: number;
   parent2IncomeDays: number;
@@ -205,6 +407,15 @@ interface ConversionContext {
   parent2NetIncome: number;
   parent1LeaveDailyIncome: number;
   parent2LeaveDailyIncome: number;
+  parent1MinDailyNet: number;
+  parent2MinDailyNet: number;
+  parent1HighDailyNet: number;
+  parent2HighDailyNet: number;
+  parent1LowTotalDays: number;
+  parent2LowTotalDays: number;
+  parent1HighTotalDays: number;
+  parent2HighTotalDays: number;
+  minHouseholdIncome: number;
   baseStartDate: Date;
   adjustedTotalMonths: number;
   requestedDaysPerWeek: number;
@@ -1128,6 +1339,43 @@ function convertLegacyResult(
 
   mergedPeriods.splice(0, mergedPeriods.length, ...sequentialPeriods);
 
+  const usedLowDaysByParent: RemainingBenefitDays = { parent1: 0, parent2: 0 };
+  const usedHighDaysByParent: RemainingBenefitDays = { parent1: 0, parent2: 0 };
+
+  mergedPeriods.forEach(period => {
+    const benefitDays = period.benefitDaysUsed ?? period.daysCount ?? 0;
+    if (!benefitDays || period.benefitLevel === 'none') {
+      return;
+    }
+
+    const targets: ('parent1' | 'parent2')[] =
+      period.parent === 'both'
+        ? ['parent1', 'parent2']
+        : period.parent === 'parent1'
+        ? ['parent1']
+        : ['parent2'];
+
+    const share = period.parent === 'both' ? benefitDays / 2 : benefitDays;
+
+    targets.forEach(parentKey => {
+      if (period.benefitLevel === 'low') {
+        usedLowDaysByParent[parentKey] += share;
+      } else if (period.benefitLevel === 'high' || period.benefitLevel === 'parental-salary') {
+        usedHighDaysByParent[parentKey] += share;
+      }
+    });
+  });
+
+  const remainingLowDays: RemainingBenefitDays = {
+    parent1: Math.max(0, context.parent1LowTotalDays - usedLowDaysByParent.parent1),
+    parent2: Math.max(0, context.parent2LowTotalDays - usedLowDaysByParent.parent2),
+  };
+
+  const remainingHighDays: RemainingBenefitDays = {
+    parent1: Math.max(0, context.parent1HighTotalDays - usedHighDaysByParent.parent1),
+    parent2: Math.max(0, context.parent2HighTotalDays - usedHighDaysByParent.parent2),
+  };
+
   if (timelineLimit) {
     const limitDate = startOfDay(timelineLimit);
     const lastSequentialPeriod = mergedPeriods[mergedPeriods.length - 1] ?? null;
@@ -1179,43 +1427,37 @@ function convertLegacyResult(
             fillerParent = 'parent2';
           }
 
-          const fillerOtherParentDailyIncome = fillerParent === 'parent1'
-            ? context.parent2NetIncome / 30
-            : context.parent1NetIncome / 30;
-          const fillerOwnDailyIncome = fillerParent === 'parent1'
-            ? context.parent1NetIncome / 30
-            : context.parent2NetIncome / 30;
+          const baseDaysPerWeek = Number.isFinite(lastSequentialPeriod?.daysPerWeek)
+            ? (lastSequentialPeriod?.daysPerWeek as number)
+            : context.requestedDaysPerWeek;
 
-          const fillerPeriod: LeavePeriod = {
+          const fillerTopUps = createTopUpPeriods({
             parent: fillerParent,
-            startDate: fillerStart,
-            endDate: startOfDay(limitDate),
-            daysCount: fillerDays,
-            benefitDaysUsed: fillerDays,
-            calendarDays: Math.max(1, differenceInCalendarDays(startOfDay(limitDate), fillerStart) + 1),
-            dailyBenefit: 0,
-            dailyIncome: fillerOwnDailyIncome + fillerOtherParentDailyIncome,
-            benefitLevel: 'none',
-            daysPerWeek: lastSequentialPeriod?.daysPerWeek ?? 7,
-            otherParentDailyIncome: fillerOtherParentDailyIncome,
-            isPreferenceFiller: true,
-          };
+            start: fillerStart,
+            end: limitDate,
+            context,
+            baseDaysPerWeek: baseDaysPerWeek ?? 0,
+            remainingLowDays,
+            remainingHighDays,
+          });
 
-          const trailing = mergedPeriods[mergedPeriods.length - 1];
-          if (
-            trailing &&
-            trailing.parent === fillerPeriod.parent &&
-            trailing.benefitLevel === fillerPeriod.benefitLevel &&
-            trailing.daysPerWeek === fillerPeriod.daysPerWeek &&
-            Math.abs(trailing.dailyIncome - fillerPeriod.dailyIncome) < 1 &&
-            Math.abs((trailing.otherParentDailyIncome || 0) - (fillerPeriod.otherParentDailyIncome || 0)) < 1
-          ) {
-            trailing.endDate = fillerPeriod.endDate;
-            trailing.calendarDays += fillerPeriod.calendarDays;
-            trailing.daysCount += fillerPeriod.daysCount;
-            trailing.benefitDaysUsed += fillerPeriod.benefitDaysUsed;
-          } else {
-            mergedPeriods.push(fillerPeriod);
+          for (const topUpPeriod of fillerTopUps) {
+            const trailing = mergedPeriods[mergedPeriods.length - 1];
+            if (
+              trailing &&
+              trailing.parent === topUpPeriod.parent &&
+              trailing.benefitLevel === topUpPeriod.benefitLevel &&
+              trailing.daysPerWeek === topUpPeriod.daysPerWeek &&
+              Math.abs(trailing.dailyIncome - topUpPeriod.dailyIncome) < 1 &&
+              Math.abs((trailing.otherParentDailyIncome || 0) - (topUpPeriod.otherParentDailyIncome || 0)) < 1
+            ) {
+              trailing.endDate = topUpPeriod.endDate;
+              trailing.calendarDays += topUpPeriod.calendarDays;
+              trailing.daysCount += topUpPeriod.daysCount;
+              trailing.benefitDaysUsed += topUpPeriod.benefitDaysUsed;
+            } else {
+              mergedPeriods.push(topUpPeriod);
+            }
           }
         }
       }
@@ -1392,6 +1634,12 @@ export function optimizeLeave(
 
   const baseStartDate = startOfDay(new Date());
 
+  const dayAllocation = deriveParentDayAllocation(preferredParent1Months, preferredParent2Months);
+  const parent1MinDailyNet = calculateNetIncome(MINIMUM_RATE * 30, parent1.taxRate) / 30;
+  const parent2MinDailyNet = calculateNetIncome(MINIMUM_RATE * 30, parent2.taxRate) / 30;
+  const parent1HighDailyNet = calc1.parentalBenefitPerDay + calc1.parentalSalaryPerDay;
+  const parent2HighDailyNet = calc2.parentalBenefitPerDay + calc2.parentalSalaryPerDay;
+
   const conversionContext: ConversionContext = {
     parent1,
     parent2,
@@ -1399,6 +1647,15 @@ export function optimizeLeave(
     parent2NetIncome: calc2.netIncome,
     parent1LeaveDailyIncome: calc1.parentalBenefitPerDay + calc1.parentalSalaryPerDay,
     parent2LeaveDailyIncome: calc2.parentalBenefitPerDay + calc2.parentalSalaryPerDay,
+    parent1MinDailyNet,
+    parent2MinDailyNet,
+    parent1HighDailyNet,
+    parent2HighDailyNet,
+    parent1LowTotalDays: dayAllocation.parent1LowDays,
+    parent2LowTotalDays: dayAllocation.parent2LowDays,
+    parent1HighTotalDays: dayAllocation.parent1IncomeDays,
+    parent2HighTotalDays: dayAllocation.parent2IncomeDays,
+    minHouseholdIncome: minHouseholdIncome,
     baseStartDate,
     adjustedTotalMonths,
     requestedDaysPerWeek: normalizedDaysPerWeek,
@@ -1407,8 +1664,6 @@ export function optimizeLeave(
     simultaneousMonths,
   };
 
-  const dayAllocation = deriveParentDayAllocation(preferredParent1Months, preferredParent2Months);
-  
   const allocationInputs = {
     förälder1InkomstDagar: dayAllocation.parent1IncomeDays,
     förälder2InkomstDagar: dayAllocation.parent2IncomeDays,
