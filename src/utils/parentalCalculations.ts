@@ -1691,6 +1691,8 @@ function convertLegacyResult(
   const sequentialPeriods: LeavePeriod[] = [];
   let cursor = startOfDay(baseStartDate);
   const limitDate = timelineLimit ? startOfDay(timelineLimit) : null;
+  const cutoffDate = parent1CutoffDate ? startOfDay(parent1CutoffDate) : null;
+  const lastAllowedParent1 = cutoffDate ? startOfDay(addDays(cutoffDate, -1)) : null;
 
   for (const period of orderedForSequencing) {
     if (limitDate && cursor.getTime() > limitDate.getTime()) {
@@ -1702,10 +1704,6 @@ function convertLegacyResult(
       startDate = new Date(cursor);
     }
 
-    if (startDate.getTime() > cursor.getTime()) {
-      startDate = new Date(cursor);
-    }
-
     const plannedCalendarDays = Math.max(1, period.calendarDays || Math.round(period.daysCount));
     let endDate = startOfDay(addDays(startDate, plannedCalendarDays - 1));
 
@@ -1714,6 +1712,20 @@ function convertLegacyResult(
     }
 
     if (limitDate && startDate.getTime() > limitDate.getTime()) {
+      continue;
+    }
+
+    if (period.parent === 'parent1' && lastAllowedParent1) {
+      if (startDate.getTime() > lastAllowedParent1.getTime()) {
+        continue;
+      }
+
+      if (endDate.getTime() > lastAllowedParent1.getTime()) {
+        endDate = new Date(lastAllowedParent1);
+      }
+    }
+
+    if (endDate.getTime() < startDate.getTime()) {
       continue;
     }
 
