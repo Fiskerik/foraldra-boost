@@ -1573,17 +1573,7 @@ function convertLegacyResult(
 
   ensureMinimumIncomePerMonth(mergedPeriods, context, remainingLowDays, remainingHighDays, timelineLimit ?? null);
 
-  const sortedByStart = [...mergedPeriods].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-  const initialSegments = sortedByStart.filter(period => period.isInitialTenDayPeriod);
-  const parent1Segments = sortedByStart.filter(period => period.parent === 'parent1');
-  const bothSegments = sortedByStart.filter(period => period.parent === 'both' && !period.isInitialTenDayPeriod);
-  const parent2Segments = sortedByStart.filter(period => period.parent === 'parent2');
-  const orderedForSequencing = [
-    ...initialSegments,
-    ...parent1Segments,
-    ...bothSegments,
-    ...parent2Segments,
-  ];
+  const orderedForSequencing = [...mergedPeriods].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
   const sequentialPeriods: LeavePeriod[] = [];
   let cursor = startOfDay(baseStartDate);
