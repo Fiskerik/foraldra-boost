@@ -68,7 +68,12 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     const segments: MonthlyBreakdown[] = [];
     let cursor = new Date(startDate);
 
-    const normalizedDaysPerWeek = period.daysPerWeek && period.daysPerWeek > 0 ? period.daysPerWeek : 7;
+    const normalizedDaysPerWeek =
+      period.benefitLevel === 'none'
+        ? 0
+        : period.daysPerWeek && period.daysPerWeek > 0
+        ? period.daysPerWeek
+        : 7;
 
     while (cursor <= endDate) {
       const monthStart = new Date(cursor);
@@ -96,7 +101,12 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       return [];
     }
 
-    const daysPerWeek = period.daysPerWeek && period.daysPerWeek > 0 ? period.daysPerWeek : 7;
+    const daysPerWeek =
+      period.benefitLevel === 'none'
+        ? 0
+        : period.daysPerWeek && period.daysPerWeek > 0
+        ? period.daysPerWeek
+        : 7;
     const expectedBenefitDaysPerMonth = daysPerWeek * 4.33;
 
     const totalCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
@@ -312,9 +322,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         {results.map((result, index) => {
           // Find the absolute lowest monthly income across ALL periods in this strategy
           // Only consider full months (calendarDays === 30) to avoid partial months
-          const filteredPeriods = result.periods.filter(period =>
-            period.benefitLevel !== 'none' || period.isInitialTenDayPeriod || period.isPreferenceFiller
-          );
+          const filteredPeriods = result.periods.filter(period => period.benefitLevel !== 'none');
           const periodGroups = groupConsecutivePeriods(filteredPeriods);
 
           const initialTenDayGroupIndex = periodGroups.findIndex(group =>

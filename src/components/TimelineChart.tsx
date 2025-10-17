@@ -90,9 +90,9 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
       incomeDaysSum += period.dailyIncome * daysInOverlap;
       daysCovered += daysInOverlap;
 
-      if (period.parent === "parent1") {
+      if (period.parent === "parent1" && period.benefitLevel !== "none") {
         parent1Days += daysInOverlap;
-      } else if (period.parent === "parent2") {
+      } else if (period.parent === "parent2" && period.benefitLevel !== "none") {
         parent2Days += daysInOverlap;
       } else if (period.parent === "both" && period.benefitLevel !== "none") {
         bothDays += daysInOverlap; // count only overlap days with compensation

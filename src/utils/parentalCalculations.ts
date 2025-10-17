@@ -207,21 +207,27 @@ function createTopUpPeriods({
       const endDate = startOfDay(addDays(startDate, calendarDays - 1));
       const safeOtherIncome = Math.max(0, Math.min(remainingOtherIncome, allocatedOtherIncome));
       remainingOtherIncome = Math.max(0, remainingOtherIncome - safeOtherIncome);
-      const totalIncome = safeOtherIncome + dailyBenefit * benefitDaysUsed;
+      const isNoneLevel = benefitLevel === 'none';
+      const benefitDays = isNoneLevel ? 0 : benefitDaysUsed;
+      const totalIncome = safeOtherIncome + (isNoneLevel ? 0 : dailyBenefit * benefitDaysUsed);
       const dailyIncome = calendarDays > 0 ? totalIncome / calendarDays : 0;
-      const effectiveDaysPerWeek = benefitLevel === 'none' ? Math.max(1, Math.round(daysPerWeekValue || normalizedBase || 1)) : daysPerWeekValue;
+      const normalizedRequested = Number.isFinite(daysPerWeekValue) ? Number(daysPerWeekValue) : normalizedBase;
+      const fallbackDaysPerWeek = Math.max(0, Number.isFinite(normalizedRequested) ? normalizedRequested : normalizedBase);
+      const effectiveDaysPerWeek = isNoneLevel
+        ? 0
+        : Math.min(7, Math.max(fallbackDaysPerWeek > 0 ? fallbackDaysPerWeek : 1, 1));
 
       results.push({
         parent,
         startDate,
         endDate,
-        daysCount: benefitLevel === 'none' ? calendarDays : benefitDaysUsed,
-        benefitDaysUsed: benefitLevel === 'none' ? calendarDays : benefitDaysUsed,
+        daysCount: calendarDays,
+        benefitDaysUsed: benefitDays,
         calendarDays,
-        dailyBenefit: benefitLevel === 'none' ? 0 : dailyBenefit,
+        dailyBenefit: isNoneLevel ? 0 : dailyBenefit,
         dailyIncome,
         benefitLevel,
-        daysPerWeek: Math.min(7, Math.max(benefitLevel === 'none' ? effectiveDaysPerWeek : daysPerWeekValue, 1)),
+        daysPerWeek: effectiveDaysPerWeek,
         otherParentDailyIncome: safeOtherIncome && calendarDays > 0 ? safeOtherIncome / calendarDays : 0,
         otherParentMonthlyIncome: safeOtherIncome,
         isPreferenceFiller: true,
@@ -277,7 +283,7 @@ function createTopUpPeriods({
 
     if (remainingCalendarDays > 0) {
       const otherIncomeForNone = Math.max(0, remainingOtherIncome);
-      pushPeriod('none', remainingCalendarDays, 0, remainingCalendarDays, normalizedBase, otherIncomeForNone);
+      pushPeriod('none', remainingCalendarDays, 0, remainingCalendarDays, 0, otherIncomeForNone);
       deficit = 0;
     }
   }
@@ -1435,7 +1441,7 @@ function convertLegacyResult(
       dailyBenefit: 0,
       dailyIncome: ownDailyIncome + otherParentDailyIncome,
       benefitLevel: 'none',
-      daysPerWeek: 7,
+      daysPerWeek: 0,
       otherParentDailyIncome,
       isPreferenceFiller: true,
     });
