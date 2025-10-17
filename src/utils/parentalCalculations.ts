@@ -151,6 +151,7 @@ interface TopUpOptions {
   baseDaysPerWeek: number;
   remainingLowDays: RemainingBenefitDays;
   remainingHighDays: RemainingBenefitDays;
+  parent1CutoffDate?: Date | null;
 }
 
 function createTopUpPeriods({
@@ -161,15 +162,34 @@ function createTopUpPeriods({
   baseDaysPerWeek,
   remainingLowDays,
   remainingHighDays,
+  parent1CutoffDate,
 }: TopUpOptions): LeavePeriod[] {
   const normalizedStart = startOfDay(start);
   const normalizedEnd = startOfDay(end);
 
-  if (normalizedStart.getTime() > normalizedEnd.getTime()) {
+  const cutoff = parent1CutoffDate ? startOfDay(parent1CutoffDate) : null;
+  let effectiveStart = normalizedStart;
+  let effectiveEnd = normalizedEnd;
+
+  if (cutoff) {
+    if (parent === 'parent1') {
+      const lastAllowed = startOfDay(addDays(cutoff, -1));
+      if (lastAllowed.getTime() < effectiveStart.getTime()) {
+        return [];
+      }
+      if (effectiveEnd.getTime() >= cutoff.getTime()) {
+        effectiveEnd = lastAllowed;
+      }
+    } else if (parent === 'parent2' && effectiveStart.getTime() < cutoff.getTime()) {
+      effectiveStart = cutoff;
+    }
+  }
+
+  if (effectiveStart.getTime() > effectiveEnd.getTime()) {
     return [];
   }
 
-  const segments = splitIntoMonthlySegments(normalizedStart, normalizedEnd);
+  const segments = splitIntoMonthlySegments(effectiveStart, effectiveEnd);
   if (!segments.length) {
     return [];
   }
@@ -296,7 +316,8 @@ function ensureMinimumIncomePerMonth(
   context: ConversionContext,
   remainingLowDays: RemainingBenefitDays,
   remainingHighDays: RemainingBenefitDays,
-  timelineLimit: Date | null
+  timelineLimit: Date | null,
+  parent1CutoffDate: Date | null
 ): void {
   if (!context.minHouseholdIncome || context.minHouseholdIncome <= 0) {
     return;
@@ -341,6 +362,44 @@ function ensureMinimumIncomePerMonth(
     return;
   }
 
+  const cutoff = parent1CutoffDate ? startOfDay(parent1CutoffDate) : null;
+  const lastParent1Day = cutoff ? startOfDay(addDays(cutoff, -1)) : null;
+
+  const monthSegments: { start: Date; end: Date; forcedOwner?: 'parent1' | 'parent2' }[] = [];
+
+  for (const { start: monthStart, end: monthEnd } of months) {
+    if (!cutoff) {
+      monthSegments.push({ start: monthStart, end: monthEnd });
+      continue;
+    }
+
+    if (cutoff.getTime() <= monthStart.getTime()) {
+      monthSegments.push({ start: monthStart, end: monthEnd, forcedOwner: 'parent2' });
+      continue;
+    }
+
+    if (cutoff.getTime() > monthEnd.getTime()) {
+      monthSegments.push({ start: monthStart, end: monthEnd, forcedOwner: 'parent1' });
+      continue;
+    }
+
+    if (lastParent1Day && lastParent1Day.getTime() >= monthStart.getTime()) {
+      const forcedEnd = lastParent1Day.getTime() < monthEnd.getTime() ? lastParent1Day : monthEnd;
+      if (forcedEnd.getTime() >= monthStart.getTime()) {
+        monthSegments.push({ start: monthStart, end: forcedEnd, forcedOwner: 'parent1' });
+      }
+    }
+
+    const segmentStart = cutoff.getTime() > monthStart.getTime() ? cutoff : monthStart;
+    if (segmentStart.getTime() <= monthEnd.getTime()) {
+      monthSegments.push({ start: segmentStart, end: monthEnd, forcedOwner: 'parent2' });
+    }
+  }
+
+  if (!monthSegments.length) {
+    return;
+  }
+
   const remainingPreferredMonths: Record<'parent1' | 'parent2', number> = {
     parent1: Math.max(0, context.preferredParent1Months),
     parent2: Math.max(0, context.preferredParent2Months),
@@ -356,8 +415,12 @@ function ensureMinimumIncomePerMonth(
     parent2: Math.max(0, context.parent2HighDailyNet),
   };
 
-  for (const { start: monthStart, end: monthEnd } of months) {
-    const daysInMonth = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
+  for (const { start: monthStart, end: monthEnd, forcedOwner } of monthSegments) {
+    const segmentDays = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
+    const fullMonthStart = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth(), 1));
+    const fullMonthEnd = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
+    const fullMonthDays = Math.max(1, differenceInCalendarDays(fullMonthEnd, fullMonthStart) + 1);
+    const monthShare = Math.min(1, segmentDays / fullMonthDays);
 
     const parentDayTotals: Record<'parent1' | 'parent2', number> = { parent1: 0, parent2: 0 };
     const parentMaxDaysPerWeek: Record<'parent1' | 'parent2', number> = { parent1: 0, parent2: 0 };
@@ -395,7 +458,8 @@ function ensureMinimumIncomePerMonth(
       }
     }
 
-    const deficit = Math.max(0, context.minHouseholdIncome - monthIncome);
+    const targetIncome = context.minHouseholdIncome * monthShare;
+    const deficit = Math.max(0, targetIncome - monthIncome);
     if (deficit <= 0) {
       continue;
     }
@@ -403,7 +467,7 @@ function ensureMinimumIncomePerMonth(
     let owner: 'parent1' | 'parent2';
 
     const monthKey = format(monthStart, 'yyyy-MM');
-    const preAssignedOwner = context.monthOwnership?.get(monthKey);
+    const preAssignedOwner = forcedOwner ?? context.monthOwnership?.get(monthKey);
 
     if (preAssignedOwner) {
       owner = preAssignedOwner;
@@ -420,7 +484,7 @@ function ensureMinimumIncomePerMonth(
     }
 
     if (remainingPreferredMonths[owner] > 0) {
-      remainingPreferredMonths[owner] -= 1;
+      remainingPreferredMonths[owner] = Math.max(0, remainingPreferredMonths[owner] - monthShare);
     }
 
     const usedDaysPerWeek = Math.min(7, Math.max(0, Math.round(parentMaxDaysPerWeek[owner] || 0)));
@@ -431,7 +495,7 @@ function ensureMinimumIncomePerMonth(
       continue;
     }
 
-    remainingCapacityDays = Math.min(remainingCapacityDays, daysInMonth);
+    remainingCapacityDays = Math.min(remainingCapacityDays, segmentDays);
 
     const lowDaily = parentLowDaily[owner];
     const highDaily = parentHighDaily[owner];
@@ -456,7 +520,7 @@ function ensureMinimumIncomePerMonth(
       }
 
       const daysPerWeek = clampDaysPerWeek(takeDays / WEEKS_PER_MONTH);
-      const calendarDays = daysInMonth;
+      const calendarDays = segmentDays;
       const periodStart = new Date(monthStart);
       const periodEnd = new Date(monthEnd);
       const totalBenefitIncome = takeDays * benefitDaily;
@@ -741,6 +805,7 @@ interface SegmentContext {
   timelineLimit?: Date | null;
   parentLastEndDates: Record<'parent1' | 'parent2' | 'both', Date | null>;
   parentEarliestStart: Record<'parent1' | 'parent2' | 'both', Date | null>;
+  parent1CutoffDate?: Date | null;
 }
 
 function addSegment(
@@ -828,7 +893,7 @@ function addSegment(
     startDate = startOfDay(earliestStart);
   }
 
-  const { timelineLimit: limit } = context;
+  const { timelineLimit: limit, parent1CutoffDate } = context;
 
   if (limit && startDate.getTime() > limit.getTime()) {
     return;
@@ -836,6 +901,20 @@ function addSegment(
 
   let effectiveCalendarDays = calendarDays;
   let endDate = addDays(startDate, effectiveCalendarDays - 1);
+
+  const cutoff = parent1CutoffDate ? startOfDay(parent1CutoffDate) : null;
+
+  if (parent === 'parent1' && cutoff) {
+    const lastAllowedDay = startOfDay(addDays(cutoff, -1));
+    if (lastAllowedDay.getTime() < startDate.getTime()) {
+      return;
+    }
+
+    if (endDate.getTime() >= cutoff.getTime()) {
+      endDate = lastAllowedDay;
+      effectiveCalendarDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+    }
+  }
 
   if (limit && endDate.getTime() > limit.getTime()) {
     endDate = startOfDay(limit);
@@ -974,13 +1053,10 @@ function convertLegacyResult(
   const sharedInitialWorkingDays = initialWorkingDays;
 
   const parent1EarliestStart = startOfDay(addDays(initialEndDate, 1));
-  const parent2EarliestStartCandidate = startOfDay(
+  const parent1CutoffDate = startOfDay(
     computeLimitDate(parent1EarliestStart, Math.max(0, context.preferredParent1Months))
   );
-  const parent2EarliestStart =
-    parent2EarliestStartCandidate.getTime() < parent1EarliestStart.getTime()
-      ? parent1EarliestStart
-      : parent2EarliestStartCandidate;
+  const parent2EarliestStart = parent1CutoffDate;
 
   const parentEarliestStart: Record<'parent1' | 'parent2' | 'both', Date | null> = {
     parent1: parent1EarliestStart,
@@ -993,6 +1069,7 @@ function convertLegacyResult(
     timelineLimit,
     parentLastEndDates,
     parentEarliestStart,
+    parent1CutoffDate,
   };
 
   const preferFullWeek = meta.key === 'maximize-income';
@@ -1398,6 +1475,25 @@ function convertLegacyResult(
 
     ensureEarliestStart();
 
+    const cutoff = parent1CutoffDate ? startOfDay(parent1CutoffDate) : null;
+    if (cutoff) {
+      if (parent === 'parent1') {
+        const lastAllowed = startOfDay(addDays(cutoff, -1));
+        if (startDate.getTime() >= cutoff.getTime()) {
+          return;
+        }
+
+        const maxDays = differenceInCalendarDays(lastAllowed, startDate) + 1;
+        if (maxDays <= 0) {
+          return;
+        }
+
+        effectiveDays = Math.min(effectiveDays, maxDays);
+      } else if (parent === 'parent2' && startDate.getTime() < cutoff.getTime()) {
+        startDate = startOfDay(cutoff);
+      }
+    }
+
     if (timelineLimit) {
       const latestStart = startOfDay(addDays(timelineLimit, 1 - effectiveDays));
       if (startDate.getTime() > latestStart.getTime()) {
@@ -1577,7 +1673,14 @@ function convertLegacyResult(
 
   context.monthOwnership = monthOwnershipMap;
 
-  ensureMinimumIncomePerMonth(mergedPeriods, context, remainingLowDays, remainingHighDays, timelineLimit ?? null);
+  ensureMinimumIncomePerMonth(
+    mergedPeriods,
+    context,
+    remainingLowDays,
+    remainingHighDays,
+    timelineLimit ?? null,
+    parent1CutoffDate
+  );
 
   const orderedForSequencing = [...mergedPeriods].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
@@ -1693,6 +1796,7 @@ function convertLegacyResult(
             baseDaysPerWeek: baseDaysPerWeek ?? 0,
             remainingLowDays,
             remainingHighDays,
+            parent1CutoffDate,
           });
 
           for (const topUpPeriod of fillerTopUps) {
