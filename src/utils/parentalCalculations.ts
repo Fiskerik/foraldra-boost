@@ -1476,6 +1476,43 @@ function convertLegacyResult(
     }
   }
 
+  const usedLowDaysByParent: RemainingBenefitDays = { parent1: 0, parent2: 0 };
+  const usedHighDaysByParent: RemainingBenefitDays = { parent1: 0, parent2: 0 };
+
+  mergedPeriods.forEach(period => {
+    const benefitDays = period.benefitDaysUsed ?? period.daysCount ?? 0;
+    if (!benefitDays || period.benefitLevel === 'none') {
+      return;
+    }
+
+    const targets: ('parent1' | 'parent2')[] =
+      period.parent === 'both'
+        ? ['parent1', 'parent2']
+        : period.parent === 'parent1'
+        ? ['parent1']
+        : ['parent2'];
+
+    const share = period.parent === 'both' ? benefitDays / 2 : benefitDays;
+
+    targets.forEach(parentKey => {
+      if (period.benefitLevel === 'low') {
+        usedLowDaysByParent[parentKey] += share;
+      } else if (period.benefitLevel === 'high' || period.benefitLevel === 'parental-salary') {
+        usedHighDaysByParent[parentKey] += share;
+      }
+    });
+  });
+
+  const remainingLowDays: RemainingBenefitDays = {
+    parent1: Math.max(0, context.parent1LowTotalDays - usedLowDaysByParent.parent1),
+    parent2: Math.max(0, context.parent2LowTotalDays - usedLowDaysByParent.parent2),
+  };
+
+  const remainingHighDays: RemainingBenefitDays = {
+    parent1: Math.max(0, context.parent1HighTotalDays - usedHighDaysByParent.parent1),
+    parent2: Math.max(0, context.parent2HighTotalDays - usedHighDaysByParent.parent2),
+  };
+
   ensureMinimumIncomePerMonth(mergedPeriods, context, remainingLowDays, remainingHighDays, timelineLimit ?? null);
 
   const sortedByStart = [...mergedPeriods].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
@@ -1538,43 +1575,6 @@ function convertLegacyResult(
   }
 
   mergedPeriods.splice(0, mergedPeriods.length, ...sequentialPeriods);
-
-  const usedLowDaysByParent: RemainingBenefitDays = { parent1: 0, parent2: 0 };
-  const usedHighDaysByParent: RemainingBenefitDays = { parent1: 0, parent2: 0 };
-
-  mergedPeriods.forEach(period => {
-    const benefitDays = period.benefitDaysUsed ?? period.daysCount ?? 0;
-    if (!benefitDays || period.benefitLevel === 'none') {
-      return;
-    }
-
-    const targets: ('parent1' | 'parent2')[] =
-      period.parent === 'both'
-        ? ['parent1', 'parent2']
-        : period.parent === 'parent1'
-        ? ['parent1']
-        : ['parent2'];
-
-    const share = period.parent === 'both' ? benefitDays / 2 : benefitDays;
-
-    targets.forEach(parentKey => {
-      if (period.benefitLevel === 'low') {
-        usedLowDaysByParent[parentKey] += share;
-      } else if (period.benefitLevel === 'high' || period.benefitLevel === 'parental-salary') {
-        usedHighDaysByParent[parentKey] += share;
-      }
-    });
-  });
-
-  const remainingLowDays: RemainingBenefitDays = {
-    parent1: Math.max(0, context.parent1LowTotalDays - usedLowDaysByParent.parent1),
-    parent2: Math.max(0, context.parent2LowTotalDays - usedLowDaysByParent.parent2),
-  };
-
-  const remainingHighDays: RemainingBenefitDays = {
-    parent1: Math.max(0, context.parent1HighTotalDays - usedHighDaysByParent.parent1),
-    parent2: Math.max(0, context.parent2HighTotalDays - usedHighDaysByParent.parent2),
-  };
 
   if (timelineLimit) {
     const limitDate = startOfDay(timelineLimit);
