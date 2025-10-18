@@ -154,6 +154,7 @@ interface TopUpOptions {
   parent1CutoffDate?: Date | null;
   parentCalendarUsage: Record<'parent1' | 'parent2', number>;
   parentCalendarCaps: Record<'parent1' | 'parent2', number>;
+  preferLowFirst?: boolean;
 }
 
 const APPROX_CALENDAR_DAYS_PER_MONTH = 30;
@@ -200,6 +201,7 @@ function createTopUpPeriods({
   parent1CutoffDate,
   parentCalendarUsage,
   parentCalendarCaps,
+  preferLowFirst = false,
 }: TopUpOptions): LeavePeriod[] {
   const normalizedStart = startOfDay(start);
   const normalizedEnd = startOfDay(end);
@@ -306,70 +308,47 @@ function createTopUpPeriods({
       ? Math.max(0, Math.floor(remainingCalendarCapForParent))
       : Number.POSITIVE_INFINITY;
 
-    if (deficit > 0 && remainingCapacity > 0 && highDailyNet > 0 && remainingHighDays[parent] > 0 && availableCalendarCap > 0) {
-      const needHigh = Math.ceil(deficit / highDailyNet);
-      const takeHighCandidate = Math.min(needHigh, remainingHighDays[parent], remainingCapacity, availableCalendarCap);
-      const takeHigh = Math.max(0, Math.floor(takeHighCandidate));
+    const order: Array<'high' | 'low'> = preferLowFirst ? ['low', 'high'] : ['high', 'low'];
 
-      if (takeHigh > 0) {
+    for (const benefitType of order) {
+      if (deficit <= 0 || remainingCapacity <= 0 || availableCalendarCap <= 0) {
+        break;
+      }
+
+      const dailyNet = benefitType === 'high' ? highDailyNet : lowDailyNet;
+      const remainingDaysPool = benefitType === 'high' ? remainingHighDays : remainingLowDays;
+
+      if (dailyNet <= 0 || remainingDaysPool[parent] <= 0) {
+        continue;
+      }
+
+      const needed = Math.ceil(deficit / dailyNet);
+      const takeCandidate = Math.min(needed, remainingDaysPool[parent], remainingCapacity, availableCalendarCap);
+      const take = Math.max(0, Math.floor(takeCandidate));
+
+      if (take > 0) {
         const periodShare = segment.calendarDays > 0 ? Math.min(1, Math.max(0, availableCalendarCap / segment.calendarDays)) : 0;
         const effectiveProportion = Math.max(0.01, proportion * Math.max(periodShare, 0.01));
-        const daysPerWeek = clampDaysPerWeek(takeHigh / (WEEKS_PER_MONTH * effectiveProportion));
-        const weeksUsed = daysPerWeek > 0 ? takeHigh / daysPerWeek : 0;
-        const calendarDaysForHigh = Math.min(
+        const daysPerWeek = clampDaysPerWeek(take / (WEEKS_PER_MONTH * effectiveProportion));
+        const weeksUsed = daysPerWeek > 0 ? take / daysPerWeek : 0;
+        const calendarDaysForBenefit = Math.min(
           remainingCalendarDays,
           Math.max(1, Math.round(weeksUsed * 7)),
           availableCalendarCap
         );
 
-        if (calendarDaysForHigh > 0) {
-          const otherIncomeForHigh = monthOtherIncomeTotal * (calendarDaysForHigh / segment.calendarDays);
+        if (calendarDaysForBenefit > 0) {
+          const otherIncome = monthOtherIncomeTotal * (calendarDaysForBenefit / segment.calendarDays);
 
-          pushPeriod('high', takeHigh, highDailyNet, calendarDaysForHigh, daysPerWeek, otherIncomeForHigh);
+          pushPeriod(benefitType, take, dailyNet, calendarDaysForBenefit, daysPerWeek, otherIncome);
 
-          remainingHighDays[parent] = Math.max(0, remainingHighDays[parent] - takeHigh);
-          remainingCapacity = Math.max(0, remainingCapacity - takeHigh);
-          deficit = Math.max(0, deficit - takeHigh * highDailyNet);
+          remainingDaysPool[parent] = Math.max(0, remainingDaysPool[parent] - take);
+          remainingCapacity = Math.max(0, remainingCapacity - take);
+          deficit = Math.max(0, deficit - take * dailyNet);
           if (Number.isFinite(remainingCalendarCapForParent)) {
-            remainingCalendarCapForParent = Math.max(0, remainingCalendarCapForParent - calendarDaysForHigh);
+            remainingCalendarCapForParent = Math.max(0, remainingCalendarCapForParent - calendarDaysForBenefit);
           }
-          parentCalendarUsage[parent] += calendarDaysForHigh;
-        }
-      }
-    }
-
-    const updatedCalendarCap = Number.isFinite(remainingCalendarCapForParent)
-      ? Math.max(0, Math.floor(remainingCalendarCapForParent))
-      : Number.POSITIVE_INFINITY;
-
-    if (deficit > 0 && remainingCapacity > 0 && lowDailyNet > 0 && remainingLowDays[parent] > 0 && updatedCalendarCap > 0) {
-      const needLow = Math.ceil(deficit / lowDailyNet);
-      const takeLowCandidate = Math.min(needLow, remainingLowDays[parent], remainingCapacity, updatedCalendarCap);
-      const takeLow = Math.max(0, Math.floor(takeLowCandidate));
-
-      if (takeLow > 0) {
-        const periodShare = segment.calendarDays > 0 ? Math.min(1, Math.max(0, updatedCalendarCap / segment.calendarDays)) : 0;
-        const effectiveProportion = Math.max(0.01, proportion * Math.max(periodShare, 0.01));
-        const daysPerWeek = clampDaysPerWeek(takeLow / (WEEKS_PER_MONTH * effectiveProportion));
-        const weeksUsed = daysPerWeek > 0 ? takeLow / daysPerWeek : 0;
-        const calendarDaysForLow = Math.min(
-          remainingCalendarDays,
-          Math.max(1, Math.round(weeksUsed * 7)),
-          updatedCalendarCap
-        );
-
-        if (calendarDaysForLow > 0) {
-          const otherIncomeForLow = monthOtherIncomeTotal * (calendarDaysForLow / segment.calendarDays);
-
-          pushPeriod('low', takeLow, lowDailyNet, calendarDaysForLow, daysPerWeek, otherIncomeForLow);
-
-          remainingLowDays[parent] = Math.max(0, remainingLowDays[parent] - takeLow);
-          remainingCapacity = Math.max(0, remainingCapacity - takeLow);
-          deficit = Math.max(0, deficit - takeLow * lowDailyNet);
-          if (Number.isFinite(remainingCalendarCapForParent)) {
-            remainingCalendarCapForParent = Math.max(0, remainingCalendarCapForParent - calendarDaysForLow);
-          }
-          parentCalendarUsage[parent] += calendarDaysForLow;
+          parentCalendarUsage[parent] += calendarDaysForBenefit;
         }
       }
     }
@@ -390,7 +369,8 @@ function ensureMinimumIncomePerMonth(
   remainingLowDays: RemainingBenefitDays,
   remainingHighDays: RemainingBenefitDays,
   timelineLimit: Date | null,
-  parent1CutoffDate: Date | null
+  parent1CutoffDate: Date | null,
+  preferLowFirst: boolean = false
 ): void {
   if (!context.minHouseholdIncome || context.minHouseholdIncome <= 0) {
     return;
@@ -695,8 +675,27 @@ function ensureMinimumIncomePerMonth(
       parentCalendarUsage[owner] += calendarDays;
     };
 
-    allocateTopUp('high', highDaily);
-    allocateTopUp('low', lowDaily);
+    // Check if this month has parental salary periods for the owner
+    const ownerHasParentalSalary = periods.some(p =>
+      p.parent === owner &&
+      p.benefitLevel === 'parental-salary' &&
+      p.startDate <= monthEnd &&
+      p.endDate >= monthStart
+    );
+
+    if (ownerHasParentalSalary) {
+      // Must use high benefit days when parental salary is active
+      allocateTopUp('high', highDaily);
+      allocateTopUp('low', lowDaily);
+    } else if (preferLowFirst) {
+      // Save-days strategy: use low first, then high
+      allocateTopUp('low', lowDaily);
+      allocateTopUp('high', highDaily);
+    } else {
+      // Maximize-income strategy: use high first
+      allocateTopUp('high', highDaily);
+      allocateTopUp('low', lowDaily);
+    }
 
     if (remainingDeficit > 0) {
       console.warn(
@@ -1865,7 +1864,8 @@ function convertLegacyResult(
     remainingLowDays,
     remainingHighDays,
     timelineLimit ?? null,
-    parent1CutoffDate
+    parent1CutoffDate,
+    meta.key === 'save-days'
   );
 
   const orderedForSequencing = [...mergedPeriods].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
@@ -1999,6 +1999,7 @@ function convertLegacyResult(
             parent1CutoffDate,
             parentCalendarUsage: currentCalendarUsage,
             parentCalendarCaps,
+            preferLowFirst: meta.key === 'save-days',
           });
 
           for (const topUpPeriod of fillerTopUps) {

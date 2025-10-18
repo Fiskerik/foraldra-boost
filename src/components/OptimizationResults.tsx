@@ -702,7 +702,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="text-muted-foreground space-y-0.5">
+                                     <div className="text-muted-foreground space-y-0.5">
                                       <div>{month.calendarDays} kalenderdagar</div>
                                       {isInitialTenDayGroup ? (
                                         <div className="text-[10px]">• 2 x 10 uttagna dagar</div>
@@ -727,10 +727,16 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                         </>
                                       )}
                                     </div>
-                                    <div className={`font-semibold ${isLowest ? 'text-yellow-700 dark:text-yellow-400' : isBelowMinimum ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>
-                                      Hushållets inkomst: {formatCurrency(aggregatedIncome)}
-                                      {isLowest && <span className="ml-1 text-[9px]">(lägst)</span>}
-                                    </div>
+                                    {group.parent !== 'both' && (
+                                      <div className="text-muted-foreground">
+                                        {workingParentLabel}: {formatCurrency(workingIncome)}
+                                        {shouldShowProration && (
+                                          <span className="ml-1">
+                                            ({formatCurrency(baseWorkingIncome)} × {month.calendarDays}/{monthLength})
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                      <div className="font-medium">
                                        {leaveParentLabel}: {formatCurrency(leaveIncome)}
                                        {group.parent !== 'both' && (
@@ -742,41 +748,18 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                          </span>
                                        )}
                                      </div>
-                                    {group.parent !== 'both' && (
-                                      <div className="text-muted-foreground">
-                                        {workingParentLabel}: {formatCurrency(workingIncome)}
-                                        {shouldShowProration && (
-                                          <span className="ml-1">
-                                            ({formatCurrency(baseWorkingIncome)} × {month.calendarDays}/{monthLength})
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
                                      <div className="text-muted-foreground italic">
                                       Föräldrapenning: {formatCurrency(benefitIncome)}
+                                    </div>
+                                    <div className={`font-semibold ${isLowest ? 'text-yellow-700 dark:text-yellow-400' : isBelowMinimum ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>
+                                      Hushållets inkomst: {formatCurrency(aggregatedIncome)}
+                                      {isLowest && <span className="ml-1 text-[9px]">(lägst)</span>}
                                     </div>
                                   </div>
                                 );
                               })}
-                              {/* Add household income summary at the bottom */}
-                              {monthlyBreakdown.length > 0 && (
-                                <div className="mt-3 p-2 bg-primary/10 rounded border border-primary/20">
-                                  <div className="text-sm font-semibold">
-                                    Total hushållsinkomst (alla månader): {formatCurrency(
-                                      monthlyBreakdown.reduce((sum, month) => {
-                                        const aggregatedInfo = aggregatedMonthMap.get(month.monthKey);
-                                        return sum + (aggregatedInfo?.totalIncome ?? month.monthlyIncome);
-                                      }, 0)
-                                    )}
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           )}
-
-                           <div className="font-semibold text-sm mt-2 pt-2 border-t border-border">
-                            Periodinkomst: {formatCurrency(totalHouseholdIncome)}
-                          </div>
                         </div>
                       </div>
                     );
