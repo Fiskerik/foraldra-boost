@@ -1514,12 +1514,19 @@ function convertLegacyResult(
   for (const period of periods) {
     const last = mergedPeriods[mergedPeriods.length - 1];
 
+    // Don't merge parental-salary with high, or initial periods with other periods
+    const shouldNotMerge = 
+      (last?.benefitLevel === 'parental-salary' && period.benefitLevel === 'high') ||
+      (last?.benefitLevel === 'high' && period.benefitLevel === 'parental-salary') ||
+      (last?.isInitialTenDayPeriod !== period.isInitialTenDayPeriod);
+
     // Check if we can merge with the previous period
     if (
       last &&
       last.parent === period.parent &&
       last.benefitLevel === period.benefitLevel &&
       last.daysPerWeek === period.daysPerWeek &&
+      !shouldNotMerge &&
       Math.abs(last.dailyIncome - period.dailyIncome) < 1 && // Same income
       Math.abs(last.dailyBenefit - period.dailyBenefit) < 1 && // Same benefit
       Math.abs((last.otherParentDailyIncome || 0) - (period.otherParentDailyIncome || 0)) < 1 // Same other parent income

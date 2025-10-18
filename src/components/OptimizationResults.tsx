@@ -41,6 +41,8 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     monthStart: Date;
     monthLength: number;
     daysPerWeekValues: number[];
+    benefitLevels: Array<'parental-salary' | 'high' | 'low' | 'none'>;
+    benefitDaysByLevel: Record<string, number>;
   }
 
   const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
@@ -230,9 +232,8 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
 
     const monthMap = new Map<string, MonthlyBreakdownEntry>();
 
-    periodList
-      .flatMap(breakDownByMonth)
-      .forEach(segment => {
+    periodList.forEach(period => {
+      breakDownByMonth(period).forEach(segment => {
         const monthStart = startOfMonth(segment.startDate);
         const key = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
         const monthLength = differenceInCalendarDays(endOfMonth(monthStart), monthStart) + 1;
@@ -247,6 +248,10 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             monthStart,
             monthLength,
             daysPerWeekValues: [segment.daysPerWeekValue],
+            benefitLevels: [segment.daysPerWeekValue > 0 ? period.benefitLevel : 'none'],
+            benefitDaysByLevel: {
+              [period.benefitLevel]: segment.benefitDays
+            }
           });
           return;
         }
@@ -272,7 +277,17 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         if (segment.otherParentMonthlyBase > existing.otherParentMonthlyBase) {
           existing.otherParentMonthlyBase = segment.otherParentMonthlyBase;
         }
+        
+        // Track benefit levels and days by level
+        if (!existing.benefitLevels.includes(period.benefitLevel)) {
+          existing.benefitLevels.push(period.benefitLevel);
+        }
+        if (!existing.benefitDaysByLevel[period.benefitLevel]) {
+          existing.benefitDaysByLevel[period.benefitLevel] = 0;
+        }
+        existing.benefitDaysByLevel[period.benefitLevel] += segment.benefitDays;
       });
+    });
 
     return Array.from(monthMap.values()).sort((a, b) => a.monthStart.getTime() - b.monthStart.getTime());
   };
@@ -687,10 +702,30 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="text-muted-foreground">
-                                      {month.calendarDays} kalenderdagar • {
-                                        isInitialTenDayGroup ? '2 x 10 uttagna dagar' : `${month.benefitDays} uttagna dagar`
-                                      }
+                                    <div className="text-muted-foreground space-y-0.5">
+                                      <div>{month.calendarDays} kalenderdagar</div>
+                                      {isInitialTenDayGroup ? (
+                                        <div className="text-[10px]">• 2 x 10 uttagna dagar</div>
+                                      ) : (
+                                        <>
+                                          {month.benefitDays > 0 && (
+                                            <div className="text-[10px]">• {month.benefitDays} uttagna dagar totalt</div>
+                                          )}
+                                          {Object.entries(month.benefitDaysByLevel || {}).map(([level, days]) => {
+                                            if (days === 0 || level === 'none') return null;
+                                            const label = 
+                                              level === 'parental-salary' ? 'Föräldralön (90%)' :
+                                              level === 'high' ? 'Vanliga (80%)' :
+                                              level === 'low' ? 'Lägstanivå (180kr/dag)' : 'Ingen';
+                                            const daysPerWeek = Math.round(days / 4.33);
+                                            return (
+                                              <div key={level} className="text-[10px] pl-2">
+                                                → {days} dagar {label} ({daysPerWeek} d/v)
+                                              </div>
+                                            );
+                                          })}
+                                        </>
+                                      )}
                                     </div>
                                     <div className={`font-semibold ${isLowest ? 'text-yellow-700 dark:text-yellow-400' : isBelowMinimum ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>
                                       Hushållets inkomst: {formatCurrency(aggregatedIncome)}
@@ -739,30 +774,6 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                             </div>
                           )}
 
-                          {group.parent !== 'both' && (
-                            <div className="mt-2 p-2 bg-muted/50 rounded space-y-1">
-                              {uniqueDaysPerWeekLabels.every(label => label !== 'Heltid') ? (
-                                <>
-                                  <div className="text-xs text-muted-foreground">
-                                    Lediga förälderns totala inkomst: {formatCurrency(leaveParentMonthlyIncome)}/mån
-                                  </div>
-                                  <div className="text-xs text-muted-foreground italic pl-2">
-                                    (varav {formatCurrency(leaveBenefitMonthly)}/mån föräldrapenning)
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="text-xs text-muted-foreground">
-                                  Lediga förälderns ersättning: {formatCurrency(leaveBenefitMonthly)}/mån
-                                </div>
-                              )}
-                              <div className="text-xs text-muted-foreground">
-                                Arbetande förälderns lön (netto): {formatCurrency(otherParentMonthlyIncome)}/mån
-                              </div>
-                              <div className="text-xs font-semibold border-t border-border pt-1 mt-1">
-                                Hushållets månadsinkomst: {formatCurrency(householdMonthlyIncome)}
-                              </div>
-                            </div>
-                          )}
                            <div className="font-semibold text-sm mt-2 pt-2 border-t border-border">
                             Periodinkomst: {formatCurrency(totalHouseholdIncome)}
                           </div>
