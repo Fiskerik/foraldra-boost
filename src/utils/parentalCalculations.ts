@@ -1,4 +1,4 @@
-import { addDays, addMonths, differenceInCalendarDays, format, startOfDay } from 'date-fns';
+import { addDays, addMonths, differenceInCalendarDays, format, startOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import { sv } from 'date-fns/locale';
 
 import {
@@ -52,6 +52,9 @@ export interface LeavePeriod {
   isPreferenceFiller?: boolean;
   transferredDays?: number;
   transferredFromParent?: 'parent1' | 'parent2';
+  needsSequencing?: boolean;
+  isTopUp?: boolean;
+  monthlyIncome?: number;
 }
 
 const PARENTAL_BENEFIT_CEILING = 49000;
@@ -683,6 +686,7 @@ function ensureMinimumIncomePerMonth(
         otherParentDailyIncome: 0,
         otherParentMonthlyIncome: 0,
         isPreferenceFiller: true,
+        needsSequencing: true,
       });
 
       remainingDaysPool[owner] = Math.max(0, remainingDaysPool[owner] - takeDays);
@@ -2052,15 +2056,123 @@ function convertLegacyResult(
     }
   }
 
-  const orderedForSequencing = [...mergedPeriods].sort((a, b) => {
-    const ta = a.startDate.getTime();
-    const tb = b.startDate.getTime();
-    if (ta !== tb) return ta - tb;
-    // Initial 2x10 first when equal start
-    const ai = a.isInitialTenDayPeriod ? 1 : 0;
-    const bi = b.isInitialTenDayPeriod ? 1 : 0;
-    return bi - ai;
-  });
+  // For "Spara dagar" strategy, optimize monthly day usage to minimize days while meeting threshold
+  if (meta.key === 'save-days') {
+    // Analyze each month and trim excess days
+    const monthlyAnalysis = new Map<string, {
+      monthStart: Date;
+      monthEnd: Date;
+      totalIncome: number;
+      periods: LeavePeriod[];
+    }>();
+
+    // Group periods by month
+    for (const period of mergedPeriods) {
+      const periodStart = startOfDay(new Date(period.startDate));
+      const periodEnd = startOfDay(new Date(period.endDate));
+      
+      let cursor = new Date(periodStart);
+      while (cursor.getTime() <= periodEnd.getTime()) {
+        const monthStart = startOfMonth(cursor);
+        const monthEnd = endOfMonth(monthStart);
+        const monthKey = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
+        
+        if (!monthlyAnalysis.has(monthKey)) {
+          monthlyAnalysis.set(monthKey, {
+            monthStart,
+            monthEnd,
+            totalIncome: 0,
+            periods: []
+          });
+        }
+        
+        const monthData = monthlyAnalysis.get(monthKey)!;
+        if (!monthData.periods.includes(period)) {
+          monthData.periods.push(period);
+        }
+        
+        // Calculate income contribution for this month
+        const segmentStart = cursor.getTime() < periodStart.getTime() ? periodStart : cursor;
+        const segmentEnd = monthEnd.getTime() < periodEnd.getTime() ? monthEnd : periodEnd;
+        const segmentCalendarDays = Math.max(1, differenceInCalendarDays(segmentEnd, segmentStart) + 1);
+        
+        if (period.benefitLevel !== 'none' && period.daysPerWeek && period.daysPerWeek > 0) {
+          const benefitDaysInSegment = Math.round((segmentCalendarDays / 7) * period.daysPerWeek);
+          const segmentIncome = benefitDaysInSegment * period.dailyBenefit;
+          monthData.totalIncome += segmentIncome;
+          
+          // Add other parent's income for this segment
+          if (period.parent !== 'both') {
+            const otherParentDaily = period.otherParentDailyIncome || 0;
+            monthData.totalIncome += otherParentDaily * segmentCalendarDays;
+          }
+        }
+        
+        cursor = addDays(monthEnd, 1);
+      }
+    }
+
+    // For each month exceeding threshold by a significant margin, try to reduce days
+    const EXCESS_BUFFER = 2000; // Only trim if > 2000 kr above threshold
+    
+    for (const [monthKey, monthData] of monthlyAnalysis.entries()) {
+      if (monthData.totalIncome > context.minHouseholdIncome + EXCESS_BUFFER) {
+        const excess = monthData.totalIncome - context.minHouseholdIncome;
+        
+        // Find high-benefit periods in this month (excluding parental-salary)
+        const trimCandidates = monthData.periods.filter(p => 
+          p.benefitLevel === 'high' && 
+          !p.isInitialTenDayPeriod &&
+          p.daysPerWeek && p.daysPerWeek > 1
+        );
+        
+        // If no high-benefit candidates, try low-benefit
+        if (trimCandidates.length === 0) {
+          trimCandidates.push(...monthData.periods.filter(p => 
+            p.benefitLevel === 'low' &&
+            p.daysPerWeek && p.daysPerWeek > 1
+          ));
+        }
+        
+        for (const period of trimCandidates) {
+          if (excess <= 0) break;
+          
+          // Try reducing by 1 day/week
+          const currentDaysPerWeek = period.daysPerWeek || 7;
+          if (currentDaysPerWeek > 1) {
+            const newDaysPerWeek = currentDaysPerWeek - 1;
+            const dailySavings = period.dailyBenefit;
+            const monthlySavings = dailySavings * 4.33; // Average weeks per month
+            
+            if (monthlySavings <= excess + 500) { // Allow some tolerance
+              period.daysPerWeek = newDaysPerWeek;
+              const newBenefitDays = Math.round((period.calendarDays / 7) * newDaysPerWeek);
+              period.benefitDaysUsed = newBenefitDays;
+              period.daysCount = newBenefitDays;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Separate periods that need sequencing from those with fixed dates
+  const fixedDatePeriods = mergedPeriods.filter(p => !p.needsSequencing);
+  const floatingPeriods = mergedPeriods.filter(p => p.needsSequencing);
+
+  const orderedForSequencing = [
+    ...fixedDatePeriods.sort((a, b) => {
+      const ta = a.startDate.getTime();
+      const tb = b.startDate.getTime();
+      if (ta !== tb) return ta - tb;
+      // Initial 2x10 first when equal start
+      const ai = a.isInitialTenDayPeriod ? 1 : 0;
+      const bi = b.isInitialTenDayPeriod ? 1 : 0;
+      return bi - ai;
+    }),
+    ...floatingPeriods
+  ];
 
   const sequentialPeriods: LeavePeriod[] = [];
   let cursor = startOfDay(baseStartDate);
@@ -2073,9 +2185,16 @@ function convertLegacyResult(
       break;
     }
 
-    let startDate = startOfDay(period.startDate);
-    if (startDate.getTime() < cursor.getTime()) {
+    let startDate: Date;
+    if (period.needsSequencing) {
+      // Floating periods are placed sequentially from cursor
       startDate = new Date(cursor);
+    } else {
+      // Fixed-date periods respect their planned start date
+      startDate = startOfDay(period.startDate);
+      if (startDate.getTime() < cursor.getTime()) {
+        startDate = new Date(cursor);
+      }
     }
 
     const plannedCalendarDays = Math.max(1, period.calendarDays || Math.round(period.daysCount));
@@ -2230,7 +2349,11 @@ function convertLegacyResult(
     }
   }
 
-  const totalIncome = mergedPeriods.reduce((sum, period) => sum + period.dailyIncome * (period.calendarDays ?? period.daysCount), 0);
+    const totalIncome = mergedPeriods.reduce((sum, period) => {
+      if (period.benefitLevel === 'none') return sum;
+      const daysToCount = period.benefitDaysUsed ?? period.daysCount;
+      return sum + period.dailyIncome * daysToCount;
+    }, 0);
   
   // Calculate days used by benefit level
   const highBenefitDaysUsed = mergedPeriods.reduce((sum, period) => {
