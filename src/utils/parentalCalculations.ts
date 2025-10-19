@@ -484,6 +484,23 @@ function ensureMinimumIncomePerMonth(
   };
 
   for (const { start: monthStart, end: monthEnd, forcedOwner } of monthSegments) {
+    // Skip birth month if it only contains initial 2x10 periods
+    const hasInitialTenDay = periods.some(p =>
+      p.isInitialTenDayPeriod &&
+      p.startDate <= monthEnd &&
+      p.endDate >= monthStart
+    );
+    const hasNonInitialOwnerLeave = periods.some(p =>
+      !p.isInitialTenDayPeriod &&
+      (p.parent === 'parent1' || p.parent === 'parent2') &&
+      p.startDate <= monthEnd &&
+      p.endDate >= monthStart
+    );
+    
+    if (hasInitialTenDay && !hasNonInitialOwnerLeave) {
+      continue;
+    }
+
     const segmentDays = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
     const fullMonthStart = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth(), 1));
     const fullMonthEnd = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
@@ -1717,7 +1734,7 @@ function convertLegacyResult(
       startDate,
       endDate,
       daysCount: effectiveDays,
-      benefitDaysUsed: effectiveDays,
+      benefitDaysUsed: 0,
       calendarDays: Math.max(1, differenceInCalendarDays(endDate, startDate) + 1),
       dailyBenefit: 0,
       dailyIncome: ownDailyIncome + otherParentDailyIncome,
@@ -1734,9 +1751,6 @@ function convertLegacyResult(
     }
 
   };
-
-  appendFiller('parent1', targetParent1Days - parentCalendarDays.parent1);
-  appendFiller('parent2', targetParent2Days - parentCalendarDays.parent2);
 
   if (timelineLimit) {
     let safetyCounter = 0;
@@ -1868,7 +1882,185 @@ function convertLegacyResult(
     meta.key === 'save-days'
   );
 
-  const orderedForSequencing = [...mergedPeriods].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  // Escalation loop: increase days/week for the lowest-income month until threshold is met
+  const MAX_ESCALATION_PASSES = 7;
+  for (let pass = 0; pass < MAX_ESCALATION_PASSES; pass++) {
+    // Recompute remaining days after each pass
+    const recomputedRemaining = {
+      low: { parent1: context.parent1LowTotalDays, parent2: context.parent2LowTotalDays },
+      high: { parent1: context.parent1HighTotalDays, parent2: context.parent2HighTotalDays }
+    };
+    
+    mergedPeriods.forEach(p => {
+      if (p.benefitLevel === 'low') {
+        recomputedRemaining.low[p.parent as 'parent1' | 'parent2'] = Math.max(
+          0,
+          recomputedRemaining.low[p.parent as 'parent1' | 'parent2'] - (p.benefitDaysUsed || 0)
+        );
+      } else if (p.benefitLevel === 'high') {
+        recomputedRemaining.high[p.parent as 'parent1' | 'parent2'] = Math.max(
+          0,
+          recomputedRemaining.high[p.parent as 'parent1' | 'parent2'] - (p.benefitDaysUsed || 0)
+        );
+      }
+    });
+
+    remainingLowDays.parent1 = recomputedRemaining.low.parent1;
+    remainingLowDays.parent2 = recomputedRemaining.low.parent2;
+    remainingHighDays.parent1 = recomputedRemaining.high.parent1;
+    remainingHighDays.parent2 = recomputedRemaining.high.parent2;
+
+    // Find month with largest deficit
+    const timelineStart = startOfDay(new Date(context.baseStartDate.getFullYear(), context.baseStartDate.getMonth(), 1));
+    const limitDate = timelineLimit ? startOfDay(timelineLimit) : null;
+    const latestExistingEnd = mergedPeriods.reduce<Date | null>((latest, period) => {
+      const periodEnd = startOfDay(period.endDate);
+      if (!latest || periodEnd.getTime() > latest.getTime()) return periodEnd;
+      return latest;
+    }, null);
+    
+    const timelineEnd = limitDate && latestExistingEnd && latestExistingEnd.getTime() < limitDate.getTime()
+      ? new Date(latestExistingEnd)
+      : (limitDate ?? (latestExistingEnd ?? startOfDay(addMonths(timelineStart, 15))));
+
+    let cursor = new Date(timelineStart);
+    let worstDeficit = 0;
+    let worstMonth: { start: Date; end: Date; owner: 'parent1' | 'parent2'; usedDaysPerWeek: number; hasParentalSalary: boolean } | null = null;
+
+    while (cursor.getTime() <= timelineEnd.getTime()) {
+      const monthStart = startOfDay(cursor);
+      const monthEndCandidate = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
+      const monthEnd = monthEndCandidate.getTime() > timelineEnd.getTime() ? new Date(timelineEnd) : monthEndCandidate;
+
+      // Skip birth month if it only has initial periods
+      const hasInitialTenDay = mergedPeriods.some(p =>
+        p.isInitialTenDayPeriod &&
+        p.startDate <= monthEnd &&
+        p.endDate >= monthStart
+      );
+      const hasNonInitialOwnerLeave = mergedPeriods.some(p =>
+        !p.isInitialTenDayPeriod &&
+        (p.parent === 'parent1' || p.parent === 'parent2') &&
+        p.startDate <= monthEnd &&
+        p.endDate >= monthStart
+      );
+
+      if (!hasInitialTenDay || hasNonInitialOwnerLeave) {
+        const segmentDays = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
+        const fullMonthStart = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth(), 1));
+        const fullMonthEnd = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
+        const fullMonthDays = Math.max(1, differenceInCalendarDays(fullMonthEnd, fullMonthStart) + 1);
+        const monthShare = Math.min(1, segmentDays / fullMonthDays);
+
+        const parentDayTotals: Record<'parent1' | 'parent2', number> = { parent1: 0, parent2: 0 };
+        const parentMaxDaysPerWeek: Record<'parent1' | 'parent2', number> = { parent1: 0, parent2: 0 };
+        let monthIncome = 0;
+
+        for (const period of mergedPeriods) {
+          const periodStart = startOfDay(period.startDate);
+          const periodEnd = startOfDay(period.endDate);
+
+          if (periodEnd.getTime() < monthStart.getTime() || periodStart.getTime() > monthEnd.getTime()) {
+            continue;
+          }
+
+          const overlapStart = periodStart.getTime() > monthStart.getTime() ? periodStart : monthStart;
+          const overlapEnd = periodEnd.getTime() < monthEnd.getTime() ? periodEnd : monthEnd;
+          const overlapDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+
+          if (overlapDays <= 0) continue;
+
+          monthIncome += (period.dailyIncome || 0) * overlapDays;
+
+          if (period.parent === 'parent1' || period.parent === 'parent2') {
+            parentDayTotals[period.parent] += overlapDays;
+            const safeDaysPerWeek = Number.isFinite(period.daysPerWeek) ? (period.daysPerWeek as number) : 0;
+            parentMaxDaysPerWeek[period.parent] = Math.max(parentMaxDaysPerWeek[period.parent], safeDaysPerWeek);
+          } else if (period.parent === 'both') {
+            parentDayTotals.parent1 += overlapDays;
+            parentDayTotals.parent2 += overlapDays;
+            const safeDaysPerWeek = Number.isFinite(period.daysPerWeek) ? (period.daysPerWeek as number) : 0;
+            parentMaxDaysPerWeek.parent1 = Math.max(parentMaxDaysPerWeek.parent1, safeDaysPerWeek);
+            parentMaxDaysPerWeek.parent2 = Math.max(parentMaxDaysPerWeek.parent2, safeDaysPerWeek);
+          }
+        }
+
+        const targetIncome = context.minHouseholdIncome * monthShare;
+        const deficit = Math.max(0, targetIncome - monthIncome);
+
+        if (deficit > worstDeficit) {
+          const monthKey = format(monthStart, 'yyyy-MM');
+          const owner = context.monthOwnership?.get(monthKey) ??
+            (parentDayTotals.parent1 > parentDayTotals.parent2 + 0.5 ? 'parent1' : 'parent2');
+          
+          const hasParentalSalary = mergedPeriods.some(p =>
+            p.parent === owner &&
+            p.benefitLevel === 'parental-salary' &&
+            p.startDate <= monthEnd &&
+            p.endDate >= monthStart
+          );
+
+          worstDeficit = deficit;
+          worstMonth = {
+            start: monthStart,
+            end: monthEnd,
+            owner,
+            usedDaysPerWeek: Math.min(7, Math.max(0, Math.round(parentMaxDaysPerWeek[owner] || 0))),
+            hasParentalSalary
+          };
+        }
+      }
+
+      cursor = startOfDay(addMonths(monthStart, 1));
+    }
+
+    // If no deficit found, we're done
+    if (!worstMonth || worstDeficit <= 0) {
+      break;
+    }
+
+    // If owner already uses 7 days/week, can't escalate further
+    if (worstMonth.usedDaysPerWeek >= 7) {
+      break;
+    }
+
+    // Check if owner has any remaining days
+    const ownerHasRemainingDays = 
+      (remainingLowDays[worstMonth.owner] > 0) || 
+      (remainingHighDays[worstMonth.owner] > 0);
+
+    if (!ownerHasRemainingDays) {
+      break;
+    }
+
+    // Call ensureMinimumIncomePerMonth again to add more days
+    const periodCountBefore = mergedPeriods.length;
+    ensureMinimumIncomePerMonth(
+      mergedPeriods,
+      context,
+      remainingLowDays,
+      remainingHighDays,
+      timelineLimit ?? null,
+      parent1CutoffDate,
+      meta.key === 'save-days'
+    );
+
+    // Check for progress
+    if (mergedPeriods.length === periodCountBefore) {
+      // No new periods added, break to avoid infinite loop
+      break;
+    }
+  }
+
+  const orderedForSequencing = [...mergedPeriods].sort((a, b) => {
+    const ta = a.startDate.getTime();
+    const tb = b.startDate.getTime();
+    if (ta !== tb) return ta - tb;
+    // Initial 2x10 first when equal start
+    const ai = a.isInitialTenDayPeriod ? 1 : 0;
+    const bi = b.isInitialTenDayPeriod ? 1 : 0;
+    return bi - ai;
+  });
 
   const sequentialPeriods: LeavePeriod[] = [];
   let cursor = startOfDay(baseStartDate);
