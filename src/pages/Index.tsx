@@ -248,8 +248,8 @@ const Index = () => {
       : undefined;
 
   useEffect(() => {
-    // Only auto-adjust if user hasn't manually set income
-    if (userHasManuallySetIncome) {
+    // Only auto-adjust when switching strategies, not on initial optimization
+    if (userHasManuallySetIncome || !optimizationResults) {
       return;
     }
 
@@ -271,7 +271,7 @@ const Index = () => {
       }
       return roundedMinimum;
     });
-  }, [selectedIncomeSummary, userHasManuallySetIncome]);
+  }, [selectedStrategyIndex, selectedIncomeSummary?.hasEligibleFullMonths, userHasManuallySetIncome]);
 
   return (
     <div className="min-h-screen bg-background">

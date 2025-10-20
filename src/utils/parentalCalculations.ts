@@ -2161,18 +2161,16 @@ function convertLegacyResult(
   const fixedDatePeriods = mergedPeriods.filter(p => !p.needsSequencing);
   const floatingPeriods = mergedPeriods.filter(p => p.needsSequencing);
 
-  const orderedForSequencing = [
-    ...fixedDatePeriods.sort((a, b) => {
-      const ta = a.startDate.getTime();
-      const tb = b.startDate.getTime();
-      if (ta !== tb) return ta - tb;
-      // Initial 2x10 first when equal start
-      const ai = a.isInitialTenDayPeriod ? 1 : 0;
-      const bi = b.isInitialTenDayPeriod ? 1 : 0;
-      return bi - ai;
-    }),
-    ...floatingPeriods
-  ];
+  // Sort fixed-date periods chronologically
+  const sortedFixedPeriods = fixedDatePeriods.sort((a, b) => {
+    const ta = a.startDate.getTime();
+    const tb = b.startDate.getTime();
+    if (ta !== tb) return ta - tb;
+    // Initial 2x10 first when equal start
+    const ai = a.isInitialTenDayPeriod ? 1 : 0;
+    const bi = b.isInitialTenDayPeriod ? 1 : 0;
+    return bi - ai;
+  });
 
   const sequentialPeriods: LeavePeriod[] = [];
   let cursor = startOfDay(baseStartDate);
@@ -2180,21 +2178,49 @@ function convertLegacyResult(
   const cutoffDate = parent1CutoffDate ? startOfDay(parent1CutoffDate) : null;
   const lastAllowedParent1 = cutoffDate ? startOfDay(addDays(cutoffDate, -1)) : null;
 
-  for (const period of orderedForSequencing) {
+  let floatingIndex = 0;
+  let fixedIndex = 0;
+
+  // Interleave fixed and floating periods to fill gaps
+  while (fixedIndex < sortedFixedPeriods.length || floatingIndex < floatingPeriods.length) {
     if (limitDate && cursor.getTime() > limitDate.getTime()) {
       break;
     }
 
+    const nextFixed = sortedFixedPeriods[fixedIndex];
+    const nextFloating = floatingPeriods[floatingIndex];
+
+    // Determine which period to place next
+    let period: LeavePeriod;
     let startDate: Date;
-    if (period.needsSequencing) {
-      // Floating periods are placed sequentially from cursor
-      startDate = new Date(cursor);
-    } else {
-      // Fixed-date periods respect their planned start date
-      startDate = startOfDay(period.startDate);
-      if (startDate.getTime() < cursor.getTime()) {
+    
+    if (nextFixed && nextFloating) {
+      const fixedStart = startOfDay(nextFixed.startDate);
+      
+      // If there's a gap before the next fixed period, fill it with floating
+      if (cursor.getTime() < fixedStart.getTime()) {
+        period = nextFloating;
         startDate = new Date(cursor);
+        floatingIndex++;
+      } else {
+        // Place the fixed period
+        period = nextFixed;
+        startDate = fixedStart.getTime() < cursor.getTime() ? new Date(cursor) : fixedStart;
+        fixedIndex++;
       }
+    } else if (nextFixed) {
+      // Only fixed periods remaining
+      period = nextFixed;
+      const fixedStart = startOfDay(nextFixed.startDate);
+      startDate = fixedStart.getTime() < cursor.getTime() ? new Date(cursor) : fixedStart;
+      fixedIndex++;
+    } else if (nextFloating) {
+      // Only floating periods remaining
+      period = nextFloating;
+      startDate = new Date(cursor);
+      floatingIndex++;
+    } else {
+      break;
     }
 
     const plannedCalendarDays = Math.max(1, period.calendarDays || Math.round(period.daysCount));

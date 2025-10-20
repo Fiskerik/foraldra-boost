@@ -199,17 +199,33 @@ export function InteractiveSliders({
                   className="py-2"
                 />
                 <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
-                {incomeBreakPointPercent !== null && incomeBreakPoint !== null && (
+                {/* Current value indicator */}
+                <div
+                  className="absolute left-0 right-0 bottom-4 pointer-events-none"
+                  style={{ left: `${(householdIncome / maxHouseholdIncome) * 100}%`, transform: "translateX(-50%)" }}
+                >
+                  <div className="h-4 w-0.5 bg-primary" />
+                  <div className="mt-0.5 text-[12px] font-bold text-primary leading-none">
+                    ▼
+                  </div>
+                </div>
+                {/* Breakpoint indicator (lowest month) */}
+                {incomeBreakPointPercent !== null && incomeBreakPoint !== null && Math.abs(incomeBreakPoint - householdIncome) > 1000 && (
                   <div
-                    className="absolute left-0 right-0 bottom-4 cursor-pointer transition-transform hover:scale-110 z-10"
+                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
                     style={{ left: `${incomeBreakPointPercent}%`, transform: "translateX(-50%)" }}
-                    onClick={() => onHouseholdIncomeChange(Math.round(incomeBreakPoint))}
-                    title={`Klicka för att sänka till ${formatCurrency(incomeBreakPoint)}`}
                   >
-              <div className="h-5 w-1 bg-amber-500" />
-              <div className="mt-0.5 text-[14px] font-bold text-amber-600 pointer-events-none leading-none">
-                ▼
-              </div>
+                    <div className="h-5 w-1 bg-amber-500 pointer-events-none" />
+                    <div 
+                      className="mt-0.5 text-[14px] font-bold text-amber-600 leading-none cursor-pointer pointer-events-auto"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onHouseholdIncomeChange(Math.round(incomeBreakPoint));
+                      }}
+                      title={`Klicka för att sänka till ${formatCurrency(incomeBreakPoint)}`}
+                    >
+                      ▼
+                    </div>
                   </div>
                 )}
               </div>
@@ -225,14 +241,27 @@ export function InteractiveSliders({
                   {formattedTotalMonths} {totalMonths === 1 ? 'månad' : 'månader'}
                 </span>
               </div>
-              <Slider
-                value={[totalMonths]}
-                onValueChange={(values) => onTotalMonthsChange(values[0])}
-                min={0}
-                max={monthsSliderMax}
-                step={0.5}
-                className="py-2"
-              />
+              <div className="relative pt-1 pb-8">
+                <Slider
+                  value={[totalMonths]}
+                  onValueChange={(values) => onTotalMonthsChange(values[0])}
+                  min={0}
+                  max={monthsSliderMax}
+                  step={0.5}
+                  className="py-2"
+                />
+                <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
+                {/* Current value indicator */}
+                <div
+                  className="absolute left-0 right-0 bottom-4 pointer-events-none"
+                  style={{ left: `${(totalMonths / monthsSliderMax) * 100}%`, transform: "translateX(-50%)" }}
+                >
+                  <div className="h-4 w-0.5 bg-primary" />
+                  <div className="mt-0.5 text-[12px] font-bold text-primary leading-none">
+                    ▼
+                  </div>
+                </div>
+              </div>
               <p className="text-[10px] text-muted-foreground">
                 Totalt antal månader lediga. {daysUsed ?? 0} av {TOTAL_BENEFIT_DAYS} dagar används.
               </p>
@@ -258,17 +287,33 @@ export function InteractiveSliders({
                   className="py-2"
                 />
                 <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
-                {recommendedDaysPercent !== null && recommendedDaysPerWeek !== null && isBelowMinimum && (
+                {/* Current value indicator */}
+                <div
+                  className="absolute left-0 right-0 bottom-4 pointer-events-none"
+                  style={{ left: `${((daysPerWeek - 1) / 6) * 100}%`, transform: "translateX(-50%)" }}
+                >
+                  <div className="h-4 w-0.5 bg-primary" />
+                  <div className="mt-0.5 text-[12px] font-bold text-primary leading-none">
+                    ▼
+                  </div>
+                </div>
+                {/* Recommended adjustment indicator */}
+                {recommendedDaysPercent !== null && recommendedDaysPerWeek !== null && isBelowMinimum && recommendedDaysPerWeek !== daysPerWeek && (
                   <div
-                    className="absolute left-0 right-0 bottom-4 cursor-pointer transition-transform hover:scale-110 z-10"
+                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
                     style={{ left: `${recommendedDaysPercent}%`, transform: "translateX(-50%)" }}
-                    onClick={() => onDaysPerWeekChange(recommendedDaysPerWeek)}
-                    title={`Klicka för att använda ${recommendedDaysPerWeek} dagar/vecka`}
                   >
-              <div className="h-5 w-1 bg-green-500" />
-              <div className="mt-0.5 text-[14px] font-bold text-green-600 pointer-events-none leading-none">
-                ▼
-              </div>
+                    <div className="h-5 w-1 bg-green-500 pointer-events-none" />
+                    <div 
+                      className="mt-0.5 text-[14px] font-bold text-green-600 leading-none cursor-pointer pointer-events-auto"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDaysPerWeekChange(recommendedDaysPerWeek);
+                      }}
+                      title={`Klicka för att använda ${recommendedDaysPerWeek} dagar/vecka`}
+                    >
+                      ▼
+                    </div>
                   </div>
                 )}
               </div>
