@@ -630,14 +630,14 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                 const isBelowMinimum = isEligibleMonth && aggregatedIncome < minHouseholdIncome;
                                 const leaveParentLabel =
                                   group.parent === 'parent1'
-                                    ? 'Förälder 1 (Hemma)'
+                                    ? 'Förälder 1 hemma'
                                     : group.parent === 'parent2'
-                                    ? 'Förälder 2 (Hemma)'
+                                    ? 'Förälder 2 hemma'
                                     : 'Båda föräldrarna hemma';
                                 const workingParentLabel =
                                   group.parent === 'parent1'
-                                    ? 'Förälder 2 (Arbetar)'
-                                    : 'Förälder 1 (Arbetar)';
+                                    ? 'Förälder 2 arbetar'
+                                    : 'Förälder 1 arbetar';
                                 const uniqueDayLabels = Array.from(
                                   new Set(
                                     month.daysPerWeekValues.map(value =>
@@ -689,26 +689,32 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                      <div className="text-muted-foreground space-y-0.5">
                                       <div>{month.calendarDays} kalenderdagar</div>
                                       {isInitialTenDayGroup ? (
-                                        <div className="text-[10px]">• 2 x 10 uttagna dagar</div>
+                                        <div className="text-[10px] font-medium">* 2 x 10 uttagna dagar</div>
                                       ) : (
                                         <>
                                           {month.benefitDays > 0 && (
-                                            <div className="text-[10px]">• {month.benefitDays} uttagna dagar totalt</div>
+                                            <div className="text-[10px] font-medium">* {month.benefitDays} dagar uttagna totalt</div>
                                           )}
                                           {Object.entries(month.benefitDaysByLevel || {}).map(([level, days]) => {
                                             if (days === 0 || level === 'none') return null;
-                                            const label = 
+                                            const label =
                                               level === 'parental-salary' ? 'Föräldralön (90%)' :
                                               level === 'high' ? 'Vanliga (80%)' :
-                                              level === 'low' ? 'Lägstanivå (180kr/dag)' : 'Ingen';
-                                            const daysPerWeek = Math.round(days / 4.33);
+                                              level === 'low' ? 'Lägstanivå (180 kr/dag)' : 'Ingen';
+                                            const daysPerWeekEstimate = Math.max(1, Math.round((days / Math.max(month.calendarDays, 1)) * 7));
                                             return (
                                               <div key={level} className="text-[10px] pl-2">
-                                                → {days} dagar {label} ({daysPerWeek} d/v)
+                                                - {Math.round(days)} dagar {label} ({daysPerWeekEstimate} d/v)
                                               </div>
                                             );
                                           })}
                                         </>
+                                      )}
+                                    </div>
+                                    <div className="font-medium">
+                                      {leaveParentLabel}: {formatCurrency(leaveIncome)}
+                                      {group.parent !== 'both' && (
+                                        <span className="ml-1 text-muted-foreground">{daysPerWeekText}</span>
                                       )}
                                     </div>
                                     {group.parent !== 'both' && (
@@ -721,18 +727,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                                         )}
                                       </div>
                                     )}
-                                     <div className="font-medium">
-                                       {leaveParentLabel}: {formatCurrency(leaveIncome)}
-                                       {group.parent !== 'both' && (
-                                         <span className="ml-1 text-muted-foreground">{daysPerWeekText}</span>
-                                       )}
-                                       {group.periods.some(p => p.benefitLevel === 'low') && benefitIncome > 0 && (
-                                         <span className="ml-1 text-[9px] text-orange-600 dark:text-orange-400">
-                                           (inkl. lägstanivå)
-                                         </span>
-                                       )}
-                                     </div>
-                                     <div className="text-muted-foreground italic">
+                                    <div className="text-muted-foreground italic">
                                       Föräldrapenning: {formatCurrency(benefitIncome)}
                                     </div>
                                     <div className={`font-semibold ${isLowest ? 'text-yellow-700 dark:text-yellow-400' : isBelowMinimum ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>
