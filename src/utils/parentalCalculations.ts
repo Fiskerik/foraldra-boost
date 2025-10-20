@@ -976,15 +976,27 @@ interface SegmentContext {
   parent1CutoffDate?: Date | null;
 }
 
+// Track qualifying high days used by each parent (globally accessible)
+const parent1QualifyingHighDaysUsed = { count: 10 }; // Initialize with 10 from shared period
+const parent2QualifyingHighDaysUsed = { count: 10 }; // Initialize with 10 from shared period
+
+function getMinHighDaysBeforeLow(hasCollectiveAgreement: boolean): number {
+  if (hasCollectiveAgreement) {
+    return 130; // 6 months of high benefit days (≈6 × 21.5 working days)
+  }
+  return 90; // Standard rule
+}
+
 function addSegment(
   periods: LeavePeriod[],
   config: SegmentConfig,
-  context: SegmentContext
+  context: SegmentContext,
+  parentData?: { parent1?: ParentData; parent2?: ParentData }
 ): void {
   const {
     plan,
     parent,
-    benefitLevel,
+    benefitLevel: requestedBenefitLevel,
     otherParentMonthlyIncome,
     usedDays,
     fallbackDaysPerWeek,
@@ -998,6 +1010,22 @@ function addSegment(
 
   if (!plan || usedDays <= 0) {
     return;
+  }
+
+  // Enforce 90/130-day rule for low benefit level
+  let benefitLevel = requestedBenefitLevel;
+  if (requestedBenefitLevel === 'low' && parent !== 'both' && parentData) {
+    const parentInfo = parent === 'parent1' ? parentData.parent1 : parentData.parent2;
+    const qualifyingDaysTracker = parent === 'parent1' ? parent1QualifyingHighDaysUsed : parent2QualifyingHighDaysUsed;
+    
+    if (parentInfo) {
+      const minHighDays = getMinHighDaysBeforeLow(parentInfo.hasCollectiveAgreement);
+      
+      if (qualifyingDaysTracker.count < minHighDays) {
+        // Force using high days until threshold is met
+        benefitLevel = 'high';
+      }
+    }
   }
 
   const preferredDays = preferredDaysPerWeek && preferredDaysPerWeek > 0 ? Math.round(preferredDaysPerWeek) : undefined;
@@ -1146,14 +1174,25 @@ function addSegment(
     otherParentMonthlyIncome: parent === 'both' ? 0 : otherParentMonthlyIncome,
   });
 
+  // Track qualifying high days usage
+  if (parent !== 'both' && (benefitLevel === 'high' || benefitLevel === 'parental-salary')) {
+    const qualifyingDaysTracker = parent === 'parent1' ? parent1QualifyingHighDaysUsed : parent2QualifyingHighDaysUsed;
+    qualifyingDaysTracker.count += benefitDaysUsed;
+  }
+
   parentLastEndDates[parent] = new Date(endDate);
 }
 
 function convertLegacyResult(
   meta: StrategyMeta,
   legacyResult: LegacyResult,
-  context: ConversionContext
+  context: ConversionContext,
+  parentData: { parent1: ParentData; parent2: ParentData }
 ): OptimizationResult {
+  // Reset qualifying days trackers for each strategy
+  parent1QualifyingHighDaysUsed.count = 10; // Reset to 10 from initial shared period
+  parent2QualifyingHighDaysUsed.count = 10; // Reset to 10 from initial shared period
+  
   const periods: LeavePeriod[] = [];
   const computeLimitDate = (start: Date, months: number) => {
     const safeMonths = Math.max(0, months);
@@ -1352,7 +1391,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: overlapParent1Monthly + overlapParent2Monthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, segmentContext);
+    }, segmentContext, parentData);
   }
 
   const ensurePositive = (value: number, fallback: () => number) => {
@@ -1385,7 +1424,7 @@ function convertLegacyResult(
       leaveMonthlyIncome,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, segmentContext);
+    }, segmentContext, parentData);
   }
 
   if (plan1NoExtraDays > 0) {
@@ -1414,7 +1453,7 @@ function convertLegacyResult(
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
     };
-    addSegment(periods, segment, segmentContext);
+    addSegment(periods, segment, segmentContext, parentData);
   }
 
   if (totalPlan1MinDays > 0 && activePlan1MinPlan) {
@@ -1442,7 +1481,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, segmentContext);
+    }, segmentContext, parentData);
   }
 
   if (plan2ExtraDays > 0) {
@@ -1466,7 +1505,7 @@ function convertLegacyResult(
       leaveMonthlyIncome,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, segmentContext);
+    }, segmentContext, parentData);
   }
 
   if (plan2NoExtraDays > 0) {
@@ -1495,7 +1534,7 @@ function convertLegacyResult(
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
     };
-    addSegment(periods, segment, segmentContext);
+    addSegment(periods, segment, segmentContext, parentData);
   }
 
   if (totalPlan2MinDays > 0 && activePlan2MinPlan) {
@@ -1523,7 +1562,7 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek,
       forceRecomputeWeeks: forceFullWeekScheduling,
-    }, segmentContext);
+    }, segmentContext, parentData);
   }
 
   // No filler periods - we strictly adhere to the total months specified
@@ -2586,7 +2625,7 @@ export function optimizeLeave(
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
   const savePreferences = buildPreferences(saveDaysMeta.legacyKey, minHouseholdIncome, allowFullWeekForSave);
   const saveLegacyResult = optimizeParentalLeave(savePreferences, saveInputs);
-  const saveResult = convertLegacyResult(saveDaysMeta, saveLegacyResult, conversionContext);
+  const saveResult = convertLegacyResult(saveDaysMeta, saveLegacyResult, conversionContext, { parent1, parent2 });
 
   const maximizeMeta = strategies.find((strategy) => strategy.key === 'maximize-income')!;
 
@@ -2605,7 +2644,7 @@ export function optimizeLeave(
     candidateStrategyKeys.forEach((strategyKey) => {
       const preferences = buildPreferences(strategyKey, target, allowFullWeekForMax);
       const legacyResult = optimizeParentalLeave(preferences, maximizeInputs);
-      const converted = convertLegacyResult(maximizeMeta, legacyResult, conversionContext);
+      const converted = convertLegacyResult(maximizeMeta, legacyResult, conversionContext, { parent1, parent2 });
       maximizeCandidates.push(converted);
     });
   });
@@ -2613,7 +2652,7 @@ export function optimizeLeave(
   if (maximizeCandidates.length === 0) {
     const fallbackPreferences = buildPreferences(maximizeMeta.legacyKey, minHouseholdIncome, allowFullWeekForMax);
     const fallbackLegacy = optimizeParentalLeave(fallbackPreferences, maximizeInputs);
-    maximizeCandidates.push(convertLegacyResult(maximizeMeta, fallbackLegacy, conversionContext));
+    maximizeCandidates.push(convertLegacyResult(maximizeMeta, fallbackLegacy, conversionContext, { parent1, parent2 }));
   }
 
   const pickBetter = (best: OptimizationResult, current: OptimizationResult) => {
@@ -2633,7 +2672,7 @@ export function optimizeLeave(
   const pushTarget = Math.round(combinedNetIncome * 1.5);
   const extraPreferences = buildPreferences('maximize_parental_salary', pushTarget, allowFullWeekForMax);
   const extraLegacy = optimizeParentalLeave(extraPreferences, maximizeInputs);
-  const extraResult = convertLegacyResult(maximizeMeta, extraLegacy, conversionContext);
+  const extraResult = convertLegacyResult(maximizeMeta, extraLegacy, conversionContext, { parent1, parent2 });
   maximizeResult = pickBetter(maximizeResult, extraResult);
 
   return [saveResult, maximizeResult];

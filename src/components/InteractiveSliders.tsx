@@ -209,25 +209,6 @@ export function InteractiveSliders({
                     ▼
                   </div>
                 </div>
-                {/* Breakpoint indicator (lowest month) */}
-                {incomeBreakPointPercent !== null && incomeBreakPoint !== null && Math.abs(incomeBreakPoint - householdIncome) > 1000 && (
-                  <div
-                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
-                    style={{ left: `${incomeBreakPointPercent}%`, transform: "translateX(-50%)" }}
-                  >
-                    <div className="h-5 w-1 bg-amber-500 pointer-events-none" />
-                    <div 
-                      className="mt-0.5 text-[14px] font-bold text-amber-600 leading-none cursor-pointer pointer-events-auto"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onHouseholdIncomeChange(Math.round(incomeBreakPoint));
-                      }}
-                      title={`Klicka för att sänka till ${formatCurrency(incomeBreakPoint)}`}
-                    >
-                      ▼
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -297,7 +278,7 @@ export function InteractiveSliders({
                     ▼
                   </div>
                 </div>
-                {/* Recommended adjustment indicator */}
+                {/* Recommended adjustment indicator - only show when beneficial AND different */}
                 {recommendedDaysPercent !== null && recommendedDaysPerWeek !== null && isBelowMinimum && recommendedDaysPerWeek !== daysPerWeek && (
                   <div
                     className="absolute left-0 right-0 bottom-4 pointer-events-none"
@@ -310,7 +291,7 @@ export function InteractiveSliders({
                         e.stopPropagation();
                         onDaysPerWeekChange(recommendedDaysPerWeek);
                       }}
-                      title={`Klicka för att använda ${recommendedDaysPerWeek} dagar/vecka`}
+                      title={`Rekommendation: ${recommendedDaysPerWeek} dagar/vecka för att nå målet`}
                     >
                       ▼
                     </div>

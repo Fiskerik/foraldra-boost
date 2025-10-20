@@ -48,32 +48,22 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
   const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
     const startDate = new Date(period.startDate);
     const endDate = new Date(period.endDate);
-    // Only treat actual compensated days as benefit days; periods with benefitLevel 'none' should not allocate benefit days
-    const rawBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
-    const totalBenefitDays = period.benefitLevel === 'none' ? 0 : rawBenefitDays;
     
-    // Debug logging for May-Aug 2026 periods
-    if (startDate.getFullYear() === 2026 && startDate.getMonth() >= 4 && startDate.getMonth() <= 7) {
-      console.log('May-Aug 2026 Period Debug:', {
-        parent: period.parent,
-        startDate: format(startDate, 'yyyy-MM-dd'),
-        endDate: format(endDate, 'yyyy-MM-dd'),
-        benefitLevel: period.benefitLevel,
-        dailyBenefit: period.dailyBenefit,
-        otherParentMonthlyIncome: period.otherParentMonthlyIncome,
-        otherParentDailyIncome: period.otherParentDailyIncome,
-        totalBenefitDays,
-        rawBenefitDays
-      });
+    // Skip periods with benefitLevel 'none' entirely - they're calendar fillers
+    // representing both parents working (no leave)
+    if ((period.benefitLevel as string) === 'none') {
+      return [];
     }
+    
+    // Only treat actual compensated days as benefit days
+    const rawBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
+    const totalBenefitDays = rawBenefitDays;
 
     const segments: MonthlyBreakdown[] = [];
     let cursor = new Date(startDate);
 
     const normalizedDaysPerWeek =
-      period.benefitLevel === 'none'
-        ? 0
-        : period.daysPerWeek && period.daysPerWeek > 0
+      period.daysPerWeek && period.daysPerWeek > 0
         ? period.daysPerWeek
         : 7;
 
@@ -104,9 +94,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     }
 
     const daysPerWeek =
-      period.benefitLevel === 'none'
-        ? 0
-        : period.daysPerWeek && period.daysPerWeek > 0
+      period.daysPerWeek && period.daysPerWeek > 0
         ? period.daysPerWeek
         : 7;
     const expectedBenefitDaysPerMonth = daysPerWeek * 4.33;
@@ -187,9 +175,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
           baseOtherIncome = dailyBaseFromOther * segment.calendarDays;
         }
 
-        const maxAllowedOtherIncome = period.benefitLevel === 'none'
-          ? totalSegmentIncome
-          : Math.max(0, totalSegmentIncome - benefitIncome);
+        const maxAllowedOtherIncome = Math.max(0, totalSegmentIncome - benefitIncome);
 
         otherParentIncome = Math.min(
           Math.max(0, Math.round(baseOtherIncome)),
@@ -201,8 +187,6 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       let leaveParentIncome: number;
       if (period.parent === 'both') {
         leaveParentIncome = totalSegmentIncome;
-      } else if (period.benefitLevel === 'none') {
-        leaveParentIncome = Math.max(0, totalSegmentIncome - otherParentIncome);
       } else {
         leaveParentIncome = benefitIncome;
         const combinedDisplayed = otherParentIncome + benefitIncome;
