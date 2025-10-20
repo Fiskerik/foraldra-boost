@@ -670,7 +670,14 @@ function ensureMinimumIncomePerMonth(
 
       const daysPerWeek = clampDaysPerWeek(takeDays / WEEKS_PER_MONTH);
       const totalBenefitIncome = takeDays * benefitDaily;
-      const dailyIncome = calendarDays > 0 ? totalBenefitIncome / calendarDays : 0;
+      const otherParentMonthlyNet = owner === 'parent1'
+        ? context.parent2NetIncome
+        : context.parent1NetIncome;
+      const otherParentDailyNet = otherParentMonthlyNet > 0 ? otherParentMonthlyNet / 30 : 0;
+      const totalOtherIncome = otherParentDailyNet * calendarDays;
+      const combinedDailyIncome = calendarDays > 0
+        ? (totalBenefitIncome + totalOtherIncome) / calendarDays
+        : 0;
 
       periods.push({
         parent: owner,
@@ -680,18 +687,18 @@ function ensureMinimumIncomePerMonth(
         benefitDaysUsed: takeDays,
         calendarDays,
         dailyBenefit: benefitDaily,
-        dailyIncome,
+        dailyIncome: combinedDailyIncome,
         benefitLevel,
         daysPerWeek,
-        otherParentDailyIncome: 0,
-        otherParentMonthlyIncome: 0,
+        otherParentDailyIncome: otherParentDailyNet,
+        otherParentMonthlyIncome: otherParentMonthlyNet,
         isPreferenceFiller: true,
         needsSequencing: true,
       });
 
       remainingDaysPool[owner] = Math.max(0, remainingDaysPool[owner] - takeDays);
       remainingCapacityDays = Math.max(0, remainingCapacityDays - takeDays);
-      remainingDeficit = Math.max(0, remainingDeficit - totalBenefitIncome);
+      remainingDeficit = Math.max(0, remainingDeficit - (totalBenefitIncome + totalOtherIncome));
 
       parentCalendarUsage[owner] += calendarDays;
     };
