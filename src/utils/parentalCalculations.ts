@@ -987,6 +987,10 @@ interface SegmentContext {
 const parent1QualifyingHighDaysUsed = { count: 10 }; // Initialize with 10 from shared period
 const parent2QualifyingHighDaysUsed = { count: 10 }; // Initialize with 10 from shared period
 
+// Track chronological high days for collective agreement enforcement
+const parent1ChronologicalHighDays = { count: 10 };
+const parent2ChronologicalHighDays = { count: 10 };
+
 function getMinHighDaysBeforeLow(hasCollectiveAgreement: boolean): number {
   if (hasCollectiveAgreement) {
     return 130; // 6 months of high benefit days (≈6 × 21.5 working days)
@@ -1023,13 +1027,15 @@ function addSegment(
   let benefitLevel = requestedBenefitLevel;
   if (requestedBenefitLevel === 'low' && parent !== 'both' && parentData) {
     const parentInfo = parent === 'parent1' ? parentData.parent1 : parentData.parent2;
-    const qualifyingDaysTracker = parent === 'parent1' ? parent1QualifyingHighDaysUsed : parent2QualifyingHighDaysUsed;
+    const chronologicalTracker = parent === 'parent1' 
+      ? parent1ChronologicalHighDays 
+      : parent2ChronologicalHighDays;
     
     if (parentInfo) {
       const minHighDays = getMinHighDaysBeforeLow(parentInfo.hasCollectiveAgreement);
       
-      if (qualifyingDaysTracker.count < minHighDays) {
-        // Force using high days until threshold is met
+      // Force high benefit if chronological threshold not yet met
+      if (chronologicalTracker.count < minHighDays) {
         benefitLevel = 'high';
       }
     }
@@ -1184,7 +1190,10 @@ function addSegment(
   // Track qualifying high days usage
   if (parent !== 'both' && (benefitLevel === 'high' || benefitLevel === 'parental-salary')) {
     const qualifyingDaysTracker = parent === 'parent1' ? parent1QualifyingHighDaysUsed : parent2QualifyingHighDaysUsed;
+    const chronologicalTracker = parent === 'parent1' ? parent1ChronologicalHighDays : parent2ChronologicalHighDays;
+    
     qualifyingDaysTracker.count += benefitDaysUsed;
+    chronologicalTracker.count += benefitDaysUsed;
   }
 
   parentLastEndDates[parent] = new Date(endDate);
@@ -1199,6 +1208,8 @@ function convertLegacyResult(
   // Reset qualifying days trackers for each strategy
   parent1QualifyingHighDaysUsed.count = 10; // Reset to 10 from initial shared period
   parent2QualifyingHighDaysUsed.count = 10; // Reset to 10 from initial shared period
+  parent1ChronologicalHighDays.count = 10;
+  parent2ChronologicalHighDays.count = 10;
   
   const periods: LeavePeriod[] = [];
   const computeLimitDate = (start: Date, months: number) => {

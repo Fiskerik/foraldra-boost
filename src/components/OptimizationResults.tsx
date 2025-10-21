@@ -409,7 +409,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                 selectedIndex === index && isExpanded
                   ? 'ring-2 md:ring-4 ring-primary shadow-xl'
                   : ''
-            }`}
+              } ${!isExpanded ? 'pb-0' : ''}`}
             >
               <CardHeader 
                 className={`${result.strategy === 'save-days' ? 'bg-parent1/10' : 'bg-parent2/10'} p-2 md:p-6 cursor-pointer`}

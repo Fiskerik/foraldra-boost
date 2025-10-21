@@ -262,7 +262,11 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
           {yTicks.map((tick) => (
             <div
               key={tick}
-              className="absolute left-0"
+              className={`absolute left-0 ${
+                tick === minHouseholdIncome 
+                  ? 'font-bold text-destructive' 
+                  : ''
+              }`}
               style={{ top: `${getYPercent(tick)}%`, transform: "translateY(-50%)" }}
             >
               {formatCurrency(tick)}
@@ -282,11 +286,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
           <div
             className="absolute left-0 right-0 border-t-2 border-destructive border-dashed z-10 pointer-events-none"
             style={{ top: `${minIncomePosition}%` }}
-          >
-            <span className="absolute -top-6 right-0 rounded bg-background/80 px-2 py-0.5 text-xs text-destructive font-medium shadow-sm">
-              Min. hushållsinkomst ({formatCurrency(minHouseholdIncome)})
-            </span>
-          </div>
+          />
 
           <svg className="w-full h-full" preserveAspectRatio="none">
             {/* Draw lines between points (black baseline + colored overlay) */}
