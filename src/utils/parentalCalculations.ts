@@ -2853,7 +2853,8 @@ export function optimizeLeave(
   parent2Months: number,
   minHouseholdIncome: number,
   daysPerWeek: number,
-  simultaneousMonths: number = 0
+  simultaneousMonths: number = 0,
+  isFirstOptimization: boolean = false
 ): OptimizationResult[] {
   const calc1 = calculateAvailableIncome(parent1);
   const calc2 = calculateAvailableIncome(parent2);
@@ -2901,13 +2902,19 @@ export function optimizeLeave(
   const allowFullWeekForSave = normalizedDaysPerWeek > baseDaysPerWeek;
   const allowFullWeekForMax = true;
 
-  const buildPreferences = (strategyKey: LegacyStrategyKey, minIncome: number, allowFullWeek: boolean) => ({
-    deltid: allowFullWeek ? 'nej' : 'ja',
-    ledigTid1: preferredParent1Months,
-    ledigTid2: preferredParent2Months,
-    minInkomst: Math.max(0, Math.round(minIncome)),
-    strategy: strategyKey,
-  });
+  const buildPreferences = (strategyKey: LegacyStrategyKey, minIncome: number, allowFullWeek: boolean) => {
+    // When first optimization, enforce stricter adherence to preferred months
+    const ledigTid1 = isFirstOptimization ? preferredParent1Months : Math.max(0, preferredParent1Months);
+    const ledigTid2 = isFirstOptimization ? preferredParent2Months : Math.max(0, preferredParent2Months);
+    
+    return {
+      deltid: allowFullWeek ? 'nej' : 'ja',
+      ledigTid1,
+      ledigTid2,
+      minInkomst: Math.max(0, Math.round(minIncome)),
+      strategy: strategyKey,
+    };
+  };
 
   const baseStartDate = startOfDay(new Date());
 
@@ -3024,4 +3031,41 @@ export function formatCurrency(amount: number): string {
     currency: 'SEK',
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+export function quickOptimize(params: {
+  parent1: ParentData;
+  parent2: ParentData;
+  minHouseholdIncome: number;
+  parent1Months: number;
+  parent2Months: number;
+  daysPerWeek: number;
+  simultaneousLeave: boolean;
+  simultaneousMonths: number;
+  strategy: string;
+}): {
+  totalIncome: number;
+  daysUsed: number;
+} {
+  const totalMonths = params.parent1Months + params.parent2Months;
+  
+  const results = optimizeLeave(
+    params.parent1,
+    params.parent2,
+    totalMonths,
+    params.parent1Months,
+    params.parent2Months,
+    params.minHouseholdIncome,
+    params.daysPerWeek,
+    params.simultaneousLeave ? params.simultaneousMonths : 0,
+    false // Not first optimization for quick tests
+  );
+  
+  const strategyResult = results.find(r => r.strategy === params.strategy);
+  if (!strategyResult) return { totalIncome: 0, daysUsed: 0 };
+  
+  const totalIncome = strategyResult.totalIncome || 0;
+  const daysUsed = strategyResult.daysUsed || 0;
+  
+  return { totalIncome, daysUsed };
 }

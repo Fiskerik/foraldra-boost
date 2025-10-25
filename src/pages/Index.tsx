@@ -34,6 +34,7 @@ const Index = () => {
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
   const [userHasManuallySetIncome, setUserHasManuallySetIncome] = useState(false);
   const [hasUnappliedIncomeChange, setHasUnappliedIncomeChange] = useState(false);
+  const [isFirstOptimization, setIsFirstOptimization] = useState(true);
 
   type OptimizeOverrides = {
     totalMonths?: number;
@@ -93,10 +94,12 @@ const Index = () => {
       effectiveParent2Months,
       effectiveHouseholdIncome,
       effectiveDaysPerWeek,
-      effectiveSimultaneousLeave ? effectiveSimultaneousMonths : 0
+      effectiveSimultaneousLeave ? effectiveSimultaneousMonths : 0,
+      isFirstOptimization
     );
 
     setOptimizationResults(results);
+    setIsFirstOptimization(false); // Set to false after first optimization
     if (!silent) {
       toast.success("Optimering klar!");
       
@@ -247,6 +250,21 @@ const Index = () => {
       ? strategyIncomeSummaries[selectedStrategyIndex]
       : undefined;
 
+  // Calculate current total income and days used for selected strategy
+  const currentTotalIncome = useMemo(() => {
+    if (!optimizationResults) return 0;
+    const selectedStrategy = optimizationResults[selectedStrategyIndex];
+    if (!selectedStrategy) return 0;
+    return selectedStrategy.totalIncome || 0;
+  }, [optimizationResults, selectedStrategyIndex]);
+
+  const currentDaysUsed = useMemo(() => {
+    if (!optimizationResults) return 0;
+    const selectedStrategy = optimizationResults[selectedStrategyIndex];
+    if (!selectedStrategy) return 0;
+    return selectedStrategy.daysUsed || 0;
+  }, [optimizationResults, selectedStrategyIndex]);
+
   useEffect(() => {
     // Only auto-adjust when switching strategies, not on initial optimization
     if (userHasManuallySetIncome || !optimizationResults) {
@@ -379,10 +397,16 @@ const Index = () => {
             daysSaved={optimizationResults[selectedStrategyIndex]?.daysSaved}
             strategyIncomeSummary={selectedIncomeSummary}
             hasUnappliedChanges={hasUnappliedIncomeChange}
+            selectedStrategy={optimizationResults[selectedStrategyIndex]?.strategy || 'maximize-income'}
+            parent1={parent1Data}
+            parent2={parent2Data}
+            currentTotalIncome={currentTotalIncome}
+            currentDaysUsed={currentDaysUsed}
             onHouseholdIncomeChange={handleHouseholdIncomeChange}
             onDaysPerWeekChange={handleDaysPerWeekChange}
             onTotalMonthsChange={handleTotalMonthsChange}
             onRecalculate={handleRecalculate}
+            onDistributionChange={handleDistributionChange}
           />
         )}
       </main>

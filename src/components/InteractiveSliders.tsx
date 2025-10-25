@@ -3,9 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, LeavePeriod, calculateMaxLeaveMonths, TOTAL_BENEFIT_DAYS } from "@/utils/parentalCalculations";
+import { formatCurrency, LeavePeriod, calculateMaxLeaveMonths, TOTAL_BENEFIT_DAYS, quickOptimize, ParentData } from "@/utils/parentalCalculations";
 import { StrategyIncomeSummary, calculateStrategyIncomeSummary } from "@/utils/incomeSummary";
 import { TrendingUp, Calendar, Clock, Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 
 interface InteractiveSlidersProps {
   householdIncome: number;
@@ -19,10 +20,16 @@ interface InteractiveSlidersProps {
   daysSaved?: number;
   strategyIncomeSummary?: StrategyIncomeSummary;
   hasUnappliedChanges: boolean;
+  selectedStrategy: 'maximize-income' | 'save-days' | 'balanced';
+  parent1: ParentData;
+  parent2: ParentData;
+  currentTotalIncome: number;
+  currentDaysUsed: number;
   onHouseholdIncomeChange: (value: number) => void;
   onDaysPerWeekChange: (days: number) => void;
   onTotalMonthsChange: (months: number) => void;
   onRecalculate: () => void;
+  onDistributionChange: (newParent1Months: number) => void;
 }
 
 export function InteractiveSliders({
@@ -37,10 +44,16 @@ export function InteractiveSliders({
   daysSaved,
   strategyIncomeSummary,
   hasUnappliedChanges,
+  selectedStrategy,
+  parent1,
+  parent2,
+  currentTotalIncome,
+  currentDaysUsed,
   onHouseholdIncomeChange,
   onDaysPerWeekChange,
   onTotalMonthsChange,
   onRecalculate,
+  onDistributionChange,
 }: InteractiveSlidersProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -108,6 +121,102 @@ export function InteractiveSliders({
   const recommendedDaysPercent = recommendedDaysPerWeek !== null
     ? ((recommendedDaysPerWeek - 1) / 6) * 100
     : null;
+
+  // Calculate current parent 1 months from periods
+  const currentParent1Months = useMemo(() => {
+    if (!periods || periods.length === 0) return 0;
+    
+    // Calculate total calendar days for parent1, then convert to months
+    const parent1CalendarDays = periods
+      .filter(p => p.parent === 'parent1')
+      .reduce((sum, p) => sum + p.calendarDays, 0);
+    
+    // Convert calendar days to months (30 days per month)
+    return parent1CalendarDays / 30;
+  }, [periods]);
+
+  // Calculate alternative distributions with strategy-specific suggestions
+  const alternativeDistributions = useMemo(() => {
+    if (!parent1 || !parent2 || !periods || periods.length === 0) return [];
+    
+    const alternatives: Array<{
+      parent1Months: number;
+      parent2Months: number;
+      daysSaved?: number;
+      incomeGain?: number;
+      message: string;
+    }> = [];
+    
+    // Test +/- 1, 2, 3 months for parent 1
+    for (let delta of [-3, -2, -1, 1, 2, 3]) {
+      const testParent1Months = currentParent1Months + delta;
+      const testParent2Months = totalMonths - testParent1Months;
+      
+      // Skip if invalid values
+      if (testParent1Months < 0 || testParent2Months < 0) continue;
+      if (testParent1Months > totalMonths || testParent2Months > totalMonths) continue;
+      
+      try {
+        const testResult = quickOptimize({
+          parent1,
+          parent2,
+          minHouseholdIncome: householdIncome,
+          parent1Months: testParent1Months,
+          parent2Months: testParent2Months,
+          daysPerWeek,
+          simultaneousLeave: false,
+          simultaneousMonths: 0,
+          strategy: selectedStrategy,
+        });
+        
+        if (selectedStrategy === 'save-days') {
+          const daysSaved = currentDaysUsed - testResult.daysUsed;
+          if (daysSaved > 10) { // At least 10 days gain to be worth showing
+            alternatives.push({
+              parent1Months: testParent1Months,
+              parent2Months: testParent2Months,
+              daysSaved,
+              message: `Om förälder 1 är hemma ${testParent1Months} månader istället för ${currentParent1Months} sparar ni ${daysSaved} dagar till`,
+            });
+          }
+        } else if (selectedStrategy === 'maximize-income') {
+          const incomeGain = testResult.totalIncome - currentTotalIncome;
+          if (incomeGain > 5000) { // At least 5000 SEK gain to be worth showing
+            alternatives.push({
+              parent1Months: testParent1Months,
+              parent2Months: testParent2Months,
+              incomeGain,
+              message: `Om förälder 1 är hemma ${testParent1Months} månader istället för ${currentParent1Months} blir total inkomsten ${Math.round(incomeGain).toLocaleString('sv-SE')} kr högre`,
+            });
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to calculate alternative distribution:', error);
+      }
+    }
+    
+    // Sort and return best alternative
+    if (selectedStrategy === 'save-days') {
+      return alternatives
+        .sort((a, b) => (b.daysSaved || 0) - (a.daysSaved || 0))
+        .slice(0, 1);
+    } else {
+      return alternatives
+        .sort((a, b) => (b.incomeGain || 0) - (a.incomeGain || 0))
+        .slice(0, 1);
+    }
+  }, [
+    periods, 
+    totalMonths, 
+    selectedStrategy, 
+    currentTotalIncome, 
+    currentDaysUsed, 
+    currentParent1Months,
+    parent1,
+    parent2,
+    householdIncome,
+    daysPerWeek,
+  ]);
 
   const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
   const monthsSliderMax = Math.max(maxLeaveMonths, totalMonths, 1);
