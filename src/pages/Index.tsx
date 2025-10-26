@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ParentIncomeCard } from "@/components/ParentIncomeCard";
 import { MunicipalitySelect } from "@/components/MunicipalitySelect";
 import { AvailableIncomeDisplay } from "@/components/AvailableIncomeDisplay";
@@ -13,11 +16,15 @@ import {
   OptimizationResult,
   calculateMaxLeaveMonths,
 } from "@/utils/parentalCalculations";
-import { Baby, Sparkles } from "lucide-react";
+import { Baby, Sparkles, Save, UserPlus } from "lucide-react";
 import { calculateStrategyIncomeSummary, StrategyIncomeSummary } from "@/utils/incomeSummary";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [parent1Income, setParent1Income] = useState(30000);
   const [parent2Income, setParent2Income] = useState(55000);
   const [parent1HasAgreement, setParent1HasAgreement] = useState(true);
@@ -35,6 +42,8 @@ const Index = () => {
   const [userHasManuallySetIncome, setUserHasManuallySetIncome] = useState(false);
   const [hasUnappliedIncomeChange, setHasUnappliedIncomeChange] = useState(false);
   const [isFirstOptimization, setIsFirstOptimization] = useState(true);
+  const [planName, setPlanName] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   type OptimizeOverrides = {
     totalMonths?: number;

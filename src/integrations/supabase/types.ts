@@ -14,7 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      saved_plans: {
+        Row: {
+          created_at: string
+          days_per_week: number
+          expected_birth_date: string
+          household_income: number
+          id: string
+          is_deleted: boolean
+          municipality: string
+          name: string
+          optimization_results: Json
+          parent1_has_agreement: boolean
+          parent1_income: number
+          parent1_months: number
+          parent2_has_agreement: boolean
+          parent2_income: number
+          selected_strategy_index: number
+          simultaneous_leave: boolean
+          simultaneous_months: number
+          tax_rate: number
+          total_months: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          days_per_week: number
+          expected_birth_date: string
+          household_income: number
+          id?: string
+          is_deleted?: boolean
+          municipality: string
+          name?: string
+          optimization_results: Json
+          parent1_has_agreement: boolean
+          parent1_income: number
+          parent1_months: number
+          parent2_has_agreement: boolean
+          parent2_income: number
+          selected_strategy_index?: number
+          simultaneous_leave?: boolean
+          simultaneous_months?: number
+          tax_rate: number
+          total_months: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          days_per_week?: number
+          expected_birth_date?: string
+          household_income?: number
+          id?: string
+          is_deleted?: boolean
+          municipality?: string
+          name?: string
+          optimization_results?: Json
+          parent1_has_agreement?: boolean
+          parent1_income?: number
+          parent1_months?: number
+          parent2_has_agreement?: boolean
+          parent2_income?: number
+          selected_strategy_index?: number
+          simultaneous_leave?: boolean
+          simultaneous_months?: number
+          tax_rate?: number
+          total_months?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
