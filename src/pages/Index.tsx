@@ -418,6 +418,106 @@ const Index = () => {
             onDistributionChange={handleDistributionChange}
           />
         )}
+
+        {optimizationResults && (
+          <Card className="bg-gradient-subtle border-primary/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Save className="h-5 w-5" />
+                Spara din plan
+              </CardTitle>
+              <CardDescription>
+                {user 
+                  ? "Spara din optimerade föräldraledighetsplan för att enkelt återkomma till den senare"
+                  : "Skapa ett konto för att spara och hantera dina planer"
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {user ? (
+                <>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Namnge din plan
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="T.ex. Vår föräldraledighetsplan 2024"
+                      value={planName}
+                      onChange={(e) => setPlanName(e.target.value)}
+                      className="max-w-md"
+                    />
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      if (!planName.trim()) {
+                        toast.error("Vänligen ange ett namn för planen");
+                        return;
+                      }
+
+                      setIsSaving(true);
+                      try {
+                        const { error } = await supabase
+                          .from('saved_plans')
+                          .insert([{
+                            user_id: user.id,
+                            name: planName.trim(),
+                            expected_birth_date: new Date().toISOString().split('T')[0],
+                            parent1_income: parent1Income,
+                            parent1_has_agreement: parent1HasAgreement,
+                            parent2_income: parent2Income,
+                            parent2_has_agreement: parent2HasAgreement,
+                            tax_rate: taxRate,
+                            municipality: municipality,
+                            total_months: totalMonths,
+                            parent1_months: parent1Months,
+                            household_income: householdIncome,
+                            days_per_week: daysPerWeek,
+                            simultaneous_leave: simultaneousLeave,
+                            simultaneous_months: simultaneousMonths,
+                            selected_strategy_index: selectedStrategyIndex,
+                            optimization_results: optimizationResults as any,
+                          }]);
+
+                        if (error) throw error;
+
+                        toast.success("Plan sparad!");
+                        setPlanName("");
+                        
+                        setTimeout(() => {
+                          navigate('/dashboard');
+                        }, 1000);
+                      } catch (error) {
+                        console.error('Error saving plan:', error);
+                        toast.error("Kunde inte spara planen. Försök igen.");
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                    disabled={isSaving}
+                    className="w-full md:w-auto"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    {isSaving ? "Sparar..." : "Spara plan"}
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    För att spara dina planer och komma åt dem när som helst behöver du ett konto.
+                  </p>
+                  <Button
+                    onClick={() => navigate('/auth')}
+                    className="w-full md:w-auto"
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Skapa konto / Logga in
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </main>
 
       <footer className="bg-muted py-3 md:py-8 mt-6 md:mt-20">

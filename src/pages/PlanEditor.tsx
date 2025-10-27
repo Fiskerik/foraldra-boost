@@ -7,9 +7,10 @@ import { MunicipalitySelect } from '@/components/MunicipalitySelect';
 import { AvailableIncomeDisplay } from '@/components/AvailableIncomeDisplay';
 import { OptimizationResults } from '@/components/OptimizationResults';
 import { InteractiveSliders } from '@/components/InteractiveSliders';
+import { LeavePeriodCard } from '@/components/LeavePeriodCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Save, FileDown, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
@@ -20,8 +21,31 @@ import {
   OptimizationResult,
   calculateMaxLeaveMonths,
 } from '@/utils/parentalCalculations';
-import { calculateStrategyIncomeSummary } from '@/utils/incomeSummary';
-import { exportPlanToPDF, SavedPlan } from '@/utils/pdfExport';
+import { calculateStrategyIncomeSummary, StrategyIncomeSummary } from '@/utils/incomeSummary';
+import { exportPlanToPDF } from '@/utils/pdfExport';
+
+interface SavedPlan {
+  id: string;
+  user_id: string;
+  name: string;
+  expected_birth_date: string;
+  parent1_income: number;
+  parent1_has_agreement: boolean;
+  parent2_income: number;
+  parent2_has_agreement: boolean;
+  tax_rate: number;
+  municipality: string;
+  total_months: number;
+  parent1_months: number;
+  household_income: number;
+  days_per_week: number;
+  simultaneous_leave: boolean;
+  simultaneous_months: number;
+  selected_strategy_index: number;
+  optimization_results: any;
+  created_at: string;
+  updated_at: string;
+}
 
 export default function PlanEditor() {
   const { id } = useParams<{ id: string }>();
@@ -67,11 +91,7 @@ export default function PlanEditor() {
 
       if (error) throw error;
       if (!data) {
-        toast({
-          title: 'Plan hittades inte',
-          description: 'Planen kunde inte hittas eller så har du inte åtkomst till den.',
-          variant: 'destructive',
-        });
+        toast.error('Planen kunde inte hittas eller så har du inte åtkomst till den.');
         navigate('/dashboard');
         return;
       }
@@ -92,14 +112,10 @@ export default function PlanEditor() {
       setSimultaneousLeave(data.simultaneous_leave);
       setSimultaneousMonths(data.simultaneous_months);
       setSelectedStrategyIndex(data.selected_strategy_index);
-      setOptimizationResults(data.optimization_results);
+      setOptimizationResults(data.optimization_results as unknown as OptimizationResult[]);
     } catch (error) {
       console.error('Error loading plan:', error);
-      toast({
-        title: 'Fel',
-        description: 'Kunde inte ladda planen. Försök igen.',
-        variant: 'destructive',
-      });
+      toast.error('Kunde inte ladda planen. Försök igen.');
       navigate('/dashboard');
     } finally {
       setLoading(false);
@@ -127,26 +143,19 @@ export default function PlanEditor() {
           simultaneous_leave: simultaneousLeave,
           simultaneous_months: simultaneousMonths,
           selected_strategy_index: selectedStrategyIndex,
-          optimization_results: optimizationResults,
+          optimization_results: optimizationResults as any,
         })
         .eq('id', id);
 
       if (error) throw error;
 
-      toast({
-        title: 'Plan uppdaterad!',
-        description: 'Dina ändringar har sparats.',
-      });
+      toast.success('Plan uppdaterad!');
       
       // Reload plan to get updated timestamp
       await loadPlan();
     } catch (error) {
       console.error('Error saving plan:', error);
-      toast({
-        title: 'Fel',
-        description: 'Kunde inte spara planen. Försök igen.',
-        variant: 'destructive',
-      });
+      toast.error('Kunde inte spara planen. Försök igen.');
     } finally {
       setSaving(false);
     }
@@ -160,17 +169,10 @@ export default function PlanEditor() {
         ...plan,
         optimization_results: optimizationResults,
       });
-      toast({
-        title: 'PDF exporterad!',
-        description: 'Din plan har laddats ner som PDF.',
-      });
+      toast.success('PDF exporterad!');
     } catch (error) {
       console.error('Error exporting PDF:', error);
-      toast({
-        title: 'Fel',
-        description: 'Kunde inte exportera PDF. Försök igen.',
-        variant: 'destructive',
-      });
+      toast.error('Kunde inte exportera PDF. Försök igen.');
     }
   };
 
@@ -178,12 +180,12 @@ export default function PlanEditor() {
     const results = optimizeLeave(
       parent1Data,
       parent2Data,
-      householdIncome,
+      totalMonths,
       parent1Months,
       parent2Months,
+      householdIncome,
       daysPerWeek,
-      simultaneousLeave,
-      simultaneousMonths,
+      simultaneousLeave ? simultaneousMonths : 0,
       false
     );
     setOptimizationResults(results);
@@ -200,28 +202,29 @@ export default function PlanEditor() {
 
   const parent2Months = Math.max(totalMonths - parent1Months, 0);
   const maxHouseholdIncome = parent1Income + parent2Income;
+  const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
 
   const parent1Data: ParentData = {
-    monthlyIncome: parent1Income,
-    hasAgreement: parent1HasAgreement,
-    isWorkingFull: true,
+    income: parent1Income,
+    hasCollectiveAgreement: parent1HasAgreement,
+    taxRate: taxRate,
   };
 
   const parent2Data: ParentData = {
-    monthlyIncome: parent2Income,
-    hasAgreement: parent2HasAgreement,
-    isWorkingFull: true,
+    income: parent2Income,
+    hasCollectiveAgreement: parent2HasAgreement,
+    taxRate: taxRate,
   };
 
-  const parent1AvailableIncome = calculateAvailableIncome(parent1Data, taxRate / 100);
-  const parent2AvailableIncome = calculateAvailableIncome(parent2Data, taxRate / 100);
+  const calc1 = calculateAvailableIncome(parent1Data);
+  const calc2 = calculateAvailableIncome(parent2Data);
 
-  const strategyIncomeSummaries = useMemo(() => {
-    if (!optimizationResults) return [];
-    return optimizationResults.map((result) =>
-      calculateStrategyIncomeSummary(result, parent1AvailableIncome, parent2AvailableIncome, taxRate / 100)
-    );
-  }, [optimizationResults, parent1AvailableIncome, parent2AvailableIncome, taxRate]);
+  const strategyIncomeSummaries = useMemo<StrategyIncomeSummary[]>(() => {
+    if (!optimizationResults) {
+      return [];
+    }
+    return optimizationResults.map(result => calculateStrategyIncomeSummary(result.periods));
+  }, [optimizationResults]);
 
   const selectedIncomeSummary = strategyIncomeSummaries[selectedStrategyIndex];
 
@@ -247,7 +250,7 @@ export default function PlanEditor() {
     );
   }
 
-  if (!plan) {
+  if (!plan || !optimizationResults) {
     return (
       <AppLayout>
         <div className="text-center py-12">
@@ -292,67 +295,88 @@ export default function PlanEditor() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <ParentIncomeCard
-            title="Förälder 1"
+            parentNumber={1}
             income={parent1Income}
-            hasAgreement={parent1HasAgreement}
+            hasCollectiveAgreement={parent1HasAgreement}
             onIncomeChange={setParent1Income}
-            onAgreementChange={setParent1HasAgreement}
+            onCollectiveAgreementChange={setParent1HasAgreement}
           />
           <ParentIncomeCard
-            title="Förälder 2"
+            parentNumber={2}
             income={parent2Income}
-            hasAgreement={parent2HasAgreement}
+            hasCollectiveAgreement={parent2HasAgreement}
             onIncomeChange={setParent2Income}
-            onAgreementChange={setParent2HasAgreement}
+            onCollectiveAgreementChange={setParent2HasAgreement}
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="mb-6">
           <MunicipalitySelect
-            value={municipality}
-            onChange={(value, rate) => {
-              setMunicipality(value);
+            parentNumber={0}
+            selectedMunicipality={municipality}
+            onMunicipalityChange={(name, rate) => {
+              setMunicipality(name);
               setTaxRate(rate);
             }}
           />
-          <AvailableIncomeDisplay
-            parent1Income={parent1AvailableIncome}
-            parent2Income={parent2AvailableIncome}
-            taxRate={taxRate}
-          />
         </div>
 
-        {optimizationResults && (
-          <>
-            <OptimizationResults
-              results={optimizationResults}
-              minHouseholdIncome={householdIncome}
-              selectedIndex={selectedStrategyIndex}
-              onSelectStrategy={setSelectedStrategyIndex}
-            />
-
-            {selectedIncomeSummary && (
-              <InteractiveSliders
-                periods={selectedIncomeSummary.periods}
-                strategyIncomeSummary={selectedIncomeSummary}
-                householdIncome={householdIncome}
-                daysPerWeek={daysPerWeek}
-                totalMonths={totalMonths}
-                onHouseholdIncomeChange={setHouseholdIncome}
-                onTotalMonthsChange={setTotalMonths}
-                onDaysPerWeekChange={setDaysPerWeek}
-                hasUnappliedChanges={hasUnappliedIncomeChange}
-                onRecalculate={handleRecalculate}
-                parent1={parent1Data}
-                parent2={parent2Data}
-                selectedStrategy={(optimizationResults[selectedStrategyIndex]?.strategy || 'maximize-income') as any}
-                currentTotalIncome={currentTotalIncome}
-                currentDaysUsed={currentDaysUsed}
-                onDistributionChange={handleDistributionChange}
-              />
-            )}
-          </>
+        {municipality && (
+          <AvailableIncomeDisplay
+            parent1NetIncome={calc1.netIncome}
+            parent2NetIncome={calc2.netIncome}
+            parent1AvailableIncome={calc1.availableIncome}
+            parent2AvailableIncome={calc2.availableIncome}
+          />
         )}
+
+        <LeavePeriodCard
+          totalMonths={totalMonths}
+          parent1Months={parent1Months}
+          parent2Months={parent2Months}
+          minHouseholdIncome={householdIncome}
+          maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
+          maxLeaveMonths={maxLeaveMonths}
+          onTotalMonthsChange={setTotalMonths}
+          onDistributionChange={handleDistributionChange}
+          onMinIncomeChange={setHouseholdIncome}
+          simultaneousLeave={simultaneousLeave}
+          simultaneousMonths={simultaneousMonths}
+          onSimultaneousLeaveChange={setSimultaneousLeave}
+          onSimultaneousMonthsChange={setSimultaneousMonths}
+        />
+
+        <OptimizationResults
+          results={optimizationResults}
+          minHouseholdIncome={householdIncome}
+          selectedIndex={selectedStrategyIndex}
+          onSelectStrategy={setSelectedStrategyIndex}
+          timelineMonths={totalMonths}
+        />
+
+        <InteractiveSliders
+          householdIncome={householdIncome}
+          maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
+          daysPerWeek={daysPerWeek}
+          totalMonths={totalMonths}
+          currentHouseholdIncome={optimizationResults[selectedStrategyIndex]?.averageMonthlyIncome || 0}
+          periods={optimizationResults[selectedStrategyIndex]?.periods || []}
+          totalIncome={optimizationResults[selectedStrategyIndex]?.totalIncome}
+          daysUsed={optimizationResults[selectedStrategyIndex]?.daysUsed}
+          daysSaved={optimizationResults[selectedStrategyIndex]?.daysSaved}
+          strategyIncomeSummary={selectedIncomeSummary}
+          hasUnappliedChanges={hasUnappliedIncomeChange}
+          selectedStrategy={optimizationResults[selectedStrategyIndex]?.strategy || 'maximize-income'}
+          parent1={parent1Data}
+          parent2={parent2Data}
+          currentTotalIncome={currentTotalIncome}
+          currentDaysUsed={currentDaysUsed}
+          onHouseholdIncomeChange={setHouseholdIncome}
+          onDaysPerWeekChange={setDaysPerWeek}
+          onTotalMonthsChange={setTotalMonths}
+          onRecalculate={handleRecalculate}
+          onDistributionChange={handleDistributionChange}
+        />
       </div>
     </AppLayout>
   );
