@@ -5,13 +5,12 @@ import { Button } from '@/components/ui/button';
 import { ParentIncomeCard } from '@/components/ParentIncomeCard';
 import { MunicipalitySelect } from '@/components/MunicipalitySelect';
 import { AvailableIncomeDisplay } from '@/components/AvailableIncomeDisplay';
-import { OptimizationResults } from '@/components/OptimizationResults';
-import { InteractiveSliders } from '@/components/InteractiveSliders';
+import { StrategyDetails } from '@/components/StrategyDetails';
 import { LeavePeriodCard } from '@/components/LeavePeriodCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Save, FileDown, Calendar } from 'lucide-react';
+import { Save, FileDown, Calendar, RefreshCw, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import {
@@ -21,7 +20,6 @@ import {
   OptimizationResult,
   calculateMaxLeaveMonths,
 } from '@/utils/parentalCalculations';
-import { calculateStrategyIncomeSummary, StrategyIncomeSummary } from '@/utils/incomeSummary';
 import { exportPlanToPDF } from '@/utils/pdfExport';
 
 interface SavedPlan {
@@ -73,21 +71,29 @@ export default function PlanEditor() {
   const [hasUnappliedIncomeChange, setHasUnappliedIncomeChange] = useState(false);
 
   useEffect(() => {
-    if (id && user) {
+    if (id && user?.id) {
       loadPlan();
+    } else if (id && !user?.id) {
+      setLoading(false);
+      toast.error('Du måste vara inloggad för att se denna plan.');
+      navigate('/auth');
     }
-  }, [id, user]);
+  }, [id, user?.id]);
 
   const loadPlan = async () => {
-    if (!id) return;
+    if (!id || !user?.id) {
+      setLoading(false);
+      return;
+    }
 
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('saved_plans')
         .select('*')
         .eq('id', id)
-        .eq('user_id', user?.id)
-        .single();
+        .eq('user_id', user.id)
+        .maybeSingle();
 
       if (error) throw error;
       if (!data) {
@@ -190,6 +196,7 @@ export default function PlanEditor() {
     );
     setOptimizationResults(results);
     setHasUnappliedIncomeChange(false);
+    toast.success("Plan omoptimerad!");
   };
 
   const handleDistributionChange = (newParent1Months: number) => {
@@ -219,26 +226,7 @@ export default function PlanEditor() {
   const calc1 = calculateAvailableIncome(parent1Data);
   const calc2 = calculateAvailableIncome(parent2Data);
 
-  const strategyIncomeSummaries = useMemo<StrategyIncomeSummary[]>(() => {
-    if (!optimizationResults) {
-      return [];
-    }
-    return optimizationResults.map(result => calculateStrategyIncomeSummary(result.periods));
-  }, [optimizationResults]);
-
-  const selectedIncomeSummary = strategyIncomeSummaries[selectedStrategyIndex];
-
-  const currentTotalIncome = useMemo(() => {
-    const selectedStrategy = optimizationResults?.[selectedStrategyIndex];
-    if (!selectedStrategy) return 0;
-    return selectedStrategy.totalIncome || 0;
-  }, [optimizationResults, selectedStrategyIndex]);
-
-  const currentDaysUsed = useMemo(() => {
-    const selectedStrategy = optimizationResults?.[selectedStrategyIndex];
-    if (!selectedStrategy) return 0;
-    return selectedStrategy.daysUsed || 0;
-  }, [optimizationResults, selectedStrategyIndex]);
+  const selectedStrategy = optimizationResults?.[selectedStrategyIndex];
 
   if (loading) {
     return (
@@ -267,7 +255,17 @@ export default function PlanEditor() {
       <div className="max-w-5xl mx-auto">
         <div className="mb-8">
           <div className="flex justify-between items-start mb-4">
-            <div>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => navigate('/dashboard')}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Tillbaka
+                </Button>
+              </div>
               <h1 className="text-3xl font-bold mb-2">{plan.name}</h1>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-4 w-4" />
@@ -281,13 +279,13 @@ export default function PlanEditor() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleExportPDF} variant="outline">
+              <Button onClick={handleExportPDF} variant="outline" size="sm">
                 <FileDown className="mr-2 h-4 w-4" />
                 Exportera PDF
               </Button>
-              <Button onClick={handleSavePlan} disabled={saving}>
+              <Button onClick={handleSavePlan} disabled={saving} size="sm">
                 <Save className="mr-2 h-4 w-4" />
-                {saving ? 'Sparar...' : 'Spara ändringar'}
+                {saving ? 'Sparar...' : 'Spara'}
               </Button>
             </div>
           </div>
@@ -330,53 +328,42 @@ export default function PlanEditor() {
           />
         )}
 
-        <LeavePeriodCard
-          totalMonths={totalMonths}
-          parent1Months={parent1Months}
-          parent2Months={parent2Months}
-          minHouseholdIncome={householdIncome}
-          maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
-          maxLeaveMonths={maxLeaveMonths}
-          onTotalMonthsChange={setTotalMonths}
-          onDistributionChange={handleDistributionChange}
-          onMinIncomeChange={setHouseholdIncome}
-          simultaneousLeave={simultaneousLeave}
-          simultaneousMonths={simultaneousMonths}
-          onSimultaneousLeaveChange={setSimultaneousLeave}
-          onSimultaneousMonthsChange={setSimultaneousMonths}
-        />
+        {selectedStrategy && (
+          <StrategyDetails 
+            strategy={selectedStrategy}
+            minHouseholdIncome={householdIncome}
+            timelineMonths={totalMonths}
+          />
+        )}
 
-        <OptimizationResults
-          results={optimizationResults}
-          minHouseholdIncome={householdIncome}
-          selectedIndex={selectedStrategyIndex}
-          onSelectStrategy={setSelectedStrategyIndex}
-          timelineMonths={totalMonths}
-        />
+        <div className="mt-6 space-y-6">
+          <h3 className="text-xl font-semibold">Justera din plan</h3>
+          
+          <LeavePeriodCard
+            totalMonths={totalMonths}
+            parent1Months={parent1Months}
+            parent2Months={parent2Months}
+            minHouseholdIncome={householdIncome}
+            maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
+            maxLeaveMonths={maxLeaveMonths}
+            onTotalMonthsChange={setTotalMonths}
+            onDistributionChange={handleDistributionChange}
+            onMinIncomeChange={setHouseholdIncome}
+            simultaneousLeave={simultaneousLeave}
+            simultaneousMonths={simultaneousMonths}
+            onSimultaneousLeaveChange={setSimultaneousLeave}
+            onSimultaneousMonthsChange={setSimultaneousMonths}
+          />
 
-        <InteractiveSliders
-          householdIncome={householdIncome}
-          maxHouseholdIncome={calc1.netIncome + calc2.netIncome}
-          daysPerWeek={daysPerWeek}
-          totalMonths={totalMonths}
-          currentHouseholdIncome={optimizationResults[selectedStrategyIndex]?.averageMonthlyIncome || 0}
-          periods={optimizationResults[selectedStrategyIndex]?.periods || []}
-          totalIncome={optimizationResults[selectedStrategyIndex]?.totalIncome}
-          daysUsed={optimizationResults[selectedStrategyIndex]?.daysUsed}
-          daysSaved={optimizationResults[selectedStrategyIndex]?.daysSaved}
-          strategyIncomeSummary={selectedIncomeSummary}
-          hasUnappliedChanges={hasUnappliedIncomeChange}
-          selectedStrategy={optimizationResults[selectedStrategyIndex]?.strategy || 'maximize-income'}
-          parent1={parent1Data}
-          parent2={parent2Data}
-          currentTotalIncome={currentTotalIncome}
-          currentDaysUsed={currentDaysUsed}
-          onHouseholdIncomeChange={setHouseholdIncome}
-          onDaysPerWeekChange={setDaysPerWeek}
-          onTotalMonthsChange={setTotalMonths}
-          onRecalculate={handleRecalculate}
-          onDistributionChange={handleDistributionChange}
-        />
+          <Button 
+            onClick={handleRecalculate} 
+            size="lg"
+            className="w-full"
+          >
+            <RefreshCw className="mr-2 h-5 w-5" />
+            Omoptimera plan
+          </Button>
+        </div>
       </div>
     </AppLayout>
   );

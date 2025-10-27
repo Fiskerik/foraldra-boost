@@ -21,10 +21,12 @@ import { calculateStrategyIncomeSummary, StrategyIncomeSummary } from "@/utils/i
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { usePlanCache } from "@/hooks/usePlanCache";
 
 const Index = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { savePlanToCache, loadPlanFromCache, clearPlanCache } = usePlanCache();
   const [parent1Income, setParent1Income] = useState(30000);
   const [parent2Income, setParent2Income] = useState(55000);
   const [parent1HasAgreement, setParent1HasAgreement] = useState(true);
@@ -274,6 +276,66 @@ const Index = () => {
     return selectedStrategy.daysUsed || 0;
   }, [optimizationResults, selectedStrategyIndex]);
 
+  // Load cached plan on mount
+  useEffect(() => {
+    const cached = loadPlanFromCache();
+    if (cached && !user) {
+      setParent1Income(cached.parent1Income);
+      setParent2Income(cached.parent2Income);
+      setParent1HasAgreement(cached.parent1HasAgreement);
+      setParent2HasAgreement(cached.parent2HasAgreement);
+      setMunicipality(cached.municipality);
+      setTaxRate(cached.taxRate);
+      setTotalMonths(cached.totalMonths);
+      setParent1Months(cached.parent1Months);
+      setHouseholdIncome(cached.householdIncome);
+      setSimultaneousLeave(cached.simultaneousLeave);
+      setSimultaneousMonths(cached.simultaneousMonths);
+      setDaysPerWeek(cached.daysPerWeek);
+      setOptimizationResults(cached.optimizationResults);
+      setSelectedStrategyIndex(cached.selectedStrategyIndex);
+      toast.success("Din plan har återställts!");
+    }
+  }, [user]);
+
+  // Save to cache whenever relevant state changes
+  useEffect(() => {
+    if (optimizationResults && !user) {
+      savePlanToCache({
+        parent1Income,
+        parent2Income,
+        parent1HasAgreement,
+        parent2HasAgreement,
+        municipality,
+        taxRate,
+        totalMonths,
+        parent1Months,
+        householdIncome,
+        simultaneousLeave,
+        simultaneousMonths,
+        daysPerWeek,
+        optimizationResults,
+        selectedStrategyIndex,
+      });
+    }
+  }, [
+    parent1Income,
+    parent2Income,
+    parent1HasAgreement,
+    parent2HasAgreement,
+    municipality,
+    taxRate,
+    totalMonths,
+    parent1Months,
+    householdIncome,
+    simultaneousLeave,
+    simultaneousMonths,
+    daysPerWeek,
+    optimizationResults,
+    selectedStrategyIndex,
+    user,
+  ]);
+
   useEffect(() => {
     // Only auto-adjust when switching strategies, not on initial optimization
     if (userHasManuallySetIncome || !optimizationResults) {
@@ -481,6 +543,7 @@ const Index = () => {
 
                         if (error) throw error;
 
+                        clearPlanCache();
                         toast.success("Plan sparad!");
                         setPlanName("");
                         

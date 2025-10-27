@@ -23,10 +23,15 @@ export const PlanCard = ({ plan }: PlanCardProps) => {
   
   const totalIncome = selectedStrategy?.totalIncome || 0;
   const daysUsed = selectedStrategy?.daysUsed || 0;
-  const strategyName = selectedStrategy?.meta?.title || selectedStrategy?.title || 'Okänd strategi';
+  const strategyType = selectedStrategy?.strategy || 'maximize-income';
+  const strategyName = strategyType === 'save-days' ? 'Spara dagar' : 'Maximerad inkomst';
+  
+  const strategyColorClass = strategyType === 'save-days' 
+    ? 'border-parent1/30 bg-parent1/5' 
+    : 'border-parent2/30 bg-parent2/5';
 
   return (
-    <Card className="hover:shadow-lg transition-shadow">
+    <Card className={`hover:shadow-lg transition-shadow ${strategyColorClass}`}>
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1">
@@ -36,7 +41,12 @@ export const PlanCard = ({ plan }: PlanCardProps) => {
               Förväntat födelsedatum: {format(new Date(plan.expected_birth_date), 'PPP', { locale: sv })}
             </CardDescription>
           </div>
-          <Badge variant="outline">{strategyName}</Badge>
+          <Badge 
+            variant="outline" 
+            className={strategyType === 'save-days' ? 'border-parent1 text-parent1' : 'border-parent2 text-parent2'}
+          >
+            {strategyName}
+          </Badge>
         </div>
       </CardHeader>
       <CardContent>

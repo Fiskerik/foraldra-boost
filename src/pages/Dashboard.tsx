@@ -1,25 +1,29 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { PlanCard } from '@/components/PlanCard';
 import { Button } from '@/components/ui/button';
 import { Plus, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const location = useLocation();
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadPlans();
-  }, [user]);
+    if (user) {
+      loadPlans();
+    }
+  }, [user, location.pathname]);
 
   const loadPlans = async () => {
     if (!user) return;
 
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('saved_plans')
@@ -32,11 +36,7 @@ export default function Dashboard() {
       setPlans(data || []);
     } catch (error) {
       console.error('Error loading plans:', error);
-      toast({
-        title: 'Fel',
-        description: 'Kunde inte ladda dina planer. Försök igen.',
-        variant: 'destructive',
-      });
+      toast.error('Kunde inte ladda dina planer. Försök igen.');
     } finally {
       setLoading(false);
     }
