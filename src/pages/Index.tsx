@@ -47,6 +47,8 @@ const Index = () => {
   const [daysPerWeek, setDaysPerWeek] = useState(5);
   const [optimizationResults, setOptimizationResults] = useState<OptimizationResult[] | null>(null);
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
+  const [hasChosenStrategy, setHasChosenStrategy] = useState(false);
+  const [showSliders, setShowSliders] = useState(false);
   const [userHasManuallySetIncome, setUserHasManuallySetIncome] = useState(false);
   const [hasUnappliedIncomeChange, setHasUnappliedIncomeChange] = useState(false);
   const [isFirstOptimization, setIsFirstOptimization] = useState(true);
@@ -125,6 +127,12 @@ const Index = () => {
         document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
       }, 100);
     }
+  };
+
+  const handleSelectStrategy = (index: number) => {
+    setSelectedStrategyIndex(index);
+    setHasChosenStrategy(true);
+    toast.success('Strategi vald!');
   };
 
   const handleHouseholdIncomeChange = (value: number) => {
@@ -483,19 +491,31 @@ const Index = () => {
           </Button>
         </div>
 
-        {optimizationResults && (
+          {optimizationResults && (
           <div id="results" className="pt-4 md:pt-12">
             <OptimizationResults
               results={optimizationResults}
               minHouseholdIncome={householdIncome}
               selectedIndex={selectedStrategyIndex}
-              onSelectStrategy={setSelectedStrategyIndex}
+              onSelectStrategy={handleSelectStrategy}
               timelineMonths={totalMonths}
             />
+            
+            {hasChosenStrategy && !showSliders && (
+              <div className="flex justify-center mt-8">
+                <Button
+                  onClick={() => setShowSliders(true)}
+                  size="lg"
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  Justera parametrar
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
-        {optimizationResults && (
+        {optimizationResults && showSliders && (
           <InteractiveSliders
             householdIncome={householdIncome}
             maxHouseholdIncome={calc1.netIncome + calc2.netIncome}

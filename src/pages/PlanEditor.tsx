@@ -80,6 +80,25 @@ export default function PlanEditor() {
     }
   }, [id, user?.id]);
 
+  // Rehydrate optimization results: convert date strings to Date objects
+  const rehydrateOptimizationResults = (raw: any[]): OptimizationResult[] => {
+    return raw.map((res) => ({
+      ...res,
+      periods: res.periods.map((p: any) => ({
+        ...p,
+        startDate: new Date(p.startDate),
+        endDate: new Date(p.endDate),
+        dailyIncome: Number(p.dailyIncome ?? 0),
+        dailyBenefit: Number(p.dailyBenefit ?? 0),
+        otherParentMonthlyIncome: Number(p.otherParentMonthlyIncome ?? 0),
+        otherParentDailyIncome: Number(p.otherParentDailyIncome ?? 0),
+        benefitDaysUsed: Number(p.benefitDaysUsed ?? p.daysCount ?? 0),
+        daysCount: Number(p.daysCount ?? 0),
+        daysPerWeek: p.daysPerWeek != null ? Number(p.daysPerWeek) : undefined,
+      })),
+    }));
+  };
+
   const loadPlan = async () => {
     if (!id || !user?.id) {
       console.log('Missing id or user', { id, userId: user?.id });
@@ -115,10 +134,14 @@ export default function PlanEditor() {
         return;
       }
 
+      // Rehydrate dates and numeric fields
+      const rehydrated = rehydrateOptimizationResults(data.optimization_results);
+      console.log('Rehydrated optimization results:', rehydrated);
+
       // Verify selectedStrategyIndex is valid
       const validIndex = Math.max(0, Math.min(
-        data.selected_strategy_index,
-        data.optimization_results.length - 1
+        data.selected_strategy_index ?? 0,
+        rehydrated.length - 1
       ));
 
       console.log('Setting plan data with validIndex:', validIndex);
@@ -139,7 +162,7 @@ export default function PlanEditor() {
       setSimultaneousLeave(data.simultaneous_leave);
       setSimultaneousMonths(data.simultaneous_months);
       setSelectedStrategyIndex(validIndex);
-      setOptimizationResults(data.optimization_results as unknown as OptimizationResult[]);
+      setOptimizationResults(rehydrated);
     } catch (error) {
       console.error('Error loading plan:', error);
       toast.error('Kunde inte ladda planen. Försök igen.');
