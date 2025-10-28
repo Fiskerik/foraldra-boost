@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OptimizationResult, formatPeriod, formatCurrency, LeavePeriod } from "@/utils/parentalCalculations";
 import { TimelineChart } from "./TimelineChart";
-import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfMonth } from "date-fns";
 
@@ -308,6 +309,9 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     return groups;
   };
 
+  const anyExpanded = Object.values(expandedStrategies).some(v => v);
+  const expandedIndex = Object.entries(expandedStrategies).find(([, v]) => v)?.[0];
+
   return (
     <div className="space-y-4 md:space-y-8">
       <div className="text-center space-y-1 md:space-y-2">
@@ -317,8 +321,16 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
         </p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
-        {results.map((result, index) => {
+      <div className={anyExpanded ? 'space-y-4' : 'grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6'}>
+        {results
+          .map((result, index) => ({ result, originalIndex: index }))
+          .sort((a, b) => {
+            if (!anyExpanded) return 0;
+            if (a.originalIndex === Number(expandedIndex)) return 1;
+            if (b.originalIndex === Number(expandedIndex)) return -1;
+            return 0;
+          })
+          .map(({ result, originalIndex: index }) => {
           // Find the absolute lowest monthly income across ALL periods in this strategy
           // Only consider full months (calendarDays === 30) to avoid partial months
           const filteredPeriods = result.periods.filter(period => period.benefitLevel !== 'none');
@@ -401,15 +413,16 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             Number.isFinite(lowestMonthlyIncome) && lowestMonthlyIncome < minHouseholdIncome;
 
           const isExpanded = expandedStrategies[index] ?? false;
+          const isMinimized = anyExpanded && !isExpanded;
 
           return (
             <Card
               key={index}
               className={`shadow-soft transition-all ${
-                selectedIndex === index && isExpanded
+                selectedIndex === index
                   ? 'ring-2 md:ring-4 ring-primary shadow-xl'
                   : ''
-              } ${!isExpanded ? 'pb-0' : ''}`}
+              } ${!isExpanded && !isMinimized ? 'pb-0' : ''}`}
             >
               <CardHeader 
                 className={`${result.strategy === 'save-days' ? 'bg-parent1/10' : 'bg-parent2/10'} p-2 md:p-6 cursor-pointer`}
@@ -417,22 +430,45 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-0.5 md:space-y-1 flex-1">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <CardTitle className="text-sm md:text-2xl">{result.title}</CardTitle>
                       {isExpanded ? <ChevronUp className="h-4 w-4 md:h-5 md:w-5" /> : <ChevronDown className="h-4 w-4 md:h-5 md:w-5" />}
                     </div>
-                    <p className="text-[10px] md:text-sm text-muted-foreground">
-                      {result.description}
-                    </p>
+                    {!isMinimized && (
+                      <p className="text-[10px] md:text-sm text-muted-foreground">
+                        {result.description}
+                      </p>
+                    )}
                   </div>
-                  {result.strategy === 'save-days' ? (
-                    <PiggyBank className="h-5 w-5 md:h-8 md:w-8 text-parent1 flex-shrink-0" />
-                  ) : (
-                    <TrendingUp className="h-5 w-5 md:h-8 md:w-8 text-parent2 flex-shrink-0" />
-                  )}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectStrategy(index);
+                      }}
+                      variant={selectedIndex === index ? "default" : "outline"}
+                      size="sm"
+                      className="flex-shrink-0"
+                    >
+                      {selectedIndex === index ? (
+                        <>
+                          <Check className="h-3 w-3 md:h-4 md:w-4 mr-1" />
+                          <span className="text-xs md:text-sm">Vald</span>
+                        </>
+                      ) : (
+                        <span className="text-xs md:text-sm">Välj</span>
+                      )}
+                    </Button>
+                    {result.strategy === 'save-days' ? (
+                      <PiggyBank className="h-5 w-5 md:h-8 md:w-8 text-parent1 flex-shrink-0" />
+                    ) : (
+                      <TrendingUp className="h-5 w-5 md:h-8 md:w-8 text-parent2 flex-shrink-0" />
+                    )}
+                  </div>
                 </div>
                 
-                {/* Summary - Always Visible */}
+                {/* Summary - Always Visible (hidden when minimized) */}
+                {!isMinimized && (
                 <div className="grid grid-cols-2 gap-1.5 md:gap-4 mt-2 md:mt-4">
                   <div className="p-1.5 md:p-4 bg-muted rounded-lg">
                     <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5">Total inkomst</div>
@@ -469,16 +505,12 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                     )}
                   </div>
                 </div>
+                )}
               </CardHeader>
               
               {/* Collapsible Details */}
               {isExpanded && (
-                <CardContent className="pt-3 md:pt-6 space-y-3 md:space-y-6 p-2 md:p-6"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectStrategy(index);
-                  }}
-                >
+                <CardContent className="pt-3 md:pt-6 space-y-3 md:space-y-6 p-2 md:p-6">
                 <TimelineChart
                   periods={result.periods}
                   minHouseholdIncome={minHouseholdIncome}

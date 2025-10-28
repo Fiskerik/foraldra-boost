@@ -82,12 +82,14 @@ export default function PlanEditor() {
 
   const loadPlan = async () => {
     if (!id || !user?.id) {
+      console.log('Missing id or user', { id, userId: user?.id });
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
+      console.log('Loading plan:', id);
       const { data, error } = await supabase
         .from('saved_plans')
         .select('*')
@@ -95,12 +97,31 @@ export default function PlanEditor() {
         .eq('user_id', user.id)
         .maybeSingle();
 
+      console.log('Plan data received:', data);
+      console.log('Error:', error);
+
       if (error) throw error;
       if (!data) {
         toast.error('Planen kunde inte hittas eller så har du inte åtkomst till den.');
         navigate('/dashboard');
         return;
       }
+
+      // Verify optimization_results exists and is valid
+      if (!data.optimization_results || !Array.isArray(data.optimization_results)) {
+        console.error('Invalid optimization_results:', data.optimization_results);
+        toast.error('Planen innehåller ogiltig data.');
+        navigate('/dashboard');
+        return;
+      }
+
+      // Verify selectedStrategyIndex is valid
+      const validIndex = Math.max(0, Math.min(
+        data.selected_strategy_index,
+        data.optimization_results.length - 1
+      ));
+
+      console.log('Setting plan data with validIndex:', validIndex);
 
       setPlan(data as SavedPlan);
       
@@ -117,7 +138,7 @@ export default function PlanEditor() {
       setDaysPerWeek(data.days_per_week);
       setSimultaneousLeave(data.simultaneous_leave);
       setSimultaneousMonths(data.simultaneous_months);
-      setSelectedStrategyIndex(data.selected_strategy_index);
+      setSelectedStrategyIndex(validIndex);
       setOptimizationResults(data.optimization_results as unknown as OptimizationResult[]);
     } catch (error) {
       console.error('Error loading plan:', error);
@@ -238,12 +259,36 @@ export default function PlanEditor() {
     );
   }
 
-  if (!plan || !optimizationResults) {
+  if (!plan) {
     return (
       <AppLayout>
         <div className="text-center py-12">
           <h2 className="text-2xl font-semibold mb-2">Plan hittades inte</h2>
           <p className="text-muted-foreground mb-6">Planen kunde inte laddas.</p>
+          <Button onClick={() => navigate('/dashboard')}>Tillbaka till dashboard</Button>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!optimizationResults || optimizationResults.length === 0) {
+    return (
+      <AppLayout>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-semibold mb-2">Ingen optimeringsdata</h2>
+          <p className="text-muted-foreground mb-6">Planen saknar optimeringsresultat.</p>
+          <Button onClick={() => navigate('/dashboard')}>Tillbaka till dashboard</Button>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!selectedStrategy) {
+    return (
+      <AppLayout>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-semibold mb-2">Ogiltig strategi</h2>
+          <p className="text-muted-foreground mb-6">Den valda strategin kunde inte hittas.</p>
           <Button onClick={() => navigate('/dashboard')}>Tillbaka till dashboard</Button>
         </div>
       </AppLayout>

@@ -16,7 +16,13 @@ import {
   OptimizationResult,
   calculateMaxLeaveMonths,
 } from "@/utils/parentalCalculations";
-import { Baby, Sparkles, Save, UserPlus } from "lucide-react";
+import { Baby, Sparkles, Save, UserPlus, LogIn, LogOut, User } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { calculateStrategyIncomeSummary, StrategyIncomeSummary } from "@/utils/incomeSummary";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -362,17 +368,51 @@ const Index = () => {
     });
   }, [selectedStrategyIndex, selectedIncomeSummary?.hasEligibleFullMonths, userHasManuallySetIncome]);
 
+  const { signOut } = useAuth();
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-gradient-hero text-white py-4 md:py-12 px-2 md:px-4 shadow-soft">
-        <div className="container mx-auto max-w-5xl text-center space-y-1 md:space-y-4">
-          <div className="flex items-center justify-center gap-1 md:gap-3">
-            <Baby className="h-6 md:h-12 w-6 md:w-12" />
-            <h1 className="text-xl md:text-5xl font-bold">
-              Föräldrapenningskalkylator
-            </h1>
+        <div className="container mx-auto max-w-5xl">
+          <div className="flex justify-between items-center mb-2 md:mb-4">
+            <div className="flex items-center gap-1 md:gap-3">
+              <Baby className="h-6 md:h-12 w-6 md:w-12" />
+              <h1 className="text-xl md:text-5xl font-bold">
+                Föräldrapenningskalkylator
+              </h1>
+            </div>
+            
+            {/* Navigation/Login */}
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                    Mina planer
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={signOut}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logga ut
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-white border border-white/30 hover:bg-white/20"
+                onClick={() => navigate('/auth')}
+              >
+                <LogIn className="mr-1 md:mr-2 h-3 md:h-4 w-3 md:w-4" />
+                <span className="text-xs md:text-sm">Logga in</span>
+              </Button>
+            )}
           </div>
-          <p className="text-xs md:text-xl opacity-90">
+          <p className="text-xs md:text-xl opacity-90 text-center">
             Optimera er föräldraledighet för bästa ekonomi
           </p>
         </div>
