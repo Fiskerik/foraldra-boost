@@ -32,47 +32,52 @@ export const PlanCard = ({ plan }: PlanCardProps) => {
 
   return (
     <Card className={`hover:shadow-lg transition-shadow ${strategyColorClass}`}>
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <CardTitle className="text-xl mb-2">{plan.name}</CardTitle>
-            <CardDescription className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Förväntat födelsedatum: {format(new Date(plan.expected_birth_date), 'PPP', { locale: sv })}
-            </CardDescription>
+      <CardContent className="p-6">
+        {/* Header med plannamn och strategi badge */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-xl font-semibold mb-1 truncate">{plan.name}</h3>
+            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">
+                {format(new Date(plan.expected_birth_date), 'PPP', { locale: sv })}
+              </span>
+            </p>
           </div>
           <Badge 
             variant="outline" 
-            className={strategyType === 'save-days' ? 'border-parent1 text-parent1' : 'border-parent2 text-parent2'}
+            className={`flex-shrink-0 ${strategyType === 'save-days' ? 'border-parent1 text-parent1 bg-parent1/10' : 'border-parent2 text-parent2 bg-parent2/10'}`}
           >
             {strategyName}
           </Badge>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            <div>
-              <p className="text-sm text-muted-foreground">Total inkomst</p>
-              <p className="font-semibold">{Math.round(totalIncome).toLocaleString('sv-SE')} kr</p>
+
+        {/* Stats grid - kompaktare */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-muted/50 rounded-lg p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Total inkomst</p>
             </div>
+            <p className="text-lg font-bold">{Math.round(totalIncome).toLocaleString('sv-SE')} kr</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            <div>
-              <p className="text-sm text-muted-foreground">Dagar använda</p>
-              <p className="font-semibold">{daysUsed} dagar</p>
+          <div className="bg-muted/50 rounded-lg p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Dagar använda</p>
             </div>
+            <p className="text-lg font-bold">{daysUsed}</p>
           </div>
-        </div>
-        
-        <div className="text-xs text-muted-foreground mb-4">
-          Senast uppdaterad: {format(new Date(plan.updated_at), 'PPP', { locale: sv })}
         </div>
 
+        <div className="text-xs text-muted-foreground mb-4 flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          Uppdaterad {format(new Date(plan.updated_at), 'd MMM yyyy', { locale: sv })}
+        </div>
+
+        {/* Action button */}
         <Link to={`/plan/${plan.id}`}>
-          <Button className="w-full" variant="outline">
+          <Button className="w-full">
             Öppna plan
             <ChevronRight className="ml-2 h-4 w-4" />
           </Button>

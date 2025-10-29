@@ -394,8 +394,12 @@ const Index = () => {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
-                    <User className="h-5 w-5" />
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="text-white border border-white/30 rounded-lg hover:bg-white/20 px-3"
+                  >
+                    <User className="h-6 w-6" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -501,15 +505,25 @@ const Index = () => {
               timelineMonths={totalMonths}
             />
             
-            {hasChosenStrategy && !showSliders && (
+            {hasChosenStrategy && (
               <div className="flex justify-center mt-8">
-                <Button
-                  onClick={() => setShowSliders(true)}
-                  size="lg"
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  Justera parametrar
-                </Button>
+                {!showSliders ? (
+                  <Button
+                    onClick={() => setShowSliders(true)}
+                    size="lg"
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    Justera parametrar
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setShowSliders(false)}
+                    variant="outline"
+                    size="lg"
+                  >
+                    Dölj justeringar
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -541,8 +555,8 @@ const Index = () => {
           />
         )}
 
-        {optimizationResults && (
-          <Card className="bg-gradient-subtle border-primary/20">
+        {optimizationResults && selectedStrategyIndex !== null && (
+          <Card id="save-plan-section" className="mx-auto max-w-2xl scroll-mt-20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Save className="h-5 w-5" />

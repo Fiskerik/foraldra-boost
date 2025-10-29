@@ -254,9 +254,9 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
   const getBenefitLevelLabel = (level: string): string => {
     switch (level) {
-      case 'parental-salary': return 'Föräldralön';
-      case 'high': return 'Hög nivå (≈80%)';
-      case 'low': return 'Lägsta nivå (250kr/dag)';
+      case 'parental-salary': return 'Föräldrapenning + Föräldralön (90%)';
+      case 'high': return 'Föräldrapenning (≈80%)';
+      case 'low': return 'Lägstanivå (250 kr/dag)';
       default: return level;
     }
   };

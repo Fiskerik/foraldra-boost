@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OptimizationResult, formatPeriod, formatCurrency, LeavePeriod } from "@/utils/parentalCalculations";
 import { TimelineChart } from "./TimelineChart";
-import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp, Check, X } from "lucide-react";
+import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp, Check, X, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfMonth } from "date-fns";
@@ -521,300 +521,26 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               </div>
               
               <div className="space-y-2 md:space-y-3">
-              {periodGroups.map((group, groupIndex) => {
-                const firstPeriod = group.periods[0];
-                const lastPeriod = group.periods[group.periods.length - 1];
-                const parentColor =
-                  group.parent === 'both' ? 'accent' :
-                  group.parent === 'parent1' ? 'parent1' : 'parent2';
-
-                const parentLabel =
-                  group.parent === 'both' ? 'Båda föräldrarna' :
-                  group.parent === 'parent1' ? 'Förälder 1' : 'Förälder 2';
-
-                const uniqueBenefitLabels = Array.from(new Set(group.periods.map(segment => {
-                  if (segment.benefitLevel === 'parental-salary') {
-                    return 'Föräldralön (90%)';
-                  }
-                  if (segment.benefitLevel === 'high') {
-                    return 'Föräldrapenning (80%)';
-                  }
-                  if (segment.benefitLevel === 'low') {
-                    return 'Lägstanivå (180 kr/dag)';
-                  }
-                  return segment.isPreferenceFiller || segment.isInitialTenDayPeriod
-                    ? 'Ingen ersättning'
-                    : 'Ingen ersättning';
-                })));
-                const benefitLabel = uniqueBenefitLabels.length === 1
-                  ? uniqueBenefitLabels[0]
-                  : `Varierad ersättning: ${uniqueBenefitLabels.join(' → ')}`;
-
-                const uniqueDaysPerWeekLabels = Array.from(new Set(group.periods.map(segment =>
-                  segment.daysPerWeek
-                    ? `${segment.daysPerWeek} ${segment.daysPerWeek === 1 ? 'dag' : 'dagar'}/vecka`
-                    : 'Heltid'
-                )));
-                const daysPerWeekLabel = uniqueDaysPerWeekLabels.length === 1
-                  ? uniqueDaysPerWeekLabels[0]
-                  : `Varierar: ${uniqueDaysPerWeekLabels.join(' → ')}`;
-
-                const monthlyBreakdown = groupMonthlyBreakdowns[groupIndex];
-                const totalCalendarDays = monthlyBreakdown.reduce((sum, month) => sum + month.calendarDays, 0);
-                const totalHouseholdIncome = monthlyBreakdown.reduce(
-                  (sum, month) => sum + month.monthlyIncome,
-                  0
-                );
-                const totalBenefitIncome = monthlyBreakdown.reduce(
-                  (sum, month) => sum + month.benefitIncome,
-                  0
-                );
-                const totalOtherIncome = monthlyBreakdown.reduce(
-                  (sum, month) => sum + month.otherParentIncome,
-                  0
-                );
-                const effectiveMonths = monthlyBreakdown.length > 0 ? monthlyBreakdown.length : 1;
-
-                const householdMonthlyIncome =
-                  effectiveMonths > 0 ? totalHouseholdIncome / effectiveMonths : 0;
-                const leaveBenefitMonthly =
-                  effectiveMonths > 0 ? totalBenefitIncome / effectiveMonths : 0;
-                const otherParentMonthlyIncome =
-                  effectiveMonths > 0 ? totalOtherIncome / effectiveMonths : 0;
-                const leaveParentMonthlyIncome = householdMonthlyIncome - otherParentMonthlyIncome;
-                const periodTotalIncome = monthlyBreakdown.reduce((sum, month) => sum + month.monthlyIncome, 0);
-                const periodContainsLowest = lowestAggregatedKey
-                  ? monthlyBreakdown.some(month => {
-                      return month.monthKey === lowestAggregatedKey;
-                    })
-                  : false;
-                const shouldBeOrange = periodContainsLowest && isLowestBelowMinimum;
-
-                const expandKey = `${index}-${groupIndex}`;
-                const isPeriodExpanded = expandedPeriods[expandKey];
-                const hasMultipleMonths = monthlyBreakdown.length > 1;
-                const totalDaysUsed = group.periods.reduce((sum, segment) => sum + (segment.benefitDaysUsed ?? segment.daysCount), 0);
-                const isInitialTenDayGroup =
-                  group.parent === 'both' && group.periods.every(segment => segment.isInitialTenDayPeriod);
-                const totalDaysLabel = isInitialTenDayGroup ? '2 x 10 dagar' : `${totalDaysUsed} dagar`;
-                const periodRangeLabel = formatPeriod({ ...firstPeriod, endDate: lastPeriod.endDate });
-
-                return (
-                  <div
-                    key={groupIndex}
-                    className={`p-4 rounded-lg border-l-4 ${
-                      shouldBeOrange
-                        ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20'
-                        : parentColor === 'accent'
-                        ? 'border-accent bg-accent/5'
-                        : parentColor === 'parent1'
-                        ? 'border-parent1 bg-parent1/5'
-                        : 'border-parent2 bg-parent2/5'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        <span className={`font-semibold ${parentColor === 'accent' ? 'text-accent' : parentColor === 'parent1' ? 'text-parent1' : 'text-parent2'}`}>
-                          {parentLabel}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-xs">
-                          {totalDaysLabel}
-                        </Badge>
-                        {hasMultipleMonths && (
-                          <button
-                            onClick={() => togglePeriod(index, groupIndex)}
-                            className="p-1 hover:bg-muted rounded transition-colors"
-                            aria-label={isPeriodExpanded ? "Dölj månader" : "Visa månader"}
-                          >
-                            {isPeriodExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="text-sm space-y-1">
-                      <div className="text-muted-foreground">
-                        {periodRangeLabel}
-                      </div>
-                      <div className="font-medium">
-                        {benefitLabel}
-                      </div>
-                      <div className="text-muted-foreground">
-                        Uttag: {daysPerWeekLabel}
-                      </div>
-
-                      {isPeriodExpanded && hasMultipleMonths && (
-                        <div className="mt-3 space-y-2 pl-4 border-l-2 border-muted">
-                          {monthlyBreakdown.map((month, monthIdx) => {
-                            const aggregatedInfo = aggregatedMonthMap.get(month.monthKey);
-                            const isEligibleMonth = aggregatedInfo
-                              ? aggregatedInfo.totalCalendarDays >= aggregatedInfo.monthLength
-                              : false;
-                            const aggregatedIncome = aggregatedInfo?.totalIncome ?? month.monthlyIncome;
-                            const isLowest =
-                              lowestAggregatedKey !== null && month.monthKey === lowestAggregatedKey;
-                            const isBelowMinimum = isEligibleMonth && aggregatedIncome < minHouseholdIncome;
-                            const leaveParentLabel =
-                              group.parent === 'parent1'
-                                ? 'Förälder 1 hemma'
-                                : group.parent === 'parent2'
-                                ? 'Förälder 2 hemma'
-                                : 'Båda föräldrarna hemma';
-                            const workingParentLabel =
-                              group.parent === 'parent1'
-                                ? 'Förälder 2 arbetar'
-                                : 'Förälder 1 arbetar';
-                            const uniqueDayLabels = Array.from(
-                              new Set(
-                                month.daysPerWeekValues.map(value =>
-                                  value >= 7
-                                    ? 'Heltid'
-                                    : `${value} ${value === 1 ? 'dag' : 'dagar'}/vecka`
-                                )
-                              )
-                            );
-                            const daysPerWeekText =
-                              uniqueDayLabels.length === 1
-                                ? uniqueDayLabels[0]
-                                : `Varierar: ${uniqueDayLabels.join(' → ')}`;
-                            const leaveIncome =
-                              group.parent === 'both' ? month.monthlyIncome : month.leaveParentIncome;
-                            const workingIncome = group.parent === 'both' ? 0 : month.otherParentIncome;
-                            const benefitIncome = month.benefitIncome;
-                            const baseWorkingIncome = month.otherParentMonthlyBase;
-                            const monthLength = month.monthLength;
-                            const isFullMonthWorking =
-                              month.calendarDays >= monthLength &&
-                              month.startDate.getDate() === 1 &&
-                              month.endDate.getDate() === monthLength;
-                            const shouldShowProration =
-                              group.parent !== 'both' &&
-                              baseWorkingIncome > 0 &&
-                              workingIncome > 0 &&
-                              monthLength > 0 &&
-                              !isFullMonthWorking;
-                            return (
-                              <div
-                                key={`${month.startDate.toISOString()}-${monthIdx}`}
-                                className={`text-xs p-2 rounded space-y-1 ${
-                                  isLowest
-                                    ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400'
-                                    : isBelowMinimum
-                                    ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-300'
-                                    : 'bg-muted/30'
-                                }`}
-                              >
-                                 <div className="font-medium flex items-center gap-2">
-                                  <span>{format(month.startDate, 'd')} - {format(month.endDate, 'd MMM yyyy')}</span>
-                                  {group.periods.some(p => p.benefitLevel === 'low') && (
-                                    <Badge variant="outline" className="text-[9px] px-1 py-0 bg-orange-100 dark:bg-orange-900/30 border-orange-400">
-                                      Lägstanivå
-                                    </Badge>
-                                  )}
-                                </div>
-                                 <div className="text-muted-foreground space-y-0.5">
-                                  <div>{month.calendarDays} kalenderdagar</div>
-                                  {isInitialTenDayGroup ? (
-                                    <div className="text-[10px] font-medium">* 2 x 10 uttagna dagar</div>
-                                  ) : (
-                                    <>
-                                      {month.benefitDays > 0 && (
-                                        <div className="text-[10px] font-medium">* {month.benefitDays} dagar uttagna totalt</div>
-                                      )}
-                                      {Object.entries(month.benefitDaysByLevel || {}).map(([level, days]) => {
-                                        if (days === 0 || level === 'none') return null;
-                                        const label =
-                                          level === 'parental-salary' ? 'Föräldralön (90%)' :
-                                          level === 'high' ? 'Vanliga (80%)' :
-                                          level === 'low' ? 'Lägstanivå (180 kr/dag)' : 'Ingen';
-                                        const daysPerWeekEstimate = Math.max(1, Math.round((days / Math.max(month.calendarDays, 1)) * 7));
-                                        return (
-                                          <div key={level} className="text-[10px] pl-2">
-                                            - {Math.round(days)} dagar {label} ({daysPerWeekEstimate} d/v)
-                                          </div>
-                                        );
-                                      })}
-                                    </>
-                                  )}
-                                </div>
-                                <div className="font-medium">
-                                  {leaveParentLabel}: {formatCurrency(leaveIncome)}
-                                  {group.parent !== 'both' && (
-                                    <span className="ml-1 text-muted-foreground">{daysPerWeekText}</span>
-                                  )}
-                                </div>
-                                {group.parent !== 'both' && (
-                                  <div className="text-muted-foreground">
-                                    {workingParentLabel}: {formatCurrency(workingIncome)}
-                                    {shouldShowProration && (
-                                      <span className="ml-1">
-                                        ({formatCurrency(baseWorkingIncome)} × {month.calendarDays}/{monthLength})
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                                <div className="text-muted-foreground italic">
-                                  Föräldrapenning: {formatCurrency(benefitIncome)}
-                                </div>
-                                <div className={`font-semibold ${isLowest ? 'text-yellow-700 dark:text-yellow-400' : isBelowMinimum ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>
-                                  Hushållets inkomst: {formatCurrency(aggregatedIncome)}
-                                  {isLowest && <span className="ml-1 text-[9px]">(lägst)</span>}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {!isPeriodExpanded && hasMultipleMonths && (
-                        <div className="mt-2 p-3 bg-muted/50 rounded text-xs space-y-1">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Genomsnitt/mån:</span>
-                            <span className="font-semibold">{formatCurrency(householdMonthlyIncome)}</span>
-                          </div>
-                          {group.parent !== 'both' && (
-                            <>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Lediga föräldern:</span>
-                                <span>{formatCurrency(leaveParentMonthlyIncome)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Arbetande föräldern:</span>
-                                <span>{formatCurrency(otherParentMonthlyIncome)}</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      {!hasMultipleMonths && (
-                        <div className="mt-2 p-3 bg-muted/50 rounded text-xs space-y-1">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Månadsinkomst:</span>
-                            <span className="font-semibold">{formatCurrency(periodTotalIncome)}</span>
-                          </div>
-                          {group.parent !== 'both' && (
-                            <>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Lediga föräldern:</span>
-                                <span>{formatCurrency(leaveParentMonthlyIncome)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Arbetande föräldern:</span>
-                                <span>{formatCurrency(otherParentMonthlyIncome)}</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                <p className="text-xs text-muted-foreground">Detaljerad periodvy kommer snart.</p>
               </div>
+            </div>
+
+            {/* Save button in overlay */}
+            <div className="flex justify-center pt-6 mt-6 border-t">
+              <Button 
+                size="lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeOverlay();
+                  setTimeout(() => {
+                    document.getElementById('save-plan-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 300);
+                }}
+                className="w-full md:w-auto"
+              >
+                <Save className="mr-2 h-5 w-5" />
+                Spara denna plan
+              </Button>
             </div>
           </CardContent>
         )}
@@ -850,7 +576,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
           }}
         >
           <div 
-            className="w-full max-w-[90%] max-h-[90vh] overflow-y-auto animate-scale-in"
+            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             {renderStrategyCard(results[overlayIndex], overlayIndex, true)}
