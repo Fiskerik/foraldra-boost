@@ -69,9 +69,9 @@ export function AvailableIncomeDisplay({
         </div>
 
         <div className="pt-2 md:pt-4 border-t border-white/20">
-          <div className="flex justify-between items-center">
-            <span className="text-xs md:text-lg font-medium">Total hushållsinkomst (arbete):</span>
-            <span className="text-base md:text-2xl font-bold">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 sm:gap-2">
+            <span className="text-[10px] md:text-base font-medium break-words">Total hushållsinkomst (arbete):</span>
+            <span className="text-sm md:text-xl font-bold whitespace-nowrap">
               {formatCurrency(parent1NetIncome + parent2NetIncome)}
             </span>
           </div>

@@ -339,11 +339,11 @@ export default function PlanEditor() {
                 <Calendar className="h-4 w-4" />
                 <span>
                   Förväntat födelsedatum:{' '}
-                  {format(new Date(plan.expected_birth_date), 'PPP', { locale: sv })}
+                  {format(new Date(plan.expected_birth_date), 'yyyy-MM-dd')}
                 </span>
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                Senast uppdaterad: {format(new Date(plan.updated_at), 'PPP', { locale: sv })}
+                Senast uppdaterad: {format(new Date(plan.updated_at), 'yyyy-MM-dd')}
               </p>
             </div>
             <div className="flex gap-2">

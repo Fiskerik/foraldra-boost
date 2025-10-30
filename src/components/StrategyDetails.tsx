@@ -322,10 +322,10 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                     className="cursor-pointer hover:shadow-md transition-shadow"
                     onClick={() => setExpandedMonths(prev => ({ ...prev, [month.monthKey]: !prev[month.monthKey] }))}
                   >
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-center">
-                        <div className="flex-1">
-                          <div className="font-semibold flex items-center gap-2">
+                    <CardContent className="p-3 md:p-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="flex-1 w-full">
+                          <div className="font-semibold flex items-center gap-2 flex-wrap">
                             {format(month.monthStart, 'MMMM yyyy', { locale: sv })}
                             {!isFullMonth && (
                               <Badge variant="outline" className="text-xs">
@@ -333,13 +333,27 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                               </Badge>
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            {month.parents.join(' + ')}
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {month.parents.map((parent, idx) => (
+                              <Badge 
+                                key={idx}
+                                className={
+                                  parent === 'Parent 1' 
+                                    ? 'bg-parent1/20 text-parent1 border-parent1/30' 
+                                    : parent === 'Parent 2'
+                                    ? 'bg-parent2/20 text-parent2 border-parent2/30'
+                                    : 'bg-both/20 text-purple-700 border-purple-300'
+                                }
+                                variant="outline"
+                              >
+                                {parent}
+                              </Badge>
+                            ))}
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="font-bold text-lg">{formatCurrency(month.monthlyIncome)}</div>
-                          <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <div className="text-left sm:text-right w-full sm:w-auto">
+                          <div className="font-bold text-base md:text-lg">{formatCurrency(month.monthlyIncome)}</div>
+                          <div className="text-xs md:text-sm text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             {month.benefitDays} dagar
                           </div>
