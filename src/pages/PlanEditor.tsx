@@ -387,21 +387,25 @@ export default function PlanEditor() {
         </div>
 
         {municipality && (
-          <AvailableIncomeDisplay
-            parent1NetIncome={calc1.netIncome}
-            parent2NetIncome={calc2.netIncome}
-            parent1AvailableIncome={calc1.availableIncome}
-            parent2AvailableIncome={calc2.availableIncome}
-          />
+          <div className="mb-8">
+            <AvailableIncomeDisplay
+              parent1NetIncome={calc1.netIncome}
+              parent2NetIncome={calc2.netIncome}
+              parent1AvailableIncome={calc1.availableIncome}
+              parent2AvailableIncome={calc2.availableIncome}
+            />
+          </div>
         )}
 
-        {selectedStrategy && (
-          <StrategyDetails 
-            strategy={selectedStrategy}
-            minHouseholdIncome={householdIncome}
-            timelineMonths={totalMonths}
-          />
-        )}
+        <div className="mb-8">
+          {selectedStrategy && (
+            <StrategyDetails 
+              strategy={selectedStrategy}
+              minHouseholdIncome={householdIncome}
+              timelineMonths={totalMonths}
+            />
+          )}
+        </div>
 
         <div className="mt-6 space-y-6">
           <h3 className="text-xl font-semibold">Justera din plan</h3>

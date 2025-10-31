@@ -157,7 +157,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
     return aggregated;
   }, [isMobile, monthlyData]);
 
-  const chartBottomPadding = isMobile ? 72 : 56;
+  const chartBottomPadding = isMobile ? 80 : 64;
   const axisWidth = isMobile ? 68 : 80;
 
   const allIncomeValues = monthlyData.map((d) => d.income);
@@ -361,7 +361,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
         {/* X-axis labels */}
         <div
           className={`absolute bottom-0 flex items-end text-xs text-muted-foreground ${
-            isMobile ? "h-16 text-[10px]" : "h-14"
+            isMobile ? "h-20 text-[10px]" : "h-16"
           }`}
           style={{ left: axisWidth, right: 0 }}
         >
