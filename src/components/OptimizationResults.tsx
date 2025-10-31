@@ -304,17 +304,25 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       return [];
     }
 
-    const sorted = [...periodList].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+    const sorted = [...periodList].sort((a, b) => {
+      const dateA = a.startDate instanceof Date ? a.startDate : new Date(a.startDate);
+      const dateB = b.startDate instanceof Date ? b.startDate : new Date(b.startDate);
+      return dateA.getTime() - dateB.getTime();
+    });
     const groups: PeriodGroup[] = [];
 
     sorted.forEach(period => {
       const lastGroup = groups[groups.length - 1];
       const lastSegment = lastGroup?.periods[lastGroup.periods.length - 1];
 
+      const periodStartDate = period.startDate instanceof Date ? period.startDate : new Date(period.startDate);
+      const lastEndDate = lastSegment?.endDate instanceof Date ? lastSegment.endDate : (lastSegment?.endDate ? new Date(lastSegment.endDate) : null);
+
       const canGroup =
         lastGroup &&
+        lastEndDate &&
         lastGroup.parent === period.parent &&
-        differenceInCalendarDays(period.startDate, addDays(lastSegment.endDate, 1)) === 0;
+        differenceInCalendarDays(periodStartDate, addDays(lastEndDate, 1)) === 0;
 
       if (canGroup) {
         lastGroup.periods.push(period);
