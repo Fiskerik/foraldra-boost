@@ -157,7 +157,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
     return aggregated;
   }, [isMobile, monthlyData]);
 
-  const chartBottomPadding = isMobile ? 80 : 64;
+  const chartBottomPadding = isMobile ? 88 : 64;
   const axisWidth = isMobile ? 68 : 80;
 
   const allIncomeValues = monthlyData.map((d) => d.income);
@@ -222,17 +222,22 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
     console.table(monthlyData);
   }
 
-  const maxLabels = isMobile ? 4 : 8;
+  const maxLabels = isMobile ? 3 : 8;
   const computeLabelStride = () => {
     if (!isMobile) {
       return Math.max(1, Math.ceil(chartData.length / maxLabels));
     }
 
-    if (chartData.length > 12) {
-      return 3;
+    // More aggressive spacing on mobile
+    if (chartData.length > 9) {
+      return 4;
     }
 
     if (chartData.length > 6) {
+      return 3;
+    }
+
+    if (chartData.length > 3) {
       return 2;
     }
 
@@ -361,7 +366,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
         {/* X-axis labels */}
         <div
           className={`absolute bottom-0 flex items-end text-xs text-muted-foreground ${
-            isMobile ? "h-20 text-[10px]" : "h-16"
+            isMobile ? "h-24 text-[8px]" : "h-16 text-xs"
           }`}
           style={{ left: axisWidth, right: 0 }}
         >
@@ -405,7 +410,9 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
               return (
                 <div key={index} className="relative flex-1 h-full">
                   <div
-                    className="absolute bottom-0 left-1/2 flex -translate-x-1/2 origin-bottom rotate-[-60deg] flex-col items-center gap-0.5"
+                    className={`absolute bottom-0 left-1/2 flex -translate-x-1/2 origin-bottom flex-col items-center gap-0.5 ${
+                      isMobile ? "rotate-[-45deg]" : "rotate-[-60deg]"
+                    }`}
                     style={{ transformOrigin: "bottom center" }}
                     aria-hidden="true"
                   >
