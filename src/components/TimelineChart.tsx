@@ -157,7 +157,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
     return aggregated;
   }, [isMobile, monthlyData]);
 
-  const chartBottomPadding = isMobile ? 88 : 64;
+  const chartBottomPadding = isMobile ? 92 : 64;
   const axisWidth = isMobile ? 68 : 80;
 
   const allIncomeValues = monthlyData.map((d) => d.income);
@@ -222,26 +222,16 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
     console.table(monthlyData);
   }
 
-  const maxLabels = isMobile ? 3 : 8;
   const computeLabelStride = () => {
-    if (!isMobile) {
+    if (isMobile) {
+      // Show maximum 2 labels on mobile for better spacing
+      const maxLabels = 2;
+      return Math.max(1, Math.floor(chartData.length / maxLabels));
+    } else {
+      // Desktop: show more labels
+      const maxLabels = 8;
       return Math.max(1, Math.ceil(chartData.length / maxLabels));
     }
-
-    // More aggressive spacing on mobile
-    if (chartData.length > 9) {
-      return 4;
-    }
-
-    if (chartData.length > 6) {
-      return 3;
-    }
-
-    if (chartData.length > 3) {
-      return 2;
-    }
-
-    return 1;
   };
 
   const labelStride = computeLabelStride();
@@ -366,7 +356,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
         {/* X-axis labels */}
         <div
           className={`absolute bottom-0 flex items-end text-xs text-muted-foreground ${
-            isMobile ? "h-24 text-[8px]" : "h-16 text-xs"
+            isMobile ? "h-24 text-[7px]" : "h-16 text-xs"
           }`}
           style={{ left: axisWidth, right: 0 }}
         >
@@ -383,9 +373,8 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
 
                 if (sameYear) {
                   if (isMobile) {
-                    return [
-                      `${format(data.labelStartDate, "MMM", { locale: sv })}–${format(data.labelEndDate, "MMM yy", { locale: sv })}`,
-                    ];
+                    // Simplified format for mobile: just start month
+                    return [format(data.labelStartDate, "MMM yy", { locale: sv })];
                   }
 
                   return [
@@ -394,10 +383,8 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
                 }
 
                 if (isMobile) {
-                  return [
-                    format(data.labelStartDate, "MMM yy", { locale: sv }),
-                    format(data.labelEndDate, "MMM yy", { locale: sv }),
-                  ];
+                  // Show just start date on mobile to save space
+                  return [format(data.labelStartDate, "MMM yy", { locale: sv })];
                 }
 
                 return [

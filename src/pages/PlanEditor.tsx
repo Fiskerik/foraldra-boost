@@ -335,15 +335,18 @@ export default function PlanEditor() {
                 </Button>
               </div>
               <h1 className="text-3xl font-bold mb-2">{plan.name}</h1>
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Calendar className="h-4 w-4" />
-                <span>
-                  Förväntat födelsedatum: {format(new Date(plan.expected_birth_date), 'd MMM yyyy', { locale: sv })}
-                </span>
+              <div className="flex flex-col gap-3 text-sm">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <div>
+                    <div className="font-medium text-foreground">Förväntat födelsedatum</div>
+                    <div>{format(new Date(plan.expected_birth_date), 'd MMM yyyy', { locale: sv })}</div>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Senast uppdaterad: {format(new Date(plan.updated_at), 'd MMM yyyy', { locale: sv })}
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Senast uppdaterad: {format(new Date(plan.updated_at), 'd MMM yyyy', { locale: sv })}
-              </p>
             </div>
             <div className="flex gap-2">
               <Button onClick={handleExportPDF} variant="outline" size="sm">
