@@ -285,15 +285,15 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
           <div className="grid grid-cols-3 gap-2 md:gap-4 mt-4">
             <div className="p-2 md:p-4 bg-background rounded-lg">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Total inkomst</div>
-              <div className="text-lg md:text-4xl font-bold break-words">{formatCurrency(strategy.totalIncome)}</div>
+              <div className="text-xs md:text-xl font-bold break-words">{formatCurrency(strategy.totalIncome)}</div>
             </div>
             <div className="p-2 md:p-4 bg-background rounded-lg">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar använda</div>
-              <div className="text-lg md:text-4xl font-bold break-words">{strategy.daysUsed}</div>
+              <div className="text-xs md:text-xl font-bold break-words">{strategy.daysUsed}</div>
             </div>
             <div className="p-2 md:p-4 bg-background rounded-lg">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar sparade</div>
-              <div className="text-lg md:text-4xl font-bold break-words">{strategy.daysSaved}</div>
+              <div className="text-xs md:text-xl font-bold break-words">{strategy.daysSaved}</div>
             </div>
           </div>
         </CardHeader>
