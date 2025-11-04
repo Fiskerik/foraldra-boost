@@ -83,45 +83,6 @@ export function InteractiveSliders({
     ? Math.max(0, Math.min(100, (incomeBreakPoint / Math.max(maxHouseholdIncome, 1)) * 100))
     : null;
 
-  // Calculate recommended days per week if income requirement is below lowest month
-  const recommendedDaysPerWeek = useMemo(() => {
-    if (!isBelowMinimum || !hasEligibleMonths || computedSummary.lowestFullMonthIncome === null) return null;
-    
-    // Find the weakest period (where other parent earns the least when they're working)
-    const periodsWithOtherIncome = periods.filter(p => 
-      p.parent !== 'both' && (p.otherParentMonthlyIncome || 0) > 0
-    );
-    
-    if (periodsWithOtherIncome.length === 0) return null;
-    
-    const weakestPeriod = periodsWithOtherIncome.reduce((min, p) => 
-      (p.otherParentMonthlyIncome || 0) < (min.otherParentMonthlyIncome || 0) ? p : min
-    );
-    
-    // Calculate income gap
-    const incomeGap = householdIncome - (weakestPeriod.otherParentMonthlyIncome || 0);
-    
-    if (incomeGap <= 0) return null; // No gap = current setup works
-    
-    // Use actual dailyBenefit from the period
-    const dailyBenefit = weakestPeriod.dailyBenefit || (1250 * 0.698);
-    
-    // Calculate how many days per month are needed
-    const daysPerMonthNeeded = incomeGap / dailyBenefit;
-    
-    // Convert to days per week (4.33 weeks per month)
-    const daysPerWeekNeeded = daysPerMonthNeeded / 4.33;
-    
-    // Round up to nearest whole number, max 7 days
-    const recommended = Math.ceil(Math.max(1, Math.min(7, daysPerWeekNeeded)));
-    
-    return recommended;
-  }, [isBelowMinimum, hasEligibleMonths, householdIncome, periods, computedSummary.lowestFullMonthIncome]);
-
-  const recommendedDaysPercent = recommendedDaysPerWeek !== null
-    ? ((recommendedDaysPerWeek - 1) / 6) * 100
-    : null;
-
   // Calculate current parent 1 months from periods
   const currentParent1Months = useMemo(() => {
     if (!periods || periods.length === 0) return 0;
@@ -293,7 +254,7 @@ export function InteractiveSliders({
                 <div className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 border border-amber-200 p-2 mb-3 max-w-fit mx-auto animate-fade-in">
                   <AlertTriangle className="h-3 w-3 text-amber-600 flex-shrink-0" />
                   <p className="text-[10px] text-amber-800">
-                    Målet går inte ihop • Tryck på en pil <span className="text-green-600 font-bold">▼</span> för att justera
+                    Målet går inte ihop • Justera värdena nedan för att nå målet
                   </p>
                 </div>
               )}
@@ -314,9 +275,6 @@ export function InteractiveSliders({
                   style={{ left: `${(householdIncome / maxHouseholdIncome) * 100}%`, transform: "translateX(-50%)" }}
                 >
                   <div className="h-4 w-0.5 bg-primary" />
-                  <div className="mt-0.5 text-[12px] font-bold text-primary leading-none">
-                    ▼
-                  </div>
                 </div>
               </div>
             </div>
@@ -347,9 +305,6 @@ export function InteractiveSliders({
                   style={{ left: `${(totalMonths / monthsSliderMax) * 100}%`, transform: "translateX(-50%)" }}
                 >
                   <div className="h-4 w-0.5 bg-primary" />
-                  <div className="mt-0.5 text-[12px] font-bold text-primary leading-none">
-                    ▼
-                  </div>
                 </div>
               </div>
               <p className="text-[10px] text-muted-foreground">
@@ -383,29 +338,7 @@ export function InteractiveSliders({
                   style={{ left: `${((daysPerWeek - 1) / 6) * 100}%`, transform: "translateX(-50%)" }}
                 >
                   <div className="h-4 w-0.5 bg-primary" />
-                  <div className="mt-0.5 text-[12px] font-bold text-primary leading-none">
-                    ▼
-                  </div>
                 </div>
-                {/* Recommended adjustment indicator - only show when beneficial AND different */}
-                {recommendedDaysPercent !== null && recommendedDaysPerWeek !== null && isBelowMinimum && recommendedDaysPerWeek !== daysPerWeek && (
-                  <div
-                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
-                    style={{ left: `${recommendedDaysPercent}%`, transform: "translateX(-50%)" }}
-                  >
-                    <div className="h-5 w-1 bg-green-500 pointer-events-none" />
-                    <div 
-                      className="mt-0.5 text-[14px] font-bold text-green-600 leading-none cursor-pointer pointer-events-auto"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDaysPerWeekChange(recommendedDaysPerWeek);
-                      }}
-                      title={`Rekommendation: ${recommendedDaysPerWeek} dagar/vecka för att nå målet`}
-                    >
-                      ▼
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
