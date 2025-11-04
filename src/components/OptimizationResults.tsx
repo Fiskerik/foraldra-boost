@@ -447,25 +447,27 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                 {result.description}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectStrategy(index);
-                }}
-                variant={selectedIndex === index ? "default" : "outline"}
-                size="sm"
-                className="flex-shrink-0"
-              >
-                {selectedIndex === index ? (
-                  <>
-                    <Check className="h-3 w-3 md:h-4 md:w-4 mr-1" />
-                    <span className="text-xs md:text-sm">Vald</span>
-                  </>
-                ) : (
-                  <span className="text-xs md:text-sm">Välj</span>
-                )}
-              </Button>
+            <div className="flex items-center gap-1.5 md:gap-3">
+              {!isInOverlay && (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectStrategy(index);
+                  }}
+                  variant={selectedIndex === index ? "default" : "outline"}
+                  size="sm"
+                  className="flex-shrink-0"
+                >
+                  {selectedIndex === index ? (
+                    <>
+                      <Check className="h-3 w-3 md:h-4 md:w-4 mr-1" />
+                      <span className="text-xs md:text-sm">Vald</span>
+                    </>
+                  ) : (
+                    <span className="text-xs md:text-sm">Välj</span>
+                  )}
+                </Button>
+              )}
               {result.strategy === 'save-days' ? (
                 <PiggyBank className="h-5 w-5 md:h-8 md:w-8 text-parent1 flex-shrink-0" />
               ) : (

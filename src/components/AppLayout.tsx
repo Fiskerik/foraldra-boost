@@ -35,7 +35,7 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
         <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 flex justify-between items-center gap-2">
-          <Link to="/dashboard" className="flex items-center gap-1 sm:gap-2 hover:opacity-80 transition-opacity min-w-0 flex-shrink">
+          <Link to="/" className="flex items-center gap-1 sm:gap-2 hover:opacity-80 transition-opacity min-w-0 flex-shrink">
             <Baby className="h-5 w-5 sm:h-6 sm:w-6 text-primary flex-shrink-0" />
             <span className="font-semibold text-xs sm:text-base md:text-lg truncate">
               <span className="hidden sm:inline">Föräldraledighetsplaneraren</span>

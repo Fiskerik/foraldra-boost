@@ -40,9 +40,7 @@ export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
     ? 'border-parent1/30 bg-parent1/5' 
     : 'border-parent2/30 bg-parent2/5';
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDelete = async () => {
     setIsDeleting(true);
     
     try {
@@ -51,13 +49,16 @@ export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
         .update({ is_deleted: true })
         .eq('id', plan.id);
         
-      if (error) throw error;
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
       
       toast.success('Plan raderad!');
       onDelete?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting plan:', error);
-      toast.error('Kunde inte radera planen');
+      toast.error('Kunde inte radera planen: ' + (error?.message || 'Okänt fel'));
     } finally {
       setIsDeleting(false);
     }
