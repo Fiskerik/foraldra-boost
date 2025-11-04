@@ -53,7 +53,7 @@ export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
     try {
       const { error } = await supabase
         .from('saved_plans')
-        .update({ is_deleted: true })
+        .delete()
         .eq('id', plan.id)
         .eq('user_id', user.id);
         

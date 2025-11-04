@@ -101,12 +101,12 @@ All colors MUST be HSL.
   .slider-single [role="slider"] {
     @apply bg-primary border-primary;
   }
-  
+
   .slider-single [data-orientation="horizontal"] {
-    @apply bg-primary/20;
+    @apply bg-muted/40;
   }
-  
+
   .slider-single [data-orientation="horizontal"] > span {
-    @apply bg-primary;
+    @apply hidden;
   }
 }

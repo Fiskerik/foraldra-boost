@@ -47,10 +47,6 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
     const startDate = new Date(period.startDate);
     const endDate = new Date(period.endDate);
     
-    if ((period.benefitLevel as string) === 'none') {
-      return [];
-    }
-    
     const rawBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
     const totalBenefitDays = rawBenefitDays;
 
@@ -203,7 +199,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             monthKey: key,
             monthStart,
             monthLength,
-            monthlyIncome: segment.monthlyIncome + segment.otherParentIncome,
+            monthlyIncome: segment.monthlyIncome,
             daysPerWeekValues: [segment.daysPerWeekValue],
             benefitLevels: [segment.daysPerWeekValue > 0 ? period.benefitLevel : 'none'],
             benefitDaysByLevel: {
@@ -224,7 +220,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             : new Date(segment.endDate);
         existing.calendarDays += segment.calendarDays;
         existing.benefitDays += segment.benefitDays;
-        existing.monthlyIncome += segment.leaveParentIncome + segment.benefitIncome;
+        existing.monthlyIncome += segment.monthlyIncome;
         existing.monthLength = monthLength;
         existing.leaveParentIncome += segment.leaveParentIncome;
         existing.otherParentIncome += segment.otherParentIncome;
