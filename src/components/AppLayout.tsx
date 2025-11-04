@@ -34,15 +34,18 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 flex justify-between items-center gap-2">
-          <Link to="/" className="flex items-center gap-1 sm:gap-2 hover:opacity-80 transition-opacity min-w-0 flex-shrink">
+        <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 flex flex-wrap items-center gap-2">
+          <Link
+            to="/"
+            className="flex items-center gap-1 sm:gap-2 hover:opacity-80 transition-opacity min-w-0 flex-shrink"
+          >
             <Baby className="h-5 w-5 sm:h-6 sm:w-6 text-primary flex-shrink-0" />
             <span className="font-semibold text-xs sm:text-base md:text-lg truncate">
               <span className="hidden sm:inline">Föräldraledighetsplaneraren</span>
               <span className="sm:hidden">Föräldral.planeraren</span>
             </span>
           </Link>
-          <nav className="flex items-center gap-1 sm:gap-2 md:gap-4 flex-shrink-0">
+          <nav className="flex items-center gap-1 sm:gap-2 md:gap-4 flex-wrap justify-end sm:justify-end w-full sm:w-auto sm:ml-auto">
             <Link to="/dashboard">
               <Button variant="ghost" size="sm" className="text-xs sm:text-sm">
                 <span className="hidden sm:inline">Mina planer</span>

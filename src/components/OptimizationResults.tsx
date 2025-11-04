@@ -414,6 +414,10 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     const isLowestBelowMinimum =
       Number.isFinite(lowestMonthlyIncome) && lowestMonthlyIncome < minHouseholdIncome;
 
+    const strategyIcon = result.strategy === 'save-days'
+      ? <PiggyBank className="h-5 w-5 md:h-8 md:w-8 text-parent1 flex-shrink-0" />
+      : <TrendingUp className="h-5 w-5 md:h-8 md:w-8 text-parent2 flex-shrink-0" />;
+
     return (
       <Card
         key={index}
@@ -441,6 +445,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
           <div className="flex items-start justify-between gap-2">
             <div className="space-y-0.5 md:space-y-1 flex-1">
               <div className="flex items-center gap-2">
+                {isInOverlay && strategyIcon}
                 <CardTitle className="text-sm md:text-2xl">{result.title}</CardTitle>
               </div>
               <p className="text-[10px] md:text-sm text-muted-foreground">
@@ -449,29 +454,27 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             </div>
             <div className="flex items-center gap-1.5 md:gap-3">
               {!isInOverlay && (
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectStrategy(index);
-                  }}
-                  variant={selectedIndex === index ? "default" : "outline"}
-                  size="sm"
-                  className="flex-shrink-0"
-                >
-                  {selectedIndex === index ? (
-                    <>
-                      <Check className="h-3 w-3 md:h-4 md:w-4 mr-1" />
-                      <span className="text-xs md:text-sm">Vald</span>
-                    </>
-                  ) : (
-                    <span className="text-xs md:text-sm">Välj</span>
-                  )}
-                </Button>
-              )}
-              {result.strategy === 'save-days' ? (
-                <PiggyBank className="h-5 w-5 md:h-8 md:w-8 text-parent1 flex-shrink-0" />
-              ) : (
-                <TrendingUp className="h-5 w-5 md:h-8 md:w-8 text-parent2 flex-shrink-0" />
+                <>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectStrategy(index);
+                    }}
+                    variant={selectedIndex === index ? "default" : "outline"}
+                    size="sm"
+                    className="flex-shrink-0"
+                  >
+                    {selectedIndex === index ? (
+                      <>
+                        <Check className="h-3 w-3 md:h-4 md:w-4 mr-1" />
+                        <span className="text-xs md:text-sm">Vald</span>
+                      </>
+                    ) : (
+                      <span className="text-xs md:text-sm">Välj</span>
+                    )}
+                  </Button>
+                  {strategyIcon}
+                </>
               )}
             </div>
           </div>

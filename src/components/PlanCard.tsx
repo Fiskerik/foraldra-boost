@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const capitalizeFirstLetter = (str: string) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -29,6 +30,7 @@ interface PlanCardProps {
 
 export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
+  const { user } = useAuth();
   const selectedStrategy = plan.optimization_results?.[plan.selected_strategy_index];
   
   const totalIncome = selectedStrategy?.totalIncome || 0;
@@ -41,13 +43,19 @@ export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
     : 'border-parent2/30 bg-parent2/5';
 
   const handleDelete = async () => {
+    if (!user) {
+      toast.error('Du måste vara inloggad för att radera en plan.');
+      return;
+    }
+
     setIsDeleting(true);
-    
+
     try {
       const { error } = await supabase
         .from('saved_plans')
         .update({ is_deleted: true })
-        .eq('id', plan.id);
+        .eq('id', plan.id)
+        .eq('user_id', user.id);
         
       if (error) {
         console.error('Delete error:', error);

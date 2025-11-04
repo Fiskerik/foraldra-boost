@@ -321,8 +321,8 @@ export default function PlanEditor() {
     <AppLayout>
       <div className="max-w-5xl mx-auto">
         <div className="mb-8">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex-1">
+          <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-start mb-4">
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-2">
                 <Button 
                   variant="ghost" 
@@ -349,12 +349,22 @@ export default function PlanEditor() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={handleExportPDF} variant="outline" size="sm">
+            <div className="flex flex-wrap gap-2 w-full md:w-auto md:flex-nowrap md:justify-end">
+              <Button
+                onClick={handleExportPDF}
+                variant="outline"
+                size="sm"
+                className="w-full md:w-auto"
+              >
                 <FileDown className="mr-2 h-4 w-4" />
                 Exportera PDF
               </Button>
-              <Button onClick={handleSavePlan} disabled={saving} size="sm">
+              <Button
+                onClick={handleSavePlan}
+                disabled={saving}
+                size="sm"
+                className="w-full md:w-auto"
+              >
                 <Save className="mr-2 h-4 w-4" />
                 {saving ? 'Sparar...' : 'Spara'}
               </Button>
