@@ -2,9 +2,17 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, TrendingUp, Clock, ChevronRight } from 'lucide-react';
+import { Calendar, TrendingUp, Clock, ChevronRight, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useState } from 'react';
+
+const capitalizeFirstLetter = (str: string) => {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
 
 interface PlanCardProps {
   plan: {
@@ -16,9 +24,11 @@ interface PlanCardProps {
     selected_strategy_index: number;
     optimization_results: any;
   };
+  onDelete?: () => void;
 }
 
-export const PlanCard = ({ plan }: PlanCardProps) => {
+export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
+  const [isDeleting, setIsDeleting] = useState(false);
   const selectedStrategy = plan.optimization_results?.[plan.selected_strategy_index];
   
   const totalIncome = selectedStrategy?.totalIncome || 0;
@@ -29,6 +39,29 @@ export const PlanCard = ({ plan }: PlanCardProps) => {
   const strategyColorClass = strategyType === 'save-days' 
     ? 'border-parent1/30 bg-parent1/5' 
     : 'border-parent2/30 bg-parent2/5';
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDeleting(true);
+    
+    try {
+      const { error } = await supabase
+        .from('saved_plans')
+        .update({ is_deleted: true })
+        .eq('id', plan.id);
+        
+      if (error) throw error;
+      
+      toast.success('Plan raderad!');
+      onDelete?.();
+    } catch (error) {
+      console.error('Error deleting plan:', error);
+      toast.error('Kunde inte radera planen');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <Card className={`hover:shadow-lg transition-shadow ${strategyColorClass}`}>
@@ -72,16 +105,48 @@ export const PlanCard = ({ plan }: PlanCardProps) => {
 
         <div className="text-xs text-muted-foreground mb-4 flex items-center gap-1">
           <Clock className="h-3 w-3" />
-          Uppdaterad {format(new Date(plan.updated_at), 'd MMM yyyy', { locale: sv })}
+          Uppdaterad {capitalizeFirstLetter(format(new Date(plan.updated_at), 'd MMM yyyy', { locale: sv }))}
         </div>
 
-        {/* Action button */}
-        <Link to={`/plan/${plan.id}`}>
-          <Button className="w-full">
-            Öppna plan
-            <ChevronRight className="ml-2 h-4 w-4" />
-          </Button>
-        </Link>
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <Link to={`/plan/${plan.id}`} className="flex-1">
+            <Button className="w-full">
+              Öppna plan
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+          
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                disabled={isDeleting}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Är du säker?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Detta kommer att radera planen "{plan.name}" permanent. Denna åtgärd kan inte ångras.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={handleDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Radera
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </CardContent>
     </Card>
   );

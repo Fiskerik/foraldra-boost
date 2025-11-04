@@ -240,7 +240,6 @@ export default function PlanEditor() {
     );
     setOptimizationResults(results);
     setHasUnappliedIncomeChange(false);
-    toast.success("Plan omoptimerad!");
   };
 
   const handleDistributionChange = (newParent1Months: number) => {
@@ -334,9 +333,9 @@ export default function PlanEditor() {
                   Tillbaka
                 </Button>
               </div>
-              <h1 className="text-3xl font-bold mb-2">{plan.name}</h1>
-              <div className="w-full bg-background/50 rounded-lg p-4 md:p-6">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 text-sm md:text-base">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2">{plan.name}</h1>
+              <div className="w-full bg-background/50 rounded-lg p-5 md:p-6">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-6 text-sm md:text-base">
                   <div className="flex items-center gap-3">
                     <Calendar className="h-5 w-5 md:h-6 md:w-6 text-primary" />
                     <div>
@@ -432,7 +431,10 @@ export default function PlanEditor() {
           />
 
           <Button 
-            onClick={handleRecalculate} 
+            onClick={() => {
+              handleRecalculate();
+              toast.success("Plan omoptimerad!");
+            }} 
             size="lg"
             className="w-full"
           >

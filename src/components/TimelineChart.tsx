@@ -12,6 +12,10 @@ import {
 import { sv } from "date-fns/locale";
 import { useIsMobile } from "@/hooks/use-mobile";
 
+const capitalizeFirstLetter = (str: string) => {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
 interface TimelineChartProps {
   periods: LeavePeriod[];
   minHouseholdIncome: number;
@@ -368,28 +372,28 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
               const sameYear = data.labelStartDate.getFullYear() === data.labelEndDate.getFullYear();
               const labelLines: string[] = (() => {
                 if (sameMonth) {
-                  return [format(data.labelStartDate, isMobile ? "MMM yy" : "MMM yyyy", { locale: sv })];
+                  return [capitalizeFirstLetter(format(data.labelStartDate, isMobile ? "MMM yy" : "MMM yyyy", { locale: sv }))];
                 }
 
                 if (sameYear) {
                   if (isMobile) {
                     // Simplified format for mobile: just start month
-                    return [format(data.labelStartDate, "MMM yy", { locale: sv })];
+                    return [capitalizeFirstLetter(format(data.labelStartDate, "MMM yy", { locale: sv }))];
                   }
 
                   return [
-                    `${format(data.labelStartDate, "MMM", { locale: sv })} – ${format(data.labelEndDate, "MMM yyyy", { locale: sv })}`,
+                    `${capitalizeFirstLetter(format(data.labelStartDate, "MMM", { locale: sv }))} – ${capitalizeFirstLetter(format(data.labelEndDate, "MMM yyyy", { locale: sv }))}`,
                   ];
                 }
 
                 if (isMobile) {
                   // Show just start date on mobile to save space
-                  return [format(data.labelStartDate, "MMM yy", { locale: sv })];
+                  return [capitalizeFirstLetter(format(data.labelStartDate, "MMM yy", { locale: sv }))];
                 }
 
                 return [
-                  `${format(data.labelStartDate, "MMM yyyy", { locale: sv })}`,
-                  `${format(data.labelEndDate, "MMM yyyy", { locale: sv })}`,
+                  `${capitalizeFirstLetter(format(data.labelStartDate, "MMM yyyy", { locale: sv }))}`,
+                  `${capitalizeFirstLetter(format(data.labelEndDate, "MMM yyyy", { locale: sv }))}`,
                 ];
               })();
 

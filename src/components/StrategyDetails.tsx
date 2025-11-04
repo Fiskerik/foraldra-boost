@@ -7,6 +7,10 @@ import { format, startOfMonth, endOfMonth, differenceInCalendarDays, addDays } f
 import { sv } from "date-fns/locale";
 import { useState } from "react";
 
+const capitalizeFirstLetter = (str: string) => {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
 interface StrategyDetailsProps {
   strategy: OptimizationResult;
   minHouseholdIncome: number;
@@ -220,7 +224,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             : new Date(segment.endDate);
         existing.calendarDays += segment.calendarDays;
         existing.benefitDays += segment.benefitDays;
-        existing.monthlyIncome += segment.monthlyIncome + segment.otherParentIncome;
+        existing.monthlyIncome += segment.leaveParentIncome + segment.benefitIncome;
         existing.monthLength = monthLength;
         existing.leaveParentIncome += segment.leaveParentIncome;
         existing.otherParentIncome += segment.otherParentIncome;
@@ -283,15 +287,15 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
           </div>
           
           <div className="grid grid-cols-3 gap-2 md:gap-4 mt-4">
-            <div className="p-2 md:p-4 bg-background rounded-lg">
+            <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col justify-between min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Total inkomst</div>
               <div className="text-xs md:text-xl font-bold break-words">{formatCurrency(strategy.totalIncome)}</div>
             </div>
-            <div className="p-2 md:p-4 bg-background rounded-lg">
+            <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col justify-between min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar använda</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysUsed}</div>
             </div>
-            <div className="p-2 md:p-4 bg-background rounded-lg">
+            <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col justify-between min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar sparade</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysSaved}</div>
             </div>
@@ -327,7 +331,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                         <div className="flex-1 w-full">
                           <div className="font-semibold flex items-center gap-2 flex-wrap">
-                            {format(month.monthStart, 'MMMM yyyy', { locale: sv })}
+                            {capitalizeFirstLetter(format(month.monthStart, 'MMMM yyyy', { locale: sv }))}
                             {!isFullMonth && (
                               <Badge variant="outline" className="text-xs">
                                 {month.calendarDays} dagar
