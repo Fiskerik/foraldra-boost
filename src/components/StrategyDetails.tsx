@@ -363,10 +363,18 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
                       {isExpanded && (
                         <div className="mt-4 pt-4 border-t space-y-2">
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                               <div className="text-sm text-muted-foreground">Föräldrapenning</div>
                               <div className="font-semibold">{formatCurrency(month.benefitIncome)}</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-muted-foreground">
+                                Föräldraledig förälder (övrig ersättning)
+                              </div>
+                              <div className="font-semibold">
+                                {formatCurrency(Math.max(0, month.leaveParentIncome - month.benefitIncome))}
+                              </div>
                             </div>
                             <div>
                               <div className="text-sm text-muted-foreground">Arbetande förälder</div>
