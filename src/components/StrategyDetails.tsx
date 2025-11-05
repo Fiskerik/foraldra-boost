@@ -238,7 +238,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
     return Array.from(monthMap.values()).sort((a, b) => a.monthStart.getTime() - b.monthStart.getTime());
   };
 
-  const filteredPeriods = strategy.periods.filter(period => period.benefitLevel !== 'none');
+  const filteredPeriods = strategy.periods;
   const monthlyBreakdown = createMonthlyBreakdownEntries(strategy.periods);
 
   const getBenefitLevelLabel = (level: string): string => {

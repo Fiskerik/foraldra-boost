@@ -103,8 +103,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
       }
     });
 
-    const avgDaily = daysCovered > 0 ? incomeDaysSum / daysCovered : 0;
-    const income = avgDaily * 30; // normalize to 30-day month for a stable baseline
+    const income = incomeDaysSum; // monthly household income (no normalization)
 
     return {
       month: format(month, "MMM yyyy", { locale: sv }),
