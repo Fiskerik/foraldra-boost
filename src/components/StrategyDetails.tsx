@@ -90,7 +90,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
       if (remainingBenefitDays <= 0) {
         segment.benefitDays = 0;
       } else {
-        const monthStart = startOfMonth(segment.startDate);
+        const monthStart = startOfMonth(new Date(segment.startDate));
         const monthEndDate = endOfMonth(monthStart);
         const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
         const isFullMonth = segment.calendarDays >= monthLength;
@@ -108,7 +108,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
       }
       
       const benefitDaily = period.dailyBenefit;
-      const monthStart = startOfMonth(segment.startDate);
+      const monthStart = startOfMonth(new Date(segment.startDate));
       const monthEndDate = endOfMonth(monthStart);
       const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
 
@@ -122,8 +122,8 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
       const isFullMonthSegment =
         segment.calendarDays >= monthLength &&
-        segment.startDate.getDate() === 1 &&
-        segment.endDate.getDate() === monthEndDate.getDate();
+        new Date(segment.startDate).getDate() === 1 &&
+        new Date(segment.endDate).getDate() === monthEndDate.getDate();
 
       let benefitIncome = 0;
       if (benefitDaily > 0 && segment.benefitDays > 0) {
@@ -184,7 +184,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
     periodList.forEach(period => {
       breakDownByMonth(period).forEach(segment => {
-        const monthStart = startOfMonth(segment.startDate);
+        const monthStart = startOfMonth(new Date(segment.startDate));
         const key = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
         const monthLength = differenceInCalendarDays(endOfMonth(monthStart), monthStart) + 1;
         const existing = monthMap.get(key);
