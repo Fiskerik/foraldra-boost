@@ -143,12 +143,24 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
           baseOtherIncome = dailyBaseFromOther * segment.calendarDays;
         }
 
-        // The working parent's income is independent and should not be capped
-        otherParentIncome = Math.max(0, Math.round(baseOtherIncome));
+        const maxAllowedOtherIncome = Math.max(0, totalSegmentIncome - benefitIncome);
+
+        otherParentIncome = Math.min(
+          Math.max(0, Math.round(baseOtherIncome)),
+          Math.max(0, Math.round(maxAllowedOtherIncome))
+        );
       }
 
-      // Leave parent income is just the benefit they receive
-      const leaveParentIncome = period.parent === 'both' ? totalSegmentIncome : benefitIncome;
+      let leaveParentIncome: number;
+      if (period.parent === 'both') {
+        leaveParentIncome = totalSegmentIncome;
+      } else {
+        leaveParentIncome = benefitIncome;
+        const combinedDisplayed = otherParentIncome + benefitIncome;
+        if (combinedDisplayed < totalSegmentIncome) {
+          leaveParentIncome += totalSegmentIncome - combinedDisplayed;
+        }
+      }
 
       segment.benefitIncome = benefitIncome;
       segment.otherParentIncome = otherParentIncome;
@@ -187,7 +199,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             monthKey: key,
             monthStart,
             monthLength,
-            monthlyIncome: segment.leaveParentIncome + segment.otherParentIncome,
+            monthlyIncome: segment.monthlyIncome,
             daysPerWeekValues: [segment.daysPerWeekValue],
             benefitLevels: [segment.daysPerWeekValue > 0 ? period.benefitLevel : 'none'],
             benefitDaysByLevel: {
@@ -208,7 +220,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             : new Date(segment.endDate);
         existing.calendarDays += segment.calendarDays;
         existing.benefitDays += segment.benefitDays;
-        existing.monthlyIncome += segment.leaveParentIncome + segment.otherParentIncome;
+        existing.monthlyIncome += segment.monthlyIncome;
         existing.monthLength = monthLength;
         existing.leaveParentIncome += segment.leaveParentIncome;
         existing.otherParentIncome += segment.otherParentIncome;
