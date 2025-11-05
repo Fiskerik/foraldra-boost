@@ -1143,11 +1143,12 @@ function addSegment(
   const preferredDays = preferredDaysPerWeek && preferredDaysPerWeek > 0 ? Math.round(preferredDaysPerWeek) : undefined;
   const planDaysPerWeek = toNumber(plan.dagarPerVecka);
   let dagarPerVecka = planDaysPerWeek > 0 ? planDaysPerWeek : fallbackDaysPerWeek;
-  if (preferredDays) {
-    dagarPerVecka = Math.max(dagarPerVecka, preferredDays);
+
+  if ((!Number.isFinite(dagarPerVecka) || dagarPerVecka <= 0) && typeof preferredDays === 'number' && Number.isFinite(preferredDays)) {
+    dagarPerVecka = preferredDays;
   }
 
-  if (dagarPerVecka <= 0) {
+  if (!Number.isFinite(dagarPerVecka) || dagarPerVecka <= 0) {
     dagarPerVecka = fallbackDaysPerWeek;
   }
 
@@ -1400,21 +1401,16 @@ function convertLegacyResult(
     parent1CutoffDate,
   };
 
-  const preferFullWeek = meta.key === 'maximize-income';
-  const preferredDaysPerWeek = preferFullWeek ? 7 : context.requestedDaysPerWeek;
-  const forceFullWeekScheduling = preferFullWeek;
+  const fallbackRequestedDays = clampDaysPerWeek(context.requestedDaysPerWeek);
 
   const resolveDaysPerWeek = (...values: unknown[]): number => {
-    // Always use the user's requested days per week
-    const normalized = Math.max(1, Math.round(context.requestedDaysPerWeek));
-    
-    // For maximize-income, prefer 7 days if user requested 5+ days
-    if (preferFullWeek && normalized >= 5) {
-      return 7;
+    for (const value of values) {
+      const numeric = toNumber(value);
+      if (numeric > 0) {
+        return clampDaysPerWeek(numeric);
+      }
     }
-    
-    // Otherwise, respect the user's choice
-    return normalized;
+    return fallbackRequestedDays;
   };
 
   const dag1 = toNumber(legacyResult.dag1);
@@ -1506,8 +1502,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan1Overlap?.dagarPerVecka),
       benefitMonthly: overlapBenefitMonthly,
       leaveMonthlyIncome: overlapParent1Monthly + overlapParent2Monthly,
-      preferredDaysPerWeek,
-      forceRecomputeWeeks: forceFullWeekScheduling,
+      preferredDaysPerWeek: undefined,
+      forceRecomputeWeeks: false,
     }, segmentContext, parentData);
   }
 
@@ -1539,8 +1535,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: fallbackDays,
       benefitMonthly,
       leaveMonthlyIncome,
-      preferredDaysPerWeek,
-      forceRecomputeWeeks: forceFullWeekScheduling,
+      preferredDaysPerWeek: undefined,
+      forceRecomputeWeeks: false,
     }, segmentContext, parentData);
   }
 
@@ -1567,8 +1563,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: fallbackDays,
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
-      preferredDaysPerWeek,
-      forceRecomputeWeeks: forceFullWeekScheduling,
+      preferredDaysPerWeek: undefined,
+      forceRecomputeWeeks: false,
     };
     addSegment(periods, segment, segmentContext, parentData);
   }
@@ -1596,8 +1592,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: fallbackDays,
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
-      preferredDaysPerWeek,
-      forceRecomputeWeeks: forceFullWeekScheduling,
+      preferredDaysPerWeek: undefined,
+      forceRecomputeWeeks: false,
     }, segmentContext, parentData);
   }
 
@@ -1620,8 +1616,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: fallbackDays,
       benefitMonthly,
       leaveMonthlyIncome,
-      preferredDaysPerWeek,
-      forceRecomputeWeeks: forceFullWeekScheduling,
+      preferredDaysPerWeek: undefined,
+      forceRecomputeWeeks: false,
     }, segmentContext, parentData);
   }
 
@@ -1648,8 +1644,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: fallbackDays,
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
-      preferredDaysPerWeek,
-      forceRecomputeWeeks: forceFullWeekScheduling,
+      preferredDaysPerWeek: undefined,
+      forceRecomputeWeeks: false,
     };
     addSegment(periods, segment, segmentContext, parentData);
   }
@@ -2865,9 +2861,6 @@ export function optimizeLeave(
   const safeParent2Months = Math.max(0, parent2Months);
   const safeTotalMonths = Math.max(0, totalMonths);
 
-  const combinedNetIncome = calc1.netIncome + calc2.netIncome;
-  const combinedAvailableIncome = calc1.availableIncome + calc2.availableIncome;
-
   const baseInputs = {
     inkomst1: parent1.income,
     inkomst2: parent2.income,
@@ -2955,38 +2948,33 @@ export function optimizeLeave(
     förälder2MinDagar: dayAllocation.parent2LowDays,
   };
 
-  const saveInputs = {
-    ...baseInputs,
-    ...allocationInputs,
-  };
-
-  const maximizeInputs = {
+  const legacyInputs = {
     ...baseInputs,
     ...allocationInputs,
   };
 
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
   const savePreferences = buildPreferences(saveDaysMeta.legacyKey, minHouseholdIncome, allowFullWeekForSave);
-  const saveLegacyResult = optimizeParentalLeave(savePreferences, saveInputs);
+  const saveLegacyResult = optimizeParentalLeave(savePreferences, legacyInputs);
   const saveResult = convertLegacyResult(saveDaysMeta, saveLegacyResult, conversionContext, { parent1, parent2 });
 
   const maximizeMeta = strategies.find((strategy) => strategy.key === 'maximize-income')!;
+  const maximizeTargets = [
+    Math.round(Math.max(minHouseholdIncome, calc1.netIncome + calc2.netIncome)),
+    Math.round(calc1.availableIncome + calc2.availableIncome),
+  ].filter((target) => Number.isFinite(target) && target > 0);
 
-  // For maximize-income, we want the highest possible income which means using
-  // the combined net income as target and allowing all strategies
-  const incomeTargets = new Set<number>();
-  incomeTargets.add(Math.round(combinedNetIncome * 1.2)); // Push higher to maximize days
-  incomeTargets.add(Math.round(combinedNetIncome));
-  incomeTargets.add(Math.round(combinedAvailableIncome * 1.2));
-  incomeTargets.add(Math.round(combinedAvailableIncome));
-
-  const candidateStrategyKeys: LegacyStrategyKey[] = ['maximize', 'maximize_parental_salary'];
+  const candidateStrategyKeys: LegacyStrategyKey[] = ['maximize_parental_salary', 'maximize'];
   const maximizeCandidates: OptimizationResult[] = [];
 
-  incomeTargets.forEach((target) => {
+  if (maximizeTargets.length === 0) {
+    maximizeTargets.push(Math.max(minHouseholdIncome, 1));
+  }
+
+  maximizeTargets.forEach((target) => {
     candidateStrategyKeys.forEach((strategyKey) => {
       const preferences = buildPreferences(strategyKey, target, allowFullWeekForMax);
-      const legacyResult = optimizeParentalLeave(preferences, maximizeInputs);
+      const legacyResult = optimizeParentalLeave(preferences, legacyInputs);
       const converted = convertLegacyResult(maximizeMeta, legacyResult, conversionContext, { parent1, parent2 });
       maximizeCandidates.push(converted);
     });
@@ -2994,29 +2982,21 @@ export function optimizeLeave(
 
   if (maximizeCandidates.length === 0) {
     const fallbackPreferences = buildPreferences(maximizeMeta.legacyKey, minHouseholdIncome, allowFullWeekForMax);
-    const fallbackLegacy = optimizeParentalLeave(fallbackPreferences, maximizeInputs);
+    const fallbackLegacy = optimizeParentalLeave(fallbackPreferences, legacyInputs);
     maximizeCandidates.push(convertLegacyResult(maximizeMeta, fallbackLegacy, conversionContext, { parent1, parent2 }));
   }
 
   const pickBetter = (best: OptimizationResult, current: OptimizationResult) => {
-    // Prioritize using MORE days for maximize-income strategy
-    if (current.daysUsed !== best.daysUsed) {
-      return current.daysUsed > best.daysUsed ? current : best;
-    }
     if (current.totalIncome !== best.totalIncome) {
       return current.totalIncome > best.totalIncome ? current : best;
+    }
+    if (current.daysUsed !== best.daysUsed) {
+      return current.daysUsed > best.daysUsed ? current : best;
     }
     return current.averageMonthlyIncome > best.averageMonthlyIncome ? current : best;
   };
 
-  let maximizeResult = maximizeCandidates.reduce(pickBetter);
-
-  // Always push for maximum days used
-  const pushTarget = Math.round(combinedNetIncome * 1.5);
-  const extraPreferences = buildPreferences('maximize_parental_salary', pushTarget, allowFullWeekForMax);
-  const extraLegacy = optimizeParentalLeave(extraPreferences, maximizeInputs);
-  const extraResult = convertLegacyResult(maximizeMeta, extraLegacy, conversionContext, { parent1, parent2 });
-  maximizeResult = pickBetter(maximizeResult, extraResult);
+  const maximizeResult = maximizeCandidates.reduce(pickBetter);
 
   return [saveResult, maximizeResult];
 }
