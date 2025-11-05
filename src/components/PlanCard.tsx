@@ -53,7 +53,7 @@ export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
     try {
       const { error } = await supabase
         .from('saved_plans')
-        .delete()
+        .update({ is_deleted: true })
         .eq('id', plan.id)
         .eq('user_id', user.id);
         
@@ -63,11 +63,14 @@ export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
       }
       
       toast.success('Plan raderad!');
-      onDelete?.();
+      
+      // Call the callback to refresh the list
+      if (onDelete) {
+        await onDelete();
+      }
     } catch (error: any) {
       console.error('Error deleting plan:', error);
       toast.error('Kunde inte radera planen: ' + (error?.message || 'Okänt fel'));
-    } finally {
       setIsDeleting(false);
     }
   };

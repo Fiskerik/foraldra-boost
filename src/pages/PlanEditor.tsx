@@ -411,17 +411,7 @@ export default function PlanEditor() {
           </div>
         )}
 
-        <div className="mb-8">
-          {selectedStrategy && (
-            <StrategyDetails 
-              strategy={selectedStrategy}
-              minHouseholdIncome={householdIncome}
-              timelineMonths={totalMonths}
-            />
-          )}
-        </div>
-
-        <div className="mt-6 space-y-6">
+        <div className="mb-8 space-y-6">
           <h3 className="text-xl font-semibold">Justera din plan</h3>
           
           <LeavePeriodCard
@@ -451,6 +441,16 @@ export default function PlanEditor() {
             <RefreshCw className="mr-2 h-5 w-5" />
             Omoptimera plan
           </Button>
+        </div>
+
+        <div className="mt-6">
+          {selectedStrategy && (
+            <StrategyDetails 
+              strategy={selectedStrategy}
+              minHouseholdIncome={householdIncome}
+              timelineMonths={totalMonths}
+            />
+          )}
         </div>
       </div>
     </AppLayout>
