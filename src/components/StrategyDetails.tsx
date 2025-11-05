@@ -143,24 +143,12 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
           baseOtherIncome = dailyBaseFromOther * segment.calendarDays;
         }
 
-        const maxAllowedOtherIncome = Math.max(0, totalSegmentIncome - benefitIncome);
-
-        otherParentIncome = Math.min(
-          Math.max(0, Math.round(baseOtherIncome)),
-          Math.max(0, Math.round(maxAllowedOtherIncome))
-        );
+        // The working parent's income is independent and should not be capped
+        otherParentIncome = Math.max(0, Math.round(baseOtherIncome));
       }
 
-      let leaveParentIncome: number;
-      if (period.parent === 'both') {
-        leaveParentIncome = totalSegmentIncome;
-      } else {
-        leaveParentIncome = benefitIncome;
-        const combinedDisplayed = otherParentIncome + benefitIncome;
-        if (combinedDisplayed < totalSegmentIncome) {
-          leaveParentIncome += totalSegmentIncome - combinedDisplayed;
-        }
-      }
+      // Leave parent income is just the benefit they receive
+      const leaveParentIncome = period.parent === 'both' ? totalSegmentIncome : benefitIncome;
 
       segment.benefitIncome = benefitIncome;
       segment.otherParentIncome = otherParentIncome;
