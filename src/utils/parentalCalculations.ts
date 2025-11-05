@@ -1673,8 +1673,8 @@ function convertLegacyResult(
       fallbackDaysPerWeek: fallbackDays,
       benefitMonthly,
       leaveMonthlyIncome: benefitMonthly,
-      preferredDaysPerWeek,
-      forceRecomputeWeeks: forceFullWeekScheduling,
+      preferredDaysPerWeek: plan2MinPlanDaysPerWeek,
+      forceRecomputeWeeks: false,
     }, segmentContext, parentData);
   }
 
