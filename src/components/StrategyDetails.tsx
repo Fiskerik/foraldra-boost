@@ -2,10 +2,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OptimizationResult, LeavePeriod, formatCurrency } from "@/utils/parentalCalculations";
 import { TimelineChart } from "./TimelineChart";
-import { TrendingUp, PiggyBank, Calendar, Users, Clock } from "lucide-react";
+import { TrendingUp, PiggyBank, Calendar, Users, Clock, AlertTriangle } from "lucide-react";
 import { format, startOfMonth, endOfMonth, differenceInCalendarDays, addDays } from "date-fns";
 import { sv } from "date-fns/locale";
 import { useState } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { calculateStrategyIncomeSummary } from "@/utils/incomeSummary";
 
 const capitalizeFirstLetter = (str: string) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -259,6 +261,8 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
   const filteredPeriods = strategy.periods;
   const monthlyBreakdown = createMonthlyBreakdownEntries(strategy.periods);
+  const { lowestFullMonthIncome, hasEligibleFullMonths } = calculateStrategyIncomeSummary(filteredPeriods);
+  const belowMinimum = hasEligibleFullMonths && (lowestFullMonthIncome ?? Infinity) < minHouseholdIncome;
 
   const getBenefitLevelLabel = (level: string): string => {
     switch (level) {
@@ -306,6 +310,17 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
         </CardHeader>
         
         <CardContent className="pt-6">
+          {belowMinimum && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Under minimi-inkomst
+              </AlertTitle>
+              <AlertDescription>
+                Minsta fulla månaden är {formatCurrency(lowestFullMonthIncome!)}. Dagar/vecka har ökats där det gick, men dagarna räckte inte. Ändra fördelning eller min-inkomst.
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="mb-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <Calendar className="h-5 w-5" />
@@ -387,7 +402,12 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                               </div>
                             </div>
                             <div>
-                              <div className="text-sm text-muted-foreground">Arbetande förälder</div>
+                              <div
+                                className="text-sm text-muted-foreground"
+                                title="Summan av den som jobbar i respektive delperiod denna månad (kan vara båda föräldrarna i samma månad)."
+                              >
+                                Arbetande förälder (summa)
+                              </div>
                               <div className="font-semibold">{formatCurrency(month.otherParentIncome)}</div>
                             </div>
                           </div>

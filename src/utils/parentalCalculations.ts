@@ -810,18 +810,32 @@ function ensureMinimumIncomePerMonth(
       p.endDate >= monthStart
     );
 
-    if (ownerHasParentalSalary) {
-      // Must use high benefit days when parental salary is active
-      allocateTopUp('high', highDaily);
-      allocateTopUp('low', lowDaily);
-    } else if (preferLowFirst) {
-      // Save-days strategy: use low first, then high
-      allocateTopUp('low', lowDaily);
-      allocateTopUp('high', highDaily);
-    } else {
-      // Maximize-income strategy: use high first
-      allocateTopUp('high', highDaily);
-      allocateTopUp('low', lowDaily);
+    // Iteratively top up within this month until threshold is met or capacity/days are exhausted
+    const order: Array<'high' | 'low'> = ownerHasParentalSalary
+      ? ['high', 'low']
+      : (preferLowFirst ? ['low', 'high'] : ['high', 'low']);
+
+    let safetyCounter = 0;
+    while (
+      remainingDeficit > 0 &&
+      remainingCapacityDays > 0 &&
+      (remainingLowDays[owner] > 0 || remainingHighDays[owner] > 0) &&
+      safetyCounter < 6
+    ) {
+      const capBefore = remainingCapacityDays;
+      const deficitBefore = remainingDeficit;
+
+      for (const level of order) {
+        if (remainingDeficit <= 0 || remainingCapacityDays <= 0) break;
+        const daily = level === 'high' ? highDaily : lowDaily;
+        allocateTopUp(level, daily);
+      }
+
+      // No progress -> break to avoid infinite loop
+      if (deficitBefore === remainingDeficit || capBefore === remainingCapacityDays) {
+        break;
+      }
+      safetyCounter += 1;
     }
 
     if (remainingDeficit > 0 && process.env.NODE_ENV !== 'production') {
