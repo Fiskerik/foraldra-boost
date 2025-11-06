@@ -52,12 +52,9 @@ export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
 
     try {
       console.log('Attempting to soft delete plan', { planId: plan.id, userId: user.id });
-      const { error } = await supabase
-        .from('saved_plans')
-        .update({ is_deleted: true, user_id: user.id })
-        .eq('id', plan.id)
-        .eq('user_id', user.id)
-        .eq('is_deleted', false);
+      const { error } = await supabase.rpc('soft_delete_plan', {
+        plan_id: plan.id,
+      });
 
       if (error) {
         console.error('Delete error:', error);
@@ -74,6 +71,7 @@ export const PlanCard = ({ plan, onDelete }: PlanCardProps) => {
     } catch (error: any) {
       console.error('Error deleting plan:', error);
       toast.error('Kunde inte radera planen: ' + (error?.message || 'Okänt fel'));
+    } finally {
       setIsDeleting(false);
     }
   };
