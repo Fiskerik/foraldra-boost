@@ -120,6 +120,14 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
         ? monthlyBaseFromOther
         : (dailyBaseFromOther > 0 ? dailyBaseFromOther * 30 : 0);
 
+      const normalizedOtherParentDaily = period.parent === 'both'
+        ? 0
+        : (period.otherParentDailyIncome != null
+            ? period.otherParentDailyIncome
+            : (computedMonthlyBase > 0 && monthLength > 0
+              ? computedMonthlyBase / monthLength
+              : 0));
+
       const isFullMonthSegment =
         segment.calendarDays >= monthLength &&
         new Date(segment.startDate).getDate() === 1 &&
@@ -130,42 +138,48 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
         const benefitDaysForMonth = isFullMonthSegment ? Math.min(segment.benefitDays, 30) : segment.benefitDays;
         benefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
       }
-      benefitIncome = Math.min(totalSegmentIncome, Math.max(0, Math.round(benefitIncome)));
+      benefitIncome = Math.max(0, Math.round(benefitIncome));
 
       let otherParentIncome = 0;
       if (period.parent !== 'both') {
-        let baseOtherIncome = 0;
-        if (computedMonthlyBase > 0) {
-          baseOtherIncome = isFullMonthSegment
-            ? computedMonthlyBase
-            : computedMonthlyBase * (segment.calendarDays / monthLength);
-        } else if (dailyBaseFromOther > 0) {
-          baseOtherIncome = dailyBaseFromOther * segment.calendarDays;
-        }
+        const baseMonthlyOtherIncome = computedMonthlyBase > 0
+          ? (isFullMonthSegment
+              ? computedMonthlyBase
+              : computedMonthlyBase * (segment.calendarDays / monthLength))
+          : normalizedOtherParentDaily * segment.calendarDays;
 
-        const maxAllowedOtherIncome = Math.max(0, totalSegmentIncome - benefitIncome);
-
-        otherParentIncome = Math.min(
-          Math.max(0, Math.round(baseOtherIncome)),
-          Math.max(0, Math.round(maxAllowedOtherIncome))
+        const scaledOtherIncome = normalizedOtherParentDaily * segment.calendarDays;
+        const cappedOtherIncome = Math.min(
+          Math.max(0, Math.round(baseMonthlyOtherIncome)),
+          Math.max(0, Math.round(scaledOtherIncome))
         );
+
+        otherParentIncome = cappedOtherIncome;
       }
 
-      let leaveParentIncome: number;
-      if (period.parent === 'both') {
-        leaveParentIncome = totalSegmentIncome;
-      } else {
-        leaveParentIncome = benefitIncome;
-        const combinedDisplayed = otherParentIncome + benefitIncome;
-        if (combinedDisplayed < totalSegmentIncome) {
-          leaveParentIncome += totalSegmentIncome - combinedDisplayed;
-        }
+      const leaveParentExtraDaily = Math.max(
+        0,
+        (period.dailyIncome || 0) - normalizedOtherParentDaily - (period.dailyBenefit || 0)
+      );
+      const leaveParentExtraIncome = Math.max(0, Math.round(leaveParentExtraDaily * segment.calendarDays));
+
+      let leaveParentIncome = period.parent === 'both'
+        ? totalSegmentIncome
+        : Math.max(0, Math.round(benefitIncome + leaveParentExtraIncome));
+
+      let combinedDisplayed = leaveParentIncome + otherParentIncome;
+
+      if (totalSegmentIncome > 0 && combinedDisplayed > totalSegmentIncome + 50) {
+        const excess = combinedDisplayed - totalSegmentIncome;
+        const reduction = Math.min(excess, leaveParentIncome);
+        leaveParentIncome -= reduction;
+        combinedDisplayed = leaveParentIncome + otherParentIncome;
       }
 
-      segment.benefitIncome = benefitIncome;
+      segment.benefitIncome = Math.min(leaveParentIncome, benefitIncome);
       segment.otherParentIncome = otherParentIncome;
-      segment.leaveParentIncome = Math.max(0, Math.round(leaveParentIncome));
-      segment.monthlyIncome = totalSegmentIncome;
+      segment.leaveParentIncome = leaveParentIncome;
+      segment.monthlyIncome = combinedDisplayed;
       segment.daysPerWeekValue = normalizedDaysPerWeek;
       segment.otherParentMonthlyBase = monthlyBaseFromOther > 0
         ? monthlyBaseFromOther
@@ -369,7 +383,10 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                               <div className="font-semibold">{formatCurrency(month.benefitIncome)}</div>
                             </div>
                             <div>
-                              <div className="text-sm text-muted-foreground">
+                              <div
+                                className="text-sm text-muted-foreground"
+                                title="Visar ersättning som betalas utöver föräldrapenning, exempelvis föräldralön eller sparad semester."
+                              >
                                 Föräldraledig förälder (övrig ersättning)
                               </div>
                               <div className="font-semibold">
