@@ -123,12 +123,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      soft_delete_plan: {
-        Args: {
-          plan_id: string
-        }
-        Returns: void
-      }
+      soft_delete_plan: { Args: { plan_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

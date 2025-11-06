@@ -145,10 +145,12 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
       const labelStartDate = slice[0].labelStartDate;
       const labelEndDate = slice[slice.length - 1].labelEndDate;
 
+      const minIncome = Math.min(...slice.map((s) => s.income));
+
       aggregated.push({
-        month: slice.length === 1 ? labelStart : `${labelStart} – ${labelEnd}`,
+        month: slice.length === 1 ? labelStart : `${labelStart} – ${labelEnd} (min i perioden)`,
         monthDate: slice[0].monthDate,
-        income: totalIncome / slice.length,
+        income: minIncome,
         parent1Days: parent1Total,
         parent2Days: parent2Total,
         bothDays: bothTotal,
