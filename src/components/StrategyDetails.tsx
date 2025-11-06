@@ -167,19 +167,12 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
         ? totalSegmentIncome
         : Math.max(0, Math.round(benefitIncome + leaveParentExtraIncome));
 
-      let combinedDisplayed = leaveParentIncome + otherParentIncome;
-
-      if (totalSegmentIncome > 0 && combinedDisplayed > totalSegmentIncome + 50) {
-        const excess = combinedDisplayed - totalSegmentIncome;
-        const reduction = Math.min(excess, leaveParentIncome);
-        leaveParentIncome -= reduction;
-        combinedDisplayed = leaveParentIncome + otherParentIncome;
-      }
-
-      segment.benefitIncome = Math.min(leaveParentIncome, benefitIncome);
-      segment.otherParentIncome = otherParentIncome;
-      segment.leaveParentIncome = leaveParentIncome;
-      segment.monthlyIncome = combinedDisplayed;
+      // Use the same calculation method as TimelineChart for consistency
+      // totalSegmentIncome already contains the correct household income from period.dailyIncome
+      segment.benefitIncome = Math.min(benefitIncome, totalSegmentIncome);
+      segment.otherParentIncome = Math.max(0, totalSegmentIncome - segment.benefitIncome);
+      segment.leaveParentIncome = segment.benefitIncome;
+      segment.monthlyIncome = totalSegmentIncome;
       segment.daysPerWeekValue = normalizedDaysPerWeek;
       segment.otherParentMonthlyBase = monthlyBaseFromOther > 0
         ? monthlyBaseFromOther
