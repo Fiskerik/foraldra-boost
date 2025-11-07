@@ -78,6 +78,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
     let parent1Days = 0;
     let parent2Days = 0;
     let bothDays = 0;
+    let totalIncome = 0;
 
     periods.forEach((period) => {
       if (period.startDate.getTime() > chartEndDate.getTime()) {
@@ -91,19 +92,36 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
       if (!hasOverlap) return;
 
       const daysInOverlap = differenceInCalendarDays(overlapEnd, overlapStart) + 1;
-      incomeDaysSum += period.dailyIncome * daysInOverlap;
-      daysCovered += daysInOverlap;
-
-      if (period.parent === "parent1" && period.benefitLevel !== "none") {
-        parent1Days += daysInOverlap;
-      } else if (period.parent === "parent2" && period.benefitLevel !== "none") {
-        parent2Days += daysInOverlap;
-      } else if (period.parent === "both" && period.benefitLevel !== "none") {
-        bothDays += daysInOverlap; // count only overlap days with compensation
+      
+      // Calculate income for this overlap period
+      if (period.parent === 'both') {
+        // Both parents on leave: use dailyIncome
+        totalIncome += period.dailyIncome * daysInOverlap;
+        bothDays += daysInOverlap;
+      } else {
+        // One parent working, one on leave
+        // Calculate working parent's income (prorated for this overlap)
+        const monthLength = differenceInCalendarDays(mEnd, mStart) + 1;
+        const proportion = daysInOverlap / monthLength;
+        const workingParentIncome = (period.otherParentMonthlyIncome || 0) * proportion;
+        
+        // Calculate benefit income
+        const benefitDaily = period.dailyBenefit || 0;
+        const expectedBenefitDaysPerDay = (period.daysPerWeek || 7) / 7;
+        const benefitDays = Math.round(daysInOverlap * expectedBenefitDaysPerDay);
+        const benefitIncome = benefitDaily * benefitDays;
+        
+        totalIncome += workingParentIncome + benefitIncome;
+        
+        if (period.parent === "parent1" && period.benefitLevel !== "none") {
+          parent1Days += daysInOverlap;
+        } else if (period.parent === "parent2" && period.benefitLevel !== "none") {
+          parent2Days += daysInOverlap;
+        }
       }
     });
 
-    const income = incomeDaysSum; // monthly household income (no normalization)
+    const income = totalIncome;
 
     return {
       month: format(month, "MMM yyyy", { locale: sv }),

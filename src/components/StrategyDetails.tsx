@@ -114,27 +114,38 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
       const monthEndDate = endOfMonth(monthStart);
       const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
 
-      const totalSegmentIncome = Math.max(0, Math.round((period.dailyIncome || 0) * segment.calendarDays));
-
-      const monthlyBaseFromOther = period.parent === 'both' ? 0 : (period.otherParentMonthlyIncome || 0);
-      const dailyBaseFromOther = period.parent === 'both' ? 0 : (period.otherParentDailyIncome || 0);
-      const computedMonthlyBase = monthlyBaseFromOther > 0
-        ? monthlyBaseFromOther
-        : (dailyBaseFromOther > 0 ? dailyBaseFromOther * 30 : 0);
-
-      const normalizedOtherParentDaily = period.parent === 'both'
-        ? 0
-        : (period.otherParentDailyIncome != null
-            ? period.otherParentDailyIncome
-            : (computedMonthlyBase > 0 && monthLength > 0
-              ? computedMonthlyBase / monthLength
-              : 0));
-
       const isFullMonthSegment =
         segment.calendarDays >= monthLength &&
         new Date(segment.startDate).getDate() === 1 &&
         new Date(segment.endDate).getDate() === monthEndDate.getDate();
 
+      // Handle "both parents on leave" case separately
+      if (period.parent === 'both') {
+        const totalIncome = Math.max(0, Math.round((period.dailyIncome || 0) * segment.calendarDays));
+        segment.benefitIncome = totalIncome;
+        segment.otherParentIncome = 0;
+        segment.leaveParentIncome = totalIncome;
+        segment.monthlyIncome = totalIncome;
+        segment.daysPerWeekValue = normalizedDaysPerWeek;
+        segment.otherParentMonthlyBase = 0;
+        return;
+      }
+
+      // 1. Calculate working parent's income (exact net salary or prorated)
+      let otherParentIncome = 0;
+      if (period.otherParentMonthlyIncome) {
+        if (isFullMonthSegment) {
+          // Full month: use exact net salary
+          otherParentIncome = period.otherParentMonthlyIncome;
+        } else {
+          // Partial month: prorate based on proportion of month
+          const proportion = segment.calendarDays / monthLength;
+          otherParentIncome = period.otherParentMonthlyIncome * proportion;
+        }
+        otherParentIncome = Math.max(0, Math.round(otherParentIncome));
+      }
+
+      // 2. Calculate benefit income
       let benefitIncome = 0;
       if (benefitDaily > 0 && segment.benefitDays > 0) {
         const benefitDaysForMonth = isFullMonthSegment ? Math.min(segment.benefitDays, 30) : segment.benefitDays;
@@ -142,43 +153,16 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
       }
       benefitIncome = Math.max(0, Math.round(benefitIncome));
 
-      let otherParentIncome = 0;
-      if (period.parent !== 'both') {
-        const baseMonthlyOtherIncome = computedMonthlyBase > 0
-          ? (isFullMonthSegment
-              ? computedMonthlyBase
-              : computedMonthlyBase * (segment.calendarDays / monthLength))
-          : normalizedOtherParentDaily * segment.calendarDays;
+      // 3. Calculate total monthly income
+      const monthlyIncome = otherParentIncome + benefitIncome;
 
-        const scaledOtherIncome = normalizedOtherParentDaily * segment.calendarDays;
-        const cappedOtherIncome = Math.min(
-          Math.max(0, Math.round(baseMonthlyOtherIncome)),
-          Math.max(0, Math.round(scaledOtherIncome))
-        );
-
-        otherParentIncome = cappedOtherIncome;
-      }
-
-      const leaveParentExtraDaily = Math.max(
-        0,
-        (period.dailyIncome || 0) - normalizedOtherParentDaily - (period.dailyBenefit || 0)
-      );
-      const leaveParentExtraIncome = Math.max(0, Math.round(leaveParentExtraDaily * segment.calendarDays));
-
-      let leaveParentIncome = period.parent === 'both'
-        ? totalSegmentIncome
-        : Math.max(0, Math.round(benefitIncome + leaveParentExtraIncome));
-
-      // Use the same calculation method as TimelineChart for consistency
-      // totalSegmentIncome already contains the correct household income from period.dailyIncome
-      segment.benefitIncome = Math.min(benefitIncome, totalSegmentIncome);
-      segment.otherParentIncome = Math.max(0, totalSegmentIncome - segment.benefitIncome);
-      segment.leaveParentIncome = segment.benefitIncome;
-      segment.monthlyIncome = totalSegmentIncome;
+      // 4. Set segment data
+      segment.benefitIncome = benefitIncome;
+      segment.otherParentIncome = otherParentIncome;
+      segment.leaveParentIncome = benefitIncome; // Leave parent only gets benefit
+      segment.monthlyIncome = monthlyIncome;
       segment.daysPerWeekValue = normalizedDaysPerWeek;
-      segment.otherParentMonthlyBase = monthlyBaseFromOther > 0
-        ? monthlyBaseFromOther
-        : (dailyBaseFromOther > 0 ? dailyBaseFromOther * 30 : 0);
+      segment.otherParentMonthlyBase = period.otherParentMonthlyIncome || 0;
     });
 
     return segments;
@@ -385,7 +369,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
                       {isExpanded && (
                         <div className="mt-4 pt-4 border-t space-y-2">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <div className="text-sm text-muted-foreground">Föräldrapenning</div>
                               <div className="font-semibold">{formatCurrency(month.benefitIncome)}</div>
@@ -393,20 +377,9 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                             <div>
                               <div
                                 className="text-sm text-muted-foreground"
-                                title="Visar ersättning som betalas utöver föräldrapenning, exempelvis föräldralön eller sparad semester."
+                                title="Visar nettolönen för föräldern som jobbar. För hela månader: full nettolön. För brutna månader: proportionell del."
                               >
-                                Föräldraledig förälder (övrig ersättning)
-                              </div>
-                              <div className="font-semibold">
-                                {formatCurrency(Math.max(0, month.leaveParentIncome - month.benefitIncome))}
-                              </div>
-                            </div>
-                            <div>
-                              <div
-                                className="text-sm text-muted-foreground"
-                                title="Summan av den som jobbar i respektive delperiod denna månad (kan vara båda föräldrarna i samma månad)."
-                              >
-                                Arbetande förälder (summa)
+                                Arbetande förälder (lön)
                               </div>
                               <div className="font-semibold">{formatCurrency(month.otherParentIncome)}</div>
                             </div>
