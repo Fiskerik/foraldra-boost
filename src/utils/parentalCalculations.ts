@@ -458,37 +458,108 @@ function ensureMinimumIncomePerMonth(
     return;
   }
 
+  // Build map of months with full coverage info to determine which months qualify for minimum income guarantee
+  // Only full calendar months (where coverage >= month length) are eligible
+  // Months with only initial 10-day periods are excluded
+  interface MonthInfo {
+    start: Date;
+    end: Date;
+    monthLength: number;
+    coveredDays: number;
+    isFullMonth: boolean;
+    hasInitialTenDayOnly: boolean;
+  }
+  
+  const monthInfoMap = new Map<string, MonthInfo>();
+  
+  for (const { start: monthStart, end: monthEnd } of months) {
+    const fullMonthStart = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth(), 1));
+    const fullMonthEnd = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
+    const monthLength = Math.max(1, differenceInCalendarDays(fullMonthEnd, fullMonthStart) + 1);
+    
+    let coveredDays = 0;
+    const hasInitialTenDay = periods.some(p =>
+      p.isInitialTenDayPeriod &&
+      p.startDate <= monthEnd &&
+      p.endDate >= monthStart
+    );
+    const hasNonInitialOwnerLeave = periods.some(p =>
+      !p.isInitialTenDayPeriod &&
+      (p.parent === 'parent1' || p.parent === 'parent2') &&
+      p.startDate <= monthEnd &&
+      p.endDate >= monthStart
+    );
+    
+    // Calculate actual coverage from periods
+    for (const period of periods) {
+      const periodStart = startOfDay(period.startDate);
+      const periodEnd = startOfDay(period.endDate);
+      
+      if (periodEnd.getTime() < monthStart.getTime() || periodStart.getTime() > monthEnd.getTime()) {
+        continue;
+      }
+      
+      const overlapStart = periodStart.getTime() > monthStart.getTime() ? periodStart : monthStart;
+      const overlapEnd = periodEnd.getTime() < monthEnd.getTime() ? periodEnd : monthEnd;
+      const overlapDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+      
+      coveredDays += overlapDays;
+    }
+    
+    const monthKey = `${fullMonthStart.getFullYear()}-${fullMonthStart.getMonth()}`;
+    const isFullMonth = coveredDays >= monthLength;
+    const hasInitialTenDayOnly = hasInitialTenDay && !hasNonInitialOwnerLeave;
+    
+    monthInfoMap.set(monthKey, {
+      start: monthStart,
+      end: monthEnd,
+      monthLength,
+      coveredDays,
+      isFullMonth,
+      hasInitialTenDayOnly,
+    });
+  }
+
   const cutoff = parent1CutoffDate ? startOfDay(parent1CutoffDate) : null;
   const lastParent1Day = cutoff ? startOfDay(addDays(cutoff, -1)) : null;
 
-  const monthSegments: { start: Date; end: Date; forcedOwner?: 'parent1' | 'parent2' }[] = [];
+  const monthSegments: { start: Date; end: Date; forcedOwner?: 'parent1' | 'parent2'; monthKey: string }[] = [];
 
   for (const { start: monthStart, end: monthEnd } of months) {
+    const fullMonthStart = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth(), 1));
+    const monthKey = `${fullMonthStart.getFullYear()}-${fullMonthStart.getMonth()}`;
+    const monthInfo = monthInfoMap.get(monthKey);
+    
+    // Skip months that are not full or are only initial 10-day periods
+    if (!monthInfo || !monthInfo.isFullMonth || monthInfo.hasInitialTenDayOnly) {
+      continue;
+    }
+    
     if (!cutoff) {
-      monthSegments.push({ start: monthStart, end: monthEnd });
+      monthSegments.push({ start: monthStart, end: monthEnd, monthKey });
       continue;
     }
 
     if (cutoff.getTime() <= monthStart.getTime()) {
-      monthSegments.push({ start: monthStart, end: monthEnd, forcedOwner: 'parent2' });
+      monthSegments.push({ start: monthStart, end: monthEnd, forcedOwner: 'parent2', monthKey });
       continue;
     }
 
     if (cutoff.getTime() > monthEnd.getTime()) {
-      monthSegments.push({ start: monthStart, end: monthEnd, forcedOwner: 'parent1' });
+      monthSegments.push({ start: monthStart, end: monthEnd, forcedOwner: 'parent1', monthKey });
       continue;
     }
 
     if (lastParent1Day && lastParent1Day.getTime() >= monthStart.getTime()) {
       const forcedEnd = lastParent1Day.getTime() < monthEnd.getTime() ? lastParent1Day : monthEnd;
       if (forcedEnd.getTime() >= monthStart.getTime()) {
-        monthSegments.push({ start: monthStart, end: forcedEnd, forcedOwner: 'parent1' });
+        monthSegments.push({ start: monthStart, end: forcedEnd, forcedOwner: 'parent1', monthKey });
       }
     }
 
     const segmentStart = cutoff.getTime() > monthStart.getTime() ? cutoff : monthStart;
     if (segmentStart.getTime() <= monthEnd.getTime()) {
-      monthSegments.push({ start: segmentStart, end: monthEnd, forcedOwner: 'parent2' });
+      monthSegments.push({ start: segmentStart, end: monthEnd, forcedOwner: 'parent2', monthKey });
     }
   }
 
@@ -526,24 +597,7 @@ function ensureMinimumIncomePerMonth(
     parent2: Math.max(0, context.parent2HighDailyNet),
   };
 
-  for (const { start: monthStart, end: monthEnd, forcedOwner } of monthSegments) {
-    // Skip birth month if it only contains initial 2x10 periods
-    const hasInitialTenDay = periods.some(p =>
-      p.isInitialTenDayPeriod &&
-      p.startDate <= monthEnd &&
-      p.endDate >= monthStart
-    );
-    const hasNonInitialOwnerLeave = periods.some(p =>
-      !p.isInitialTenDayPeriod &&
-      (p.parent === 'parent1' || p.parent === 'parent2') &&
-      p.startDate <= monthEnd &&
-      p.endDate >= monthStart
-    );
-    
-    if (hasInitialTenDay && !hasNonInitialOwnerLeave) {
-      continue;
-    }
-
+  for (const { start: monthStart, end: monthEnd, forcedOwner, monthKey } of monthSegments) {
     const segmentDays = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
     const fullMonthStart = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth(), 1));
     const fullMonthEnd = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
@@ -570,6 +624,7 @@ function ensureMinimumIncomePerMonth(
         continue;
       }
 
+      // Use dailyIncome which already includes both benefit and working parent income correctly
       const totalIncomeForOverlap = (period.dailyIncome || 0) * overlapDays;
       monthIncome += totalIncomeForOverlap;
 
