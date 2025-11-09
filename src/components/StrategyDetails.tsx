@@ -245,7 +245,11 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
   const filteredPeriods = strategy.periods;
   const monthlyBreakdown = createMonthlyBreakdownEntries(strategy.periods);
-  const { lowestFullMonthIncome, hasEligibleFullMonths } = calculateStrategyIncomeSummary(filteredPeriods);
+  const {
+    lowestFullMonthIncome,
+    hasEligibleFullMonths,
+    lowestFullMonthLabel,
+  } = calculateStrategyIncomeSummary(filteredPeriods);
   const belowMinimum = hasEligibleFullMonths && (lowestFullMonthIncome ?? Infinity) < minHouseholdIncome;
 
   const getBenefitLevelLabel = (level: string): string => {
@@ -314,7 +318,14 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                 Under minimi-inkomst
               </AlertTitle>
               <AlertDescription>
-                Minsta fulla månaden är {formatCurrency(lowestFullMonthIncome!)}. Dagar/vecka har ökats där det gick, men dagarna räckte inte. Ändra fördelning eller min-inkomst.
+                {lowestFullMonthLabel ? (
+                  <>
+                    Hushållets lägsta helmånad är {lowestFullMonthLabel} med en inkomst på {formatCurrency(lowestFullMonthIncome!)}.
+                  </>
+                ) : (
+                  <>Minsta fulla månaden är {formatCurrency(lowestFullMonthIncome!)}.</>
+                )}{" "}
+                Dagar/vecka har ökats där det gick, men dagarna räckte inte. Överväg att justera fördelningen eller höj minimiinkomsten.
               </AlertDescription>
             </Alert>
           )}

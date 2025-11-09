@@ -270,6 +270,13 @@ function detectMinimumIncomeWarnings(
   };
 
   let cursor = new Date(timelineStart);
+  const deficitMonths: {
+    monthStart: Date;
+    monthLabel: string;
+    monthIncome: number;
+    dominantParent: 'parent1' | 'parent2';
+  }[] = [];
+  const splitMonthThreshold = 5;
 
   while (cursor.getTime() <= timelineEnd.getTime()) {
     const monthStart = startOfDay(cursor);
@@ -287,28 +294,82 @@ function detectMinimumIncomeWarnings(
     const isFullMonth = metrics.coveredDays >= monthLength;
 
     if (isFullMonth && metrics.hasNonInitialOwnerLeave) {
+      const hasSimultaneousOnly =
+        metrics.overlappingPeriods.length > 0 &&
+        metrics.overlappingPeriods.every(period => period.parent === 'both');
+      const parent1Days = metrics.parentDayTotals.parent1;
+      const parent2Days = metrics.parentDayTotals.parent2;
+      const isSplitMonth =
+        !hasSimultaneousOnly &&
+        parent1Days >= splitMonthThreshold &&
+        parent2Days >= splitMonthThreshold;
+
+      if (isSplitMonth) {
+        cursor = startOfDay(addMonths(monthStart, 1));
+        continue;
+      }
+
       const monthIncome = metrics.totalIncome;
       if (monthIncome + 1 < context.minHouseholdIncome) {
         const monthLabel = format(monthStart, 'MMMM yyyy', { locale: sv });
-        const remainingParent1 = remainingByParent.parent1;
-        const remainingParent2 = remainingByParent.parent2;
+        const dominantParent: 'parent1' | 'parent2' = parent1Days >= parent2Days ? 'parent1' : 'parent2';
 
-        if (remainingParent1 <= 0 && remainingParent2 <= 0) {
-          warnings.push(
-            `Hushållets inkomst i ${monthLabel} ligger under miniminivån ` +
-            `eftersom det inte finns fler dagar kvar att ta ut.`
-          );
-        } else {
-          warnings.push(
-            `Hushållets inkomst i ${monthLabel} ligger under miniminivån ` +
-            `trots att det finns dagar kvar. Överväg att öka uttaget manuellt.`
-          );
-        }
+        deficitMonths.push({
+          monthStart: monthStart,
+          monthLabel,
+          monthIncome,
+          dominantParent,
+        });
       }
     }
 
     cursor = startOfDay(addMonths(monthStart, 1));
   }
+
+  if (deficitMonths.length === 0) {
+    return warnings;
+  }
+
+  const worstMonth = deficitMonths.reduce((worst, current) => {
+    if (!worst) {
+      return current;
+    }
+
+    if (current.monthIncome < worst.monthIncome - 0.5) {
+      return current;
+    }
+
+    if (Math.abs(current.monthIncome - worst.monthIncome) <= 0.5) {
+      return current.monthStart.getTime() < worst.monthStart.getTime() ? current : worst;
+    }
+
+    return worst;
+  }, deficitMonths[0]);
+
+  const formattedIncome = formatCurrency(Math.max(0, worstMonth.monthIncome));
+  const formattedMinimum = formatCurrency(Math.max(0, context.minHouseholdIncome));
+  const dominantParentLabel = worstMonth.dominantParent === 'parent1' ? 'Förälder 1' : 'Förälder 2';
+  const alternateParent: 'parent1' | 'parent2' = worstMonth.dominantParent === 'parent1' ? 'parent2' : 'parent1';
+  const alternateLabel = alternateParent === 'parent1' ? 'Förälder 1' : 'Förälder 2';
+  const remainingParent1 = remainingByParent.parent1;
+  const remainingParent2 = remainingByParent.parent2;
+  const alternateRemaining = remainingByParent[alternateParent];
+  const dominantRemaining = remainingByParent[worstMonth.dominantParent];
+
+  const baseMessage = `Hushållets inkomst i ${worstMonth.monthLabel} är ${formattedIncome}, vilket är under minimiinkomsten ${formattedMinimum}.`;
+
+  let suggestion: string;
+  if (remainingParent1 <= 0 && remainingParent2 <= 0) {
+    suggestion = 'Inga föräldrapenningdagar finns kvar att omfördela.';
+  } else if (alternateRemaining > 0) {
+    suggestion = `Överväg att låta ${alternateLabel} vara hemma fler dagar under ${worstMonth.monthLabel} för att öka inkomsten.`;
+  } else if (dominantRemaining > 0) {
+    suggestion = `Överväg att öka uttaget för ${dominantParentLabel} under ${worstMonth.monthLabel}.`;
+  } else {
+    suggestion = 'Justera fördelningen av dagar mellan föräldrarna för att nå upp till miniminivån.';
+  }
+
+  warnings.push(`${baseMessage} ${suggestion}`);
 
   return warnings;
 }
