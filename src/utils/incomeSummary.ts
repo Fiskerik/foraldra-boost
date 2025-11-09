@@ -66,9 +66,8 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
 
   const totalCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
   let remainingBenefitDays = totalBenefitDays;
-  let carryOver = 0;
 
-  segments.forEach((segment, index) => {
+  segments.forEach(segment => {
     if (remainingBenefitDays <= 0) {
       segment.benefitDays = 0;
     } else {
@@ -105,11 +104,6 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
 
     const monthlyBaseFromOther = period.parent === "both" ? 0 : period.otherParentMonthlyIncome || 0;
     const dailyBaseFromOther = period.parent === "both" ? 0 : period.otherParentDailyIncome || 0;
-    const computedMonthlyBase = monthlyBaseFromOther > 0
-      ? monthlyBaseFromOther
-      : dailyBaseFromOther > 0
-        ? dailyBaseFromOther * 30
-        : 0;
 
     const isFullMonthSegment =
       segment.calendarDays >= monthLength &&
@@ -117,13 +111,12 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       segment.endDate.getDate() === monthEnd.getDate();
 
     let otherParentIncome = 0;
-    if (period.parent !== "both" && computedMonthlyBase > 0) {
-      if (isFullMonthSegment) {
-        otherParentIncome = monthlyBaseFromOther > 0 ? computedMonthlyBase : dailyBaseFromOther * 30;
-      } else {
-        otherParentIncome = monthlyBaseFromOther > 0
-          ? computedMonthlyBase * (segment.calendarDays / monthLength)
-          : dailyBaseFromOther * segment.calendarDays;
+    if (period.parent !== "both") {
+      if (dailyBaseFromOther > 0) {
+        otherParentIncome = dailyBaseFromOther * segment.calendarDays;
+      } else if (monthlyBaseFromOther > 0) {
+        const share = isFullMonthSegment ? 1 : segment.calendarDays / totalCalendarDays;
+        otherParentIncome = monthlyBaseFromOther * share;
       }
     }
 
