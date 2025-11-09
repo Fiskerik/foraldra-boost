@@ -529,9 +529,13 @@ function ensureMinimumIncomePerMonth(
     const fullMonthStart = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth(), 1));
     const monthKey = `${fullMonthStart.getFullYear()}-${fullMonthStart.getMonth()}`;
     const monthInfo = monthInfoMap.get(monthKey);
-    
-    // Skip months that are not full or are only initial 10-day periods
-    if (!monthInfo || !monthInfo.isFullMonth || monthInfo.hasInitialTenDayOnly) {
+
+    // Consider full calendar months based on calendar boundaries (not existing periods)
+    const endOfCalMonth = startOfDay(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
+    const isFullCalendarMonth = monthStart.getDate() === 1 && monthEnd.getDate() === endOfCalMonth.getDate();
+
+    // Skip months that are not full calendar months or are only initial 10-day periods
+    if (!isFullCalendarMonth || (monthInfo && monthInfo.hasInitialTenDayOnly)) {
       continue;
     }
     
@@ -691,6 +695,12 @@ function ensureMinimumIncomePerMonth(
       }
     }
 
+    // NEW: if chosen owner has no benefit days but the other parent does, switch owner for this month
+    if (!hasBenefitDays(owner) && hasBenefitDays(otherParent) && (!forcedOwner || forcedOwner !== owner)) {
+      owner = otherParent;
+      ownerRemainingCalendar = getRemainingCalendarFor(owner);
+    }
+
     ownerRemainingCalendar = getRemainingCalendarFor(owner);
 
     if (ownerRemainingCalendar <= 0 && (!ignoreCalendarCapsThisMonth || !hasBenefitDays(owner))) {
@@ -698,7 +708,16 @@ function ensureMinimumIncomePerMonth(
     }
 
     if (!hasBenefitDays(owner)) {
-      continue;
+      // Neither owner has benefit days, skip
+      if (!hasBenefitDays(otherParent)) {
+        continue;
+      }
+      // Fallback: try alternate owner explicitly
+      owner = otherParent;
+      ownerRemainingCalendar = getRemainingCalendarFor(owner);
+      if (ownerRemainingCalendar <= 0 && (!ignoreCalendarCapsThisMonth || !hasBenefitDays(owner))) {
+        continue;
+      }
     }
 
     if (remainingPreferredMonths[owner] > 0) {
