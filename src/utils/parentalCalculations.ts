@@ -1800,7 +1800,7 @@ function convertLegacyResult(
 
   const parent1EarliestStart = startOfDay(addDays(initialEndDate, 1));
   const parent1CutoffDate = startOfDay(
-    computeLimitDate(baseStartDate, Math.max(0, context.preferredParent1Months))
+    computeLimitDate(parent1EarliestStart, Math.max(0, context.preferredParent1Months))
   );
   const parent2EarliestStartCandidate = parent1CutoffDate;
   const parent2EarliestStart =
