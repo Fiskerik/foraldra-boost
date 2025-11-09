@@ -1,9 +1,12 @@
-import { addDays, differenceInCalendarDays, endOfMonth, startOfDay, startOfMonth } from "date-fns";
+import { addDays, differenceInCalendarDays, endOfMonth, format, startOfDay, startOfMonth } from "date-fns";
+import { sv } from "date-fns/locale";
 import { LeavePeriod } from "./parentalCalculations";
 
 export interface StrategyIncomeSummary {
   lowestFullMonthIncome: number | null;
   hasEligibleFullMonths: boolean;
+  lowestFullMonthLabel: string | null;
+  lowestFullMonthStart: Date | null;
 }
 
 interface MonthlySegment {
@@ -14,6 +17,7 @@ interface MonthlySegment {
   benefitIncome: number;
   otherParentIncome: number;
   monthlyIncome: number;
+  parent: "parent1" | "parent2" | "both";
 }
 
 interface AggregatedMonthInfo {
@@ -21,6 +25,8 @@ interface AggregatedMonthInfo {
   totalCalendarDays: number;
   monthStart: Date;
   monthLength: number;
+  exclusiveParent1Days: number;
+  exclusiveParent2Days: number;
 }
 
 function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
@@ -52,6 +58,7 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       benefitIncome: 0,
       otherParentIncome: 0,
       monthlyIncome: 0,
+      parent: period.parent,
     });
 
     cursor = addDays(segmentEnd, 1);
@@ -153,6 +160,8 @@ function aggregateMonthlyTotals(periods: LeavePeriod[]): Map<string, AggregatedM
           totalCalendarDays: segment.calendarDays,
           monthStart,
           monthLength,
+          exclusiveParent1Days: segment.parent === "parent1" ? segment.calendarDays : 0,
+          exclusiveParent2Days: segment.parent === "parent2" ? segment.calendarDays : 0,
         });
         return;
       }
@@ -160,6 +169,11 @@ function aggregateMonthlyTotals(periods: LeavePeriod[]): Map<string, AggregatedM
       existing.totalIncome += segment.monthlyIncome;
       existing.totalCalendarDays += segment.calendarDays;
       existing.monthLength = monthLength;
+      if (segment.parent === "parent1") {
+        existing.exclusiveParent1Days += segment.calendarDays;
+      } else if (segment.parent === "parent2") {
+        existing.exclusiveParent2Days += segment.calendarDays;
+      }
     });
 
   return map;
@@ -167,21 +181,37 @@ function aggregateMonthlyTotals(periods: LeavePeriod[]): Map<string, AggregatedM
 
 export function calculateStrategyIncomeSummary(periods: LeavePeriod[]): StrategyIncomeSummary {
   if (!Array.isArray(periods) || periods.length === 0) {
-    return { lowestFullMonthIncome: null, hasEligibleFullMonths: false };
+    return {
+      lowestFullMonthIncome: null,
+      hasEligibleFullMonths: false,
+      lowestFullMonthLabel: null,
+      lowestFullMonthStart: null,
+    };
   }
 
   const aggregatedMonthMap = aggregateMonthlyTotals(periods);
 
   if (aggregatedMonthMap.size === 0) {
-    return { lowestFullMonthIncome: null, hasEligibleFullMonths: false };
+    return {
+      lowestFullMonthIncome: null,
+      hasEligibleFullMonths: false,
+      lowestFullMonthLabel: null,
+      lowestFullMonthStart: null,
+    };
   }
 
   const eligibleEntries = Array.from(aggregatedMonthMap.entries()).filter(([, info]) =>
-    info.totalCalendarDays >= info.monthLength
+    info.totalCalendarDays >= info.monthLength &&
+    !(info.exclusiveParent1Days > 0 && info.exclusiveParent2Days > 0)
   );
 
   if (eligibleEntries.length === 0) {
-    return { lowestFullMonthIncome: null, hasEligibleFullMonths: false };
+    return {
+      lowestFullMonthIncome: null,
+      hasEligibleFullMonths: false,
+      lowestFullMonthLabel: null,
+      lowestFullMonthStart: null,
+    };
   }
 
   let lowestKey: string | null = null;
@@ -204,17 +234,29 @@ export function calculateStrategyIncomeSummary(periods: LeavePeriod[]): Strategy
   });
 
   if (!lowestKey) {
-    return { lowestFullMonthIncome: null, hasEligibleFullMonths: false };
+    return {
+      lowestFullMonthIncome: null,
+      hasEligibleFullMonths: false,
+      lowestFullMonthLabel: null,
+      lowestFullMonthStart: null,
+    };
   }
 
   const lowestInfo = aggregatedMonthMap.get(lowestKey);
 
   if (!lowestInfo || !Number.isFinite(lowestInfo.totalIncome)) {
-    return { lowestFullMonthIncome: null, hasEligibleFullMonths: false };
+    return {
+      lowestFullMonthIncome: null,
+      hasEligibleFullMonths: false,
+      lowestFullMonthLabel: null,
+      lowestFullMonthStart: null,
+    };
   }
 
   return {
     lowestFullMonthIncome: lowestInfo.totalIncome,
     hasEligibleFullMonths: true,
+    lowestFullMonthLabel: format(lowestInfo.monthStart, "MMMM yyyy", { locale: sv }),
+    lowestFullMonthStart: lowestInfo.monthStart,
   };
 }
