@@ -292,8 +292,21 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             </div>
           </div>
         </CardHeader>
-        
+
         <CardContent className="pt-6">
+          {strategy.warnings?.map((warning, warningIndex) => (
+            <Alert
+              key={warningIndex}
+              className="mb-4 border border-amber-300 bg-amber-50 text-amber-900"
+            >
+              <AlertTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Viktigt att veta
+              </AlertTitle>
+              <AlertDescription>{warning}</AlertDescription>
+            </Alert>
+          ))}
+
           {belowMinimum && (
             <Alert variant="destructive" className="mb-4">
               <AlertTitle className="flex items-center gap-2">

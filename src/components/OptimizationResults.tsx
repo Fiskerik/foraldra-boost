@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OptimizationResult, formatPeriod, formatCurrency, LeavePeriod } from "@/utils/parentalCalculations";
 import { TimelineChart } from "./TimelineChart";
-import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp, Check, X, Save } from "lucide-react";
+import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp, Check, X, Save, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfMonth } from "date-fns";
@@ -516,6 +516,20 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               )}
             </div>
           </div>
+
+          {result.warnings?.length ? (
+            <div className="mt-2 md:mt-4 space-y-1">
+              {result.warnings.map((warning, warningIndex) => (
+                <div
+                  key={warningIndex}
+                  className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-100/80 p-1.5 md:p-2"
+                >
+                  <AlertTriangle className="mt-0.5 h-3 w-3 text-amber-600 md:h-4 md:w-4" />
+                  <p className="text-[10px] md:text-sm text-amber-900 leading-snug">{warning}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </CardHeader>
         
         {/* Collapsible Details - Only in overlay */}
