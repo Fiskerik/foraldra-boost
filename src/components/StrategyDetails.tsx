@@ -398,19 +398,24 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                               <div className="text-sm text-muted-foreground">Föräldrapenning</div>
                               <div className="font-semibold">{formatCurrency(month.benefitIncome)}</div>
                             </div>
-                            <div>
-                              <div
-                                className="text-sm text-muted-foreground"
-                                title="Visar nettolönen för föräldern som jobbar. För hela månader: full nettolön. För brutna månader: proportionell del."
-                              >
-                                Arbetande förälder (lön)
-                              </div>
-                              <div className="font-semibold">{formatCurrency(month.otherParentIncome)}</div>
+                          <div>
+                            <div
+                              className="text-sm text-muted-foreground"
+                              title="Visar nettolönen för föräldern som jobbar. För hela månader: full nettolön. För brutna månader: proportionell del."
+                            >
+                              Arbetande förälder (lön)
                             </div>
+                            <div className="font-semibold">{formatCurrency(month.otherParentIncome)}</div>
+                            {!isFullMonth && month.otherParentIncome > 0 && (
+                              <div className="mt-1 text-xs font-semibold text-amber-500">
+                                Bruten månadslön
+                              </div>
+                            )}
                           </div>
-                          
-                          <div className="mt-3">
-                            <div className="text-sm text-muted-foreground mb-1">Typ av dagar:</div>
+                        </div>
+
+                        <div className="mt-3">
+                          <div className="text-sm text-muted-foreground mb-1">Typ av dagar:</div>
                             <div className="flex flex-wrap gap-2">
                               {Object.entries(month.benefitDaysByLevel).map(([level, days]) => (
                                 days > 0 && (

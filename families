@@ -1,173 +1,68 @@
 families:
-  - name: "2 parents, 3 kids, medium income"
-    parents:
-      - role: "Parent 1"
-        salary_sek_per_month: 30000
-        kollektivavtal: true
-        anstalld_mer_an_ett_ar: true
-      - role: "Parent 2"
-        salary_sek_per_month: 55000
-        kollektivavtal: false
-    custody:
-      typ: "Gemensam"
-      berakna_for_bada_foraldrarna: true
-    barn:
-      befintliga: 2
-      forvantade: 1
-    miniminkomst_sek_per_manad: 45000
-    preferenser:
-      foralder1_manader: 10
-      foralder2_manader: 5
-      strategi: "longer"
-      minimi_netto_sek_per_manad: 45000
-      beraknat_fodelsedatum: "2025-02-15"
-  - name: "1 parent, 2 kids, high income"
-    parents:
-      - role: "Parent 1"
-        salary_sek_per_month: 58000
-        kollektivavtal: true
-        anstalld_mer_an_ett_ar: true
-    custody:
-      typ: "Ensam"
-      berakna_for_bada_foraldrarna: false
-    barn:
-      befintliga: 1
-      forvantade: 1
-    miniminkomst_sek_per_manad: 32000
-    preferenser:
-      foralder1_manader: 12
-      foralder2_manader: 0
-      strategi: "maximize"
-      minimi_netto_sek_per_manad: 32000
-      beraknat_fodelsedatum: "2025-01-05"
-  - name: "2 parents, 2 kids, high income"
-    parents:
-      - role: "Parent 1"
-        salary_sek_per_month: 55000
-        kollektivavtal: true
-        anstalld_mer_an_ett_ar: true
-      - role: "Parent 2"
-        salary_sek_per_month: 59100
-        kollektivavtal: true
-        anstalld_manader: 8
-    custody:
-      typ: "Gemensam"
-      berakna_for_bada_foraldrarna: true
-    barn:
-      befintliga: 0
-      forvantade: 2
-    miniminkomst_sek_per_manad: 52000
-    preferenser:
-      foralder1_manader: 9
-      foralder2_manader: 9
-      strategi: "maximize"
-      minimi_netto_sek_per_manad: 54000
-      beraknat_fodelsedatum: "2025-06-10"
-  - name: "2 parents, 3 kids, single-income plan"
-    parents:
-      - role: "Parent 1"
-        salary_sek_per_month: 30000
-        kollektivavtal: true
-        anstalld_mer_an_ett_ar: true
-      - role: "Parent 2"
-        salary_sek_per_month: 55100
-        kollektivavtal: false
-    custody:
-      typ: "Gemensam"
-      berakna_for_partner: false
-    barn:
-      befintliga: 2
-      forvantade: 1
-    miniminkomst_sek_per_manad: 45000
-    preferenser:
-      foralder1_manader: 14
-      foralder2_manader: 0
-      strategi: "maximize"
-      minimi_netto_sek_per_manad: 45000
-      beraknat_fodelsedatum: "2025-05-20"
-  - name: "2 parents, 1 kid, low income"
-    parents:
-      - role: "Parent 1"
-        salary_sek_per_month: 24000
-        kollektivavtal: false
-      - role: "Parent 2"
-        salary_sek_per_month: 26000
-        kollektivavtal: false
-    custody:
-      typ: "Gemensam"
-      berakna_for_bada_foraldrarna: true
-    barn:
-      befintliga: 1
-      forvantade: 0
-    miniminkomst_sek_per_manad: 28000
-    preferenser:
-      foralder1_manader: 8
-      foralder2_manader: 6
-      strategi: "longer"
-      minimi_netto_sek_per_manad: 30000
-      beraknat_fodelsedatum: "2025-03-01"
-  - name: "2 parents, 4 kids, medium income"
-    parents:
-      - role: "Parent 1"
-        salary_sek_per_month: 38000
-        kollektivavtal: true
-        anstalld_mer_an_ett_ar: true
-      - role: "Parent 2"
-        salary_sek_per_month: 42000
-        kollektivavtal: true
-        anstalld_manader: 10
-    custody:
-      typ: "Gemensam"
-      berakna_for_bada_foraldrarna: true
-    barn:
-      befintliga: 3
-      forvantade: 1
-    miniminkomst_sek_per_manad: 50000
-    preferenser:
-      foralder1_manader: 12
-      foralder2_manader: 8
-      strategi: "longer"
-      minimi_netto_sek_per_manad: 52000
-      beraknat_fodelsedatum: "2025-04-12"
-  - name: "1 parent, 3 kids, high income"
-    parents:
-      - role: "Parent 1"
-        salary_sek_per_month: 65000
-        kollektivavtal: true
-        anstalld_mer_an_ett_ar: true
-    custody:
-      typ: "Ensam"
-      berakna_for_bada_foraldrarna: false
-    barn:
-      befintliga: 3
-      forvantade: 0
-    miniminkomst_sek_per_manad: 45000
-    preferenser:
-      foralder1_manader: 13
-      foralder2_manader: 0
-      strategi: "maximize"
-      minimi_netto_sek_per_manad: 45000
-      beraknat_fodelsedatum: "2024-12-28"
-  - name: "2 parents, twins on the way, mixed income"
-    parents:
-      - role: "Parent 1"
-        salary_sek_per_month: 72000
-        kollektivavtal: true
-        anstalld_mer_an_ett_ar: true
-      - role: "Parent 2"
-        salary_sek_per_month: 32000
-        kollektivavtal: true
-        anstalld_manader: 6
-    custody:
-      typ: "Gemensam"
-      berakna_for_bada_foraldrarna: true
-    barn:
-      befintliga: 0
-      forvantade: 2
-    miniminkomst_sek_per_manad: 55000
-    preferenser:
-      foralder1_manader: 12
-      foralder2_manader: 10
-      strategi: "maximize"
-      minimi_netto_sek_per_manad: 56000
-      beraknat_fodelsedatum: "2025-07-18"
+  - name: "Standardfamilj sparar dagar"
+    parent1:
+      grossIncome: 30000
+      hasCollectiveAgreement: true
+      taxRate: 30
+    parent2:
+      grossIncome: 55000
+      hasCollectiveAgreement: false
+      taxRate: 30
+    preferences:
+      totalMonths: 15
+      parent1Months: 10
+      parent2Months: 5
+      minimumNetIncome: 38000
+      daysPerWeek: 5
+      simultaneousMonths: 0
+      strategy: "save-days"
+    expectations:
+      requireMinIncome: true
+      minDaysSaved: 30
+      timelinePoints: 15
+      maxAllowedDeficit: 5000
+  - name: "Två höginkomsttagare maximerar"
+    parent1:
+      grossIncome: 55000
+      hasCollectiveAgreement: true
+      taxRate: 30
+    parent2:
+      grossIncome: 59100
+      hasCollectiveAgreement: true
+      taxRate: 30
+    preferences:
+      totalMonths: 18
+      parent1Months: 9
+      parent2Months: 9
+      minimumNetIncome: 44000
+      daysPerWeek: 5
+      simultaneousMonths: 0
+      strategy: "maximize-income"
+    expectations:
+      requireMinIncome: true
+      timelinePoints: 18
+      expectedCondensedPoints: 10
+      strategyBeatsAlternative: true
+      maxAllowedDeficit: 6000
+  - name: "Ensamboende förälder"
+    parent1:
+      grossIncome: 58000
+      hasCollectiveAgreement: true
+      taxRate: 30
+    parent2:
+      grossIncome: 0
+      hasCollectiveAgreement: false
+      taxRate: 30
+    preferences:
+      totalMonths: 13
+      parent1Months: 13
+      parent2Months: 0
+      minimumNetIncome: 25000
+      daysPerWeek: 6
+      simultaneousMonths: 0
+      strategy: "maximize-income"
+    expectations:
+      requireMinIncome: true
+      timelinePoints: 13
+      minDaysSaved: 20
+      maxAllowedDeficit: 30000
