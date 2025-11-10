@@ -136,7 +136,7 @@ export function TimelineChart({
 
       <div className="relative h-64 bg-muted/30 rounded-lg p-4" aria-label="Inkomsttidslinje diagram">
         {/* Fixed tooltip box in top right corner */}
-        <div className="absolute top-2 right-2 bg-white dark:bg-card rounded-lg shadow-lg p-3 min-w-[200px] border border-border z-20">
+        <div className="absolute -top-10 right-2 bg-white dark:bg-card rounded-lg shadow-lg p-3 min-w-[200px] border border-border z-20">
           {hoveredPoint ? <>
               <div className="text-xs text-muted-foreground mb-1">{hoveredPoint.month}</div>
               <div className="text-lg font-semibold text-foreground">{formatCurrency(hoveredPoint.income)}</div>
