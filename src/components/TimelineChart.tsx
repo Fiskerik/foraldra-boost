@@ -74,7 +74,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
     return mobileAggregated;
   }, [desktopBasePoints, isMobile]);
 
-  const chartBottomPadding = isMobile ? 92 : 64;
+  const chartBottomPadding = isMobile ? 110 : 80;
   const axisWidth = isMobile ? 68 : 80;
 
   const allIncomeValues = rawMonthlyPoints.map((d) => d.income);
