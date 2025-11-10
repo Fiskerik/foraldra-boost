@@ -3,125 +3,108 @@ import { LeavePeriod, formatCurrency } from "@/utils/parentalCalculations";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  TimelinePoint,
-  aggregateForMobile,
-  computeTimelineMonthlyData,
-  condenseTimelinePoints,
-} from "@/utils/timeline";
-
+import { TimelinePoint, aggregateForMobile, computeTimelineMonthlyData, condenseTimelinePoints } from "@/utils/timeline";
 const capitalizeFirstLetter = (str: string) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
 };
-
-type ChartPoint = TimelinePoint & { month: string };
-
-const formatTimelineLabel = (point: TimelinePoint & { month?: string }): string => {
-  const startLabel = capitalizeFirstLetter(format(point.labelStartDate, "MMM yyyy", { locale: sv }));
-  const endLabel = capitalizeFirstLetter(format(point.labelEndDate, "MMM yyyy", { locale: sv }));
-
+type ChartPoint = TimelinePoint & {
+  month: string;
+};
+const formatTimelineLabel = (point: TimelinePoint & {
+  month?: string;
+}): string => {
+  const startLabel = capitalizeFirstLetter(format(point.labelStartDate, "MMM yyyy", {
+    locale: sv
+  }));
+  const endLabel = capitalizeFirstLetter(format(point.labelEndDate, "MMM yyyy", {
+    locale: sv
+  }));
   if ((point.aggregatedSpan ?? 1) > 1) {
     if (startLabel === endLabel) {
       return `${startLabel} (snitt)`;
     }
     return `${startLabel} – ${endLabel} (snitt)`;
   }
-
   return startLabel;
 };
-
 interface TimelineChartProps {
   periods: LeavePeriod[];
   minHouseholdIncome: number;
   calendarMonthsLimit?: number;
 }
-
-export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit }: TimelineChartProps) {
+export function TimelineChart({
+  periods,
+  minHouseholdIncome,
+  calendarMonthsLimit
+}: TimelineChartProps) {
   const isMobile = useIsMobile();
-  const [hoveredPoint, setHoveredPoint] = React.useState<{ income: number; month: string; parent1Days: number; parent2Days: number; bothDays: number } | null>(null);
-
+  const [hoveredPoint, setHoveredPoint] = React.useState<{
+    income: number;
+    month: string;
+    parent1Days: number;
+    parent2Days: number;
+    bothDays: number;
+  } | null>(null);
   if (periods.length === 0) return null;
-
   const monthsLimit = calendarMonthsLimit && calendarMonthsLimit > 0 ? calendarMonthsLimit : null;
-
   const rawMonthlyPoints = computeTimelineMonthlyData(periods, monthsLimit);
-
-  const monthlyData: ChartPoint[] = rawMonthlyPoints.map((point) => ({
+  const monthlyData: ChartPoint[] = rawMonthlyPoints.map(point => ({
     ...point,
-    month: capitalizeFirstLetter(format(point.monthDate, "MMM yyyy", { locale: sv })),
+    month: capitalizeFirstLetter(format(point.monthDate, "MMM yyyy", {
+      locale: sv
+    }))
   }));
-
-  const desktopBasePoints: TimelinePoint[] = condenseTimelinePoints(
-    rawMonthlyPoints,
-    15
-  );
-
+  const desktopBasePoints: TimelinePoint[] = condenseTimelinePoints(rawMonthlyPoints, 15);
   const chartData = React.useMemo<ChartPoint[]>(() => {
-    const formattedDesktopPoints: ChartPoint[] = desktopBasePoints.map((point) => ({
+    const formattedDesktopPoints: ChartPoint[] = desktopBasePoints.map(point => ({
       ...point,
-      month: formatTimelineLabel(point),
+      month: formatTimelineLabel(point)
     }));
-
     if (!isMobile) {
       return formattedDesktopPoints;
     }
-
-    const mobileAggregated: ChartPoint[] = aggregateForMobile(desktopBasePoints, 8).map((point) => ({
+    const mobileAggregated: ChartPoint[] = aggregateForMobile(desktopBasePoints, 8).map(point => ({
       ...point,
-      month: formatTimelineLabel(point),
+      month: formatTimelineLabel(point)
     }));
-
     return mobileAggregated;
   }, [desktopBasePoints, isMobile]);
-
   const chartBottomPadding = isMobile ? 110 : 80;
   const axisWidth = isMobile ? 68 : 80;
-
-  const allIncomeValues = rawMonthlyPoints.map((d) => d.income);
+  const allIncomeValues = rawMonthlyPoints.map(d => d.income);
   const maxIncome = Math.max(minHouseholdIncome, ...allIncomeValues, 0);
-
   const getNiceStep = (maxValue: number) => {
     if (maxValue <= 0) {
       return 1000;
     }
-
     const roughStep = maxValue / 4;
     const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
     const residual = roughStep / magnitude;
-
     if (residual >= 5) return 5 * magnitude;
     if (residual >= 3) return 2.5 * magnitude;
     if (residual >= 2) return 2 * magnitude;
     if (residual >= 1) return magnitude;
     return 0.5 * magnitude;
   };
-
   const step = getNiceStep(maxIncome * 1.1);
   const safeStep = step > 0 ? step : 1000;
-  const yMax = Math.max(safeStep, Math.ceil((maxIncome * 1.1) / safeStep) * safeStep);
+  const yMax = Math.max(safeStep, Math.ceil(maxIncome * 1.1 / safeStep) * safeStep);
   const safeYMax = yMax > 0 ? yMax : 1;
-
   const baseTicks: number[] = [];
   for (let value = 0; value <= yMax; value += safeStep) {
     baseTicks.push(Math.round(value));
   }
-
   if (!baseTicks.includes(Math.round(minHouseholdIncome))) {
     baseTicks.push(minHouseholdIncome);
   }
-
-  const yTicks = Array.from(new Set(baseTicks)).filter((value) => value >= 0).sort((a, b) => b - a);
-
+  const yTicks = Array.from(new Set(baseTicks)).filter(value => value >= 0).sort((a, b) => b - a);
   const clampToUnitInterval = (value: number) => {
     if (value <= 0) return 0;
     if (value >= safeYMax) return 1;
     return value / safeYMax;
   };
-
   const getYPercent = (value: number) => 100 - clampToUnitInterval(value) * 100;
-
   const minIncomePosition = getYPercent(minHouseholdIncome);
-
   const getColorForData = (d: ChartPoint) => {
     const maxDays = Math.max(d.parent1Days, d.parent2Days, d.bothDays);
     if (maxDays <= 0) return "hsl(var(--muted-foreground))";
@@ -129,16 +112,13 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
     if (d.parent1Days === maxDays) return "hsl(var(--parent1))";
     return "hsl(var(--parent2))";
   };
-
   if (chartData.length === 0) {
     return null;
   }
-
   if (import.meta.env.DEV) {
     // Debug: verify data passed to chart
     console.table(monthlyData);
   }
-
   const computeLabelStride = () => {
     if (isMobile) {
       // Show maximum 2 labels on mobile for better spacing
@@ -150,204 +130,140 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
       return Math.max(1, Math.ceil(chartData.length / maxLabels));
     }
   };
-
   const labelStride = computeLabelStride();
-
-  return (
-    <div className="space-y-4">
+  return <div className="space-y-4">
       <h3 className="text-xl font-semibold">Inkomsttidslinje</h3>
 
       <div className="relative h-64 bg-muted/30 rounded-lg p-4" aria-label="Inkomsttidslinje diagram">
         {/* Fixed tooltip box in top right corner */}
         <div className="absolute top-2 right-2 bg-white dark:bg-card rounded-lg shadow-lg p-3 min-w-[200px] border border-border z-20">
-          {hoveredPoint ? (
-            <>
+          {hoveredPoint ? <>
               <div className="text-xs text-muted-foreground mb-1">{hoveredPoint.month}</div>
               <div className="text-lg font-semibold text-foreground">{formatCurrency(hoveredPoint.income)}</div>
               <div className="text-xs text-muted-foreground mt-2">
                 {hoveredPoint.parent1Days > 0 && "Förälder 1"}
                 {hoveredPoint.parent1Days > 0 && hoveredPoint.parent2Days > 0 && " & "}
                 {hoveredPoint.parent2Days > 0 && "Förälder 2"}
-                {hoveredPoint.bothDays > 0 && (hoveredPoint.parent1Days === 0 && hoveredPoint.parent2Days === 0) && "Båda föräldrar"}
+                {hoveredPoint.bothDays > 0 && hoveredPoint.parent1Days === 0 && hoveredPoint.parent2Days === 0 && "Båda föräldrar"}
               </div>
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground">Hovra över grafen för att se detaljer</div>
-          )}
+            </> : <div className="text-sm text-muted-foreground my-0 px-0 py-0">Hovra över grafen för att se detaljer</div>}
         </div>
 
         {/* Y-axis labels */}
-        <div
-          className="absolute top-0 text-xs text-muted-foreground"
-          style={{ left: 0, bottom: chartBottomPadding, width: axisWidth }}
-        >
-          {yTicks.map((tick) => (
-            <div
-              key={tick}
-              className={`absolute left-0 ${
-                tick === minHouseholdIncome 
-                  ? 'font-bold text-destructive' 
-                  : ''
-              }`}
-              style={{ top: `${getYPercent(tick)}%`, transform: "translateY(-50%)" }}
-            >
+        <div className="absolute top-0 text-xs text-muted-foreground" style={{
+        left: 0,
+        bottom: chartBottomPadding,
+        width: axisWidth
+      }}>
+          {yTicks.map(tick => <div key={tick} className={`absolute left-0 ${tick === minHouseholdIncome ? 'font-bold text-destructive' : ''}`} style={{
+          top: `${getYPercent(tick)}%`,
+          transform: "translateY(-50%)"
+        }}>
               {formatCurrency(tick)}
-            </div>
-          ))}
+            </div>)}
         </div>
 
         {/* Chart canvas */}
-        <div className="absolute right-0 top-0" style={{ left: axisWidth, bottom: chartBottomPadding }}>
-          {yTicks.map((tick) => (
-            <div
-              key={`grid-${tick}`}
-              className="absolute left-0 right-0 border-t border-muted/40"
-              style={{ top: `${getYPercent(tick)}%` }}
-            />
-          ))}
-          <div
-            className="absolute left-0 right-0 border-t-2 border-destructive border-dashed z-10 pointer-events-none"
-            style={{ top: `${minIncomePosition}%` }}
-          />
+        <div className="absolute right-0 top-0" style={{
+        left: axisWidth,
+        bottom: chartBottomPadding
+      }}>
+          {yTicks.map(tick => <div key={`grid-${tick}`} className="absolute left-0 right-0 border-t border-muted/40" style={{
+          top: `${getYPercent(tick)}%`
+        }} />)}
+          <div className="absolute left-0 right-0 border-t-2 border-destructive border-dashed z-10 pointer-events-none" style={{
+          top: `${minIncomePosition}%`
+        }} />
 
           <svg className="w-full h-full" preserveAspectRatio="none">
             {/* Draw lines between points (black baseline + colored overlay) */}
             {chartData.map((data, index) => {
-              if (chartData.length < 2 || index === chartData.length - 1) return null;
-
-              const x1 = chartData.length > 1 ? (index / (chartData.length - 1)) * 100 : 0;
-              const x2 = chartData.length > 1 ? ((index + 1) / (chartData.length - 1)) * 100 : 0;
-              const y1 = getYPercent(data.income);
-              const y2 = getYPercent(chartData[index + 1].income);
-              const color = getColorForData(data);
-
-              return (
-                <g key={index}>
-                  <line
-                    x1={`${x1}%`}
-                    y1={`${y1}%`}
-                    x2={`${x2}%`}
-                    y2={`${y2}%`}
-                    stroke={"hsl(0 0% 0%)"}
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    opacity="0.7"
-                  />
-                  <line
-                    x1={`${x1}%`}
-                    y1={`${y1}%`}
-                    x2={`${x2}%`}
-                    y2={`${y2}%`}
-                    stroke={color}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </g>
-              );
-            })}
+            if (chartData.length < 2 || index === chartData.length - 1) return null;
+            const x1 = chartData.length > 1 ? index / (chartData.length - 1) * 100 : 0;
+            const x2 = chartData.length > 1 ? (index + 1) / (chartData.length - 1) * 100 : 0;
+            const y1 = getYPercent(data.income);
+            const y2 = getYPercent(chartData[index + 1].income);
+            const color = getColorForData(data);
+            return <g key={index}>
+                  <line x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke={"hsl(0 0% 0%)"} strokeWidth="3" strokeLinecap="round" opacity="0.7" />
+                  <line x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke={color} strokeWidth="2" strokeLinecap="round" />
+                </g>;
+          })}
 
             {/* Draw points (colored only, no black dot) */}
             {chartData.map((data, index) => {
-              const x = chartData.length > 1 ? (index / (chartData.length - 1)) * 100 : 0;
-              const y = getYPercent(data.income);
-              const color = getColorForData(data);
-
-              return (
-                <g key={index} className="group">
+            const x = chartData.length > 1 ? index / (chartData.length - 1) * 100 : 0;
+            const y = getYPercent(data.income);
+            const color = getColorForData(data);
+            return <g key={index} className="group">
                   {/* Larger invisible hover area for accessibility */}
-                  <circle
-                    cx={`${x}%`}
-                    cy={`${y}%`}
-                    r="12"
-                    fill="transparent"
-                    onMouseEnter={() => setHoveredPoint({ 
-                      income: data.income, 
-                      month: data.month,
-                      parent1Days: data.parent1Days,
-                      parent2Days: data.parent2Days,
-                      bothDays: data.bothDays
-                    })}
-                    onMouseLeave={() => setHoveredPoint(null)}
-                    className="cursor-pointer"
-                  />
+                  <circle cx={`${x}%`} cy={`${y}%`} r="12" fill="transparent" onMouseEnter={() => setHoveredPoint({
+                income: data.income,
+                month: data.month,
+                parent1Days: data.parent1Days,
+                parent2Days: data.parent2Days,
+                bothDays: data.bothDays
+              })} onMouseLeave={() => setHoveredPoint(null)} className="cursor-pointer" />
                   {/* Visible colored point */}
-                  <circle
-                    cx={`${x}%`}
-                    cy={`${y}%`}
-                    r="4"
-                    fill={color}
-                    stroke={color}
-                    strokeWidth="1"
-                    className="transition-all"
-                    aria-label={`${data.month}: ${formatCurrency(data.income)}`}
-                  />
-                </g>
-              );
-            })}
+                  <circle cx={`${x}%`} cy={`${y}%`} r="4" fill={color} stroke={color} strokeWidth="1" className="transition-all" aria-label={`${data.month}: ${formatCurrency(data.income)}`} />
+                </g>;
+          })}
           </svg>
         </div>
 
         {/* X-axis labels */}
-        <div
-          className={`absolute bottom-0 flex items-end text-xs text-muted-foreground ${
-            isMobile ? "h-24 text-[7px]" : "h-16 text-xs"
-          }`}
-          style={{ left: axisWidth, right: 0 }}
-        >
+        <div className={`absolute bottom-0 flex items-end text-xs text-muted-foreground ${isMobile ? "h-24 text-[7px]" : "h-16 text-xs"}`} style={{
+        left: axisWidth,
+        right: 0
+      }}>
           {chartData.map((data, index) => {
-            if (index % labelStride === 0 || index === chartData.length - 1) {
-              const sameMonth =
-                data.labelStartDate.getFullYear() === data.labelEndDate.getFullYear() &&
-                data.labelStartDate.getMonth() === data.labelEndDate.getMonth();
-              const sameYear = data.labelStartDate.getFullYear() === data.labelEndDate.getFullYear();
-              const labelLines: string[] = (() => {
-                if (sameMonth) {
-                  return [capitalizeFirstLetter(format(data.labelStartDate, isMobile ? "MMM yy" : "MMM yyyy", { locale: sv }))];
-                }
-
-                if (sameYear) {
-                  if (isMobile) {
-                    // Simplified format for mobile: just start month
-                    return [capitalizeFirstLetter(format(data.labelStartDate, "MMM yy", { locale: sv }))];
-                  }
-
-                  return [
-                    `${capitalizeFirstLetter(format(data.labelStartDate, "MMM", { locale: sv }))} – ${capitalizeFirstLetter(format(data.labelEndDate, "MMM yyyy", { locale: sv }))}`,
-                  ];
-                }
-
+          if (index % labelStride === 0 || index === chartData.length - 1) {
+            const sameMonth = data.labelStartDate.getFullYear() === data.labelEndDate.getFullYear() && data.labelStartDate.getMonth() === data.labelEndDate.getMonth();
+            const sameYear = data.labelStartDate.getFullYear() === data.labelEndDate.getFullYear();
+            const labelLines: string[] = (() => {
+              if (sameMonth) {
+                return [capitalizeFirstLetter(format(data.labelStartDate, isMobile ? "MMM yy" : "MMM yyyy", {
+                  locale: sv
+                }))];
+              }
+              if (sameYear) {
                 if (isMobile) {
-                  // Show just start date on mobile to save space
-                  return [capitalizeFirstLetter(format(data.labelStartDate, "MMM yy", { locale: sv }))];
+                  // Simplified format for mobile: just start month
+                  return [capitalizeFirstLetter(format(data.labelStartDate, "MMM yy", {
+                    locale: sv
+                  }))];
                 }
-
-                return [
-                  `${capitalizeFirstLetter(format(data.labelStartDate, "MMM yyyy", { locale: sv }))}`,
-                  `${capitalizeFirstLetter(format(data.labelEndDate, "MMM yyyy", { locale: sv }))}`,
-                ];
-              })();
-
-              const labelKey = `${index}-label`;
-              return (
-                <div key={index} className="relative flex-1 h-full">
-                  <div
-                    className={`absolute bottom-0 left-1/2 flex -translate-x-1/2 origin-bottom flex-col items-center gap-0.5 ${
-                      isMobile ? "rotate-[-45deg]" : "rotate-[-60deg]"
-                    }`}
-                    style={{ transformOrigin: "bottom center" }}
-                    aria-hidden="true"
-                  >
-                    {labelLines.map((line, lineIndex) => (
-                      <span key={`${labelKey}-${lineIndex}`} className="block whitespace-nowrap">
+                return [`${capitalizeFirstLetter(format(data.labelStartDate, "MMM", {
+                  locale: sv
+                }))} – ${capitalizeFirstLetter(format(data.labelEndDate, "MMM yyyy", {
+                  locale: sv
+                }))}`];
+              }
+              if (isMobile) {
+                // Show just start date on mobile to save space
+                return [capitalizeFirstLetter(format(data.labelStartDate, "MMM yy", {
+                  locale: sv
+                }))];
+              }
+              return [`${capitalizeFirstLetter(format(data.labelStartDate, "MMM yyyy", {
+                locale: sv
+              }))}`, `${capitalizeFirstLetter(format(data.labelEndDate, "MMM yyyy", {
+                locale: sv
+              }))}`];
+            })();
+            const labelKey = `${index}-label`;
+            return <div key={index} className="relative flex-1 h-full">
+                  <div className={`absolute bottom-0 left-1/2 flex -translate-x-1/2 origin-bottom flex-col items-center gap-0.5 ${isMobile ? "rotate-[-45deg]" : "rotate-[-60deg]"}`} style={{
+                transformOrigin: "bottom center"
+              }} aria-hidden="true">
+                    {labelLines.map((line, lineIndex) => <span key={`${labelKey}-${lineIndex}`} className="block whitespace-nowrap py-[60px] px-0">
                         {line}
-                      </span>
-                    ))}
+                      </span>)}
                   </div>
-                </div>
-              );
-            }
-            return <div key={index} className="flex-1" />;
-          })}
+                </div>;
+          }
+          return <div key={index} className="flex-1" />;
+        })}
         </div>
       </div>
 
@@ -370,6 +286,5 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
           <span>Min. hushållsinkomst ({formatCurrency(minHouseholdIncome)})</span>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 }
