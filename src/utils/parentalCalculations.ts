@@ -1127,7 +1127,7 @@ function ensureMinimumIncomePerMonth(
     let remainingCapacityDays = Math.max(0, Math.round(capacityDaysPerWeek * WEEKS_PER_MONTH));
 
     if (remainingCapacityDays <= 0) {
-      continue;
+      remainingCapacityDays = segmentDays;
     }
 
     const ownerCalendarLimit = getRemainingCalendarFor(owner);
@@ -1211,8 +1211,30 @@ function ensureMinimumIncomePerMonth(
         return;
       }
 
+      const maximumPossibleDays = Math.min(
+        remainingDaysPool[owner],
+        remainingCapacityDays,
+        calendarCap,
+        segmentDays
+      );
+
+      if (maximumPossibleDays <= 0) {
+        return;
+      }
+
+      if (effectiveBenefitLevel === 'low') {
+        if (ownerHasParentalSalary) {
+          return;
+        }
+
+        const potentialIncome = maximumPossibleDays * effectiveBenefitDaily;
+        if (potentialIncome < remainingDeficit) {
+          return;
+        }
+      }
+
       const neededDays = Math.ceil(remainingDeficit / effectiveBenefitDaily);
-      const takeDays = Math.min(neededDays, remainingDaysPool[owner], remainingCapacityDays, calendarCap);
+      const takeDays = Math.min(neededDays, maximumPossibleDays);
 
       if (takeDays <= 0) {
         return;
@@ -2759,7 +2781,7 @@ function convertLegacyResult(
       const capacityDaysPerWeek = Math.max(0, 7 - Math.min(7, Math.max(0, Math.round(ownerUsedDaysPerWeek || 0))));
       let remainingCapacityDays = Math.max(0, Math.round(capacityDaysPerWeek * WEEKS_PER_MONTH));
       if (remainingCapacityDays <= 0) {
-        return false;
+        remainingCapacityDays = segmentDays;
       }
 
       const alternateParent: 'parent1' | 'parent2' = ownerKey === 'parent1' ? 'parent2' : 'parent1';

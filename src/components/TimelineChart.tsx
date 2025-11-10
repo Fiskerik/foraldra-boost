@@ -1,19 +1,33 @@
 import React from "react";
 import { LeavePeriod, formatCurrency } from "@/utils/parentalCalculations";
-import {
-  format,
-  eachMonthOfInterval,
-  startOfMonth,
-  endOfMonth,
-  differenceInCalendarDays,
-  addMonths,
-  addDays,
-} from "date-fns";
+import { format } from "date-fns";
 import { sv } from "date-fns/locale";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  TimelinePoint,
+  aggregateForMobile,
+  computeTimelineMonthlyData,
+  condenseTimelinePoints,
+} from "@/utils/timeline";
 
 const capitalizeFirstLetter = (str: string) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
+type ChartPoint = TimelinePoint & { month: string };
+
+const formatTimelineLabel = (point: TimelinePoint & { month?: string }): string => {
+  const startLabel = capitalizeFirstLetter(format(point.labelStartDate, "MMM yyyy", { locale: sv }));
+  const endLabel = capitalizeFirstLetter(format(point.labelEndDate, "MMM yyyy", { locale: sv }));
+
+  if ((point.aggregatedSpan ?? 1) > 1) {
+    if (startLabel === endLabel) {
+      return `${startLabel} (snitt)`;
+    }
+    return `${startLabel} – ${endLabel} (snitt)`;
+  }
+
+  return startLabel;
 };
 
 interface TimelineChartProps {
@@ -22,168 +36,48 @@ interface TimelineChartProps {
   calendarMonthsLimit?: number;
 }
 
-interface MonthlyPoint {
-  month: string;
-  monthDate: Date;
-  income: number;
-  parent1Days: number;
-  parent2Days: number;
-  bothDays: number;
-  labelStartDate: Date;
-  labelEndDate: Date;
-}
-
 export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit }: TimelineChartProps) {
   const isMobile = useIsMobile();
   const [hoveredPoint, setHoveredPoint] = React.useState<{ income: number; month: string } | null>(null);
 
   if (periods.length === 0) return null;
 
-  const startDate = periods[0].startDate;
-  const rawEndDate = periods[periods.length - 1].endDate;
   const monthsLimit = calendarMonthsLimit && calendarMonthsLimit > 0 ? calendarMonthsLimit : null;
 
-  const computeLimitDate = (base: Date, months: number) => {
-    const safeMonths = Math.max(0, months);
-    const wholeMonths = Math.floor(safeMonths);
-    const fractional = safeMonths - wholeMonths;
-    let limit = addMonths(base, wholeMonths);
-    if (fractional > 0) {
-      limit = addDays(limit, Math.round(fractional * 30));
-    }
-    return limit;
-  };
+  const rawMonthlyPoints = computeTimelineMonthlyData(periods, monthsLimit);
 
-  let chartEndDate = rawEndDate;
-  if (monthsLimit !== null) {
-    const limitCandidate = computeLimitDate(startDate, monthsLimit);
-    if (limitCandidate.getTime() >= startDate.getTime() && limitCandidate.getTime() < chartEndDate.getTime()) {
-      chartEndDate = limitCandidate;
-    }
-  }
+  const monthlyData: ChartPoint[] = rawMonthlyPoints.map((point) => ({
+    ...point,
+    month: capitalizeFirstLetter(format(point.monthDate, "MMM yyyy", { locale: sv })),
+  }));
 
-  if (chartEndDate.getTime() < startDate.getTime()) {
-    chartEndDate = startDate;
-  }
+  const desktopBasePoints: TimelinePoint[] = condenseTimelinePoints(
+    rawMonthlyPoints,
+    15
+  );
 
-  // Generate monthly data based on overlap with each period
-  const months = eachMonthOfInterval({ start: startDate, end: chartEndDate });
+  const chartData = React.useMemo<ChartPoint[]>(() => {
+    const formattedDesktopPoints: ChartPoint[] = desktopBasePoints.map((point) => ({
+      ...point,
+      month: formatTimelineLabel(point),
+    }));
 
-  const monthlyData: MonthlyPoint[] = months.map((month) => {
-    const mStart = startOfMonth(month);
-    const rawMonthEnd = endOfMonth(month);
-    const mEnd = rawMonthEnd.getTime() > chartEndDate.getTime() ? chartEndDate : rawMonthEnd;
-    let incomeDaysSum = 0;
-    let daysCovered = 0;
-    let parent1Days = 0;
-    let parent2Days = 0;
-    let bothDays = 0;
-    let totalIncome = 0;
-
-    periods.forEach((period) => {
-      if (period.startDate.getTime() > chartEndDate.getTime()) {
-        return;
-      }
-
-      const boundedPeriodEnd = period.endDate.getTime() > chartEndDate.getTime() ? chartEndDate : period.endDate;
-      const overlapStart = period.startDate > mStart ? period.startDate : mStart;
-      const overlapEnd = boundedPeriodEnd < mEnd ? boundedPeriodEnd : mEnd;
-      const hasOverlap = overlapStart <= overlapEnd;
-      if (!hasOverlap) return;
-
-      const daysInOverlap = differenceInCalendarDays(overlapEnd, overlapStart) + 1;
-      
-      // Calculate income for this overlap period
-      if (period.parent === 'both') {
-        // Both parents on leave: use dailyIncome
-        totalIncome += period.dailyIncome * daysInOverlap;
-        bothDays += daysInOverlap;
-      } else {
-        // One parent working, one on leave
-        // Calculate working parent's income (prorated for this overlap)
-        const monthLength = differenceInCalendarDays(mEnd, mStart) + 1;
-        const proportion = daysInOverlap / monthLength;
-        const workingParentIncome = (period.otherParentMonthlyIncome || 0) * proportion;
-        
-        // Calculate benefit income
-        const benefitDaily = period.dailyBenefit || 0;
-        const expectedBenefitDaysPerDay = (period.daysPerWeek || 7) / 7;
-        const benefitDays = Math.round(daysInOverlap * expectedBenefitDaysPerDay);
-        const benefitIncome = benefitDaily * benefitDays;
-        
-        totalIncome += workingParentIncome + benefitIncome;
-        
-        if (period.parent === "parent1" && period.benefitLevel !== "none") {
-          parent1Days += daysInOverlap;
-        } else if (period.parent === "parent2" && period.benefitLevel !== "none") {
-          parent2Days += daysInOverlap;
-        }
-      }
-    });
-
-    const income = totalIncome;
-
-    return {
-      month: format(month, "MMM yyyy", { locale: sv }),
-      monthDate: month,
-      income,
-      parent1Days,
-      parent2Days,
-      bothDays,
-      labelStartDate: mStart,
-      labelEndDate: mEnd,
-    };
-  });
-
-  const chartData = React.useMemo(() => {
     if (!isMobile) {
-      return monthlyData;
+      return formattedDesktopPoints;
     }
 
-    const maxPoints = 8;
-    if (monthlyData.length <= maxPoints) {
-      return monthlyData;
-    }
+    const mobileAggregated: ChartPoint[] = aggregateForMobile(desktopBasePoints, 8).map((point) => ({
+      ...point,
+      month: formatTimelineLabel(point),
+    }));
 
-    const groupSize = Math.ceil(monthlyData.length / maxPoints);
-    const aggregated: MonthlyPoint[] = [];
-
-    for (let index = 0; index < monthlyData.length; index += groupSize) {
-      const slice = monthlyData.slice(index, index + groupSize);
-      if (slice.length === 0) {
-        continue;
-      }
-
-      const totalIncome = slice.reduce((sum, item) => sum + item.income, 0);
-      const parent1Total = slice.reduce((sum, item) => sum + item.parent1Days, 0);
-      const parent2Total = slice.reduce((sum, item) => sum + item.parent2Days, 0);
-      const bothTotal = slice.reduce((sum, item) => sum + item.bothDays, 0);
-      const labelStart = slice[0].month;
-      const labelEnd = slice[slice.length - 1].month;
-      const labelStartDate = slice[0].labelStartDate;
-      const labelEndDate = slice[slice.length - 1].labelEndDate;
-
-      const minIncome = Math.min(...slice.map((s) => s.income));
-
-      aggregated.push({
-        month: slice.length === 1 ? labelStart : `${labelStart} – ${labelEnd} (min i perioden)`,
-        monthDate: slice[0].monthDate,
-        income: minIncome,
-        parent1Days: parent1Total,
-        parent2Days: parent2Total,
-        bothDays: bothTotal,
-        labelStartDate,
-        labelEndDate,
-      });
-    }
-
-    return aggregated;
-  }, [isMobile, monthlyData]);
+    return mobileAggregated;
+  }, [desktopBasePoints, isMobile]);
 
   const chartBottomPadding = isMobile ? 92 : 64;
   const axisWidth = isMobile ? 68 : 80;
 
-  const allIncomeValues = monthlyData.map((d) => d.income);
+  const allIncomeValues = rawMonthlyPoints.map((d) => d.income);
   const maxIncome = Math.max(minHouseholdIncome, ...allIncomeValues, 0);
 
   const getNiceStep = (maxValue: number) => {
@@ -228,7 +122,7 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
 
   const minIncomePosition = getYPercent(minHouseholdIncome);
 
-  const getColorForData = (d: MonthlyPoint) => {
+  const getColorForData = (d: ChartPoint) => {
     const maxDays = Math.max(d.parent1Days, d.parent2Days, d.bothDays);
     if (maxDays <= 0) return "hsl(var(--muted-foreground))";
     if (d.bothDays === maxDays) return "hsl(var(--accent))";

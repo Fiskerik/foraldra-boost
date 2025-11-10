@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "outDir": "./build/test",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "target": "ES2020",
+    "noEmit": false,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "sourceMap": false,
+    "allowImportingTsExtensions": false
+  },
+  "include": ["src/utils/**/*.ts"],
+  "exclude": ["src/utils/**/*.test.ts"]
+}

@@ -9,6 +9,15 @@ export interface StrategyIncomeSummary {
   lowestFullMonthStart: Date | null;
 }
 
+export interface MonthlyIncomeTotals {
+  monthStart: Date;
+  monthLength: number;
+  totalIncome: number;
+  totalCalendarDays: number;
+  exclusiveParent1Days: number;
+  exclusiveParent2Days: number;
+}
+
 interface MonthlySegment {
   startDate: Date;
   endDate: Date;
@@ -177,6 +186,21 @@ function aggregateMonthlyTotals(periods: LeavePeriod[]): Map<string, AggregatedM
     });
 
   return map;
+}
+
+export function getMonthlyIncomeTotals(periods: LeavePeriod[]): MonthlyIncomeTotals[] {
+  const aggregatedMonthMap = aggregateMonthlyTotals(periods);
+
+  return Array.from(aggregatedMonthMap.values())
+    .map((info) => ({
+      monthStart: new Date(info.monthStart),
+      monthLength: info.monthLength,
+      totalIncome: info.totalIncome,
+      totalCalendarDays: info.totalCalendarDays,
+      exclusiveParent1Days: info.exclusiveParent1Days,
+      exclusiveParent2Days: info.exclusiveParent2Days,
+    }))
+    .sort((a, b) => a.monthStart.getTime() - b.monthStart.getTime());
 }
 
 export function calculateStrategyIncomeSummary(periods: LeavePeriod[]): StrategyIncomeSummary {
