@@ -38,7 +38,7 @@ interface TimelineChartProps {
 
 export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit }: TimelineChartProps) {
   const isMobile = useIsMobile();
-  const [hoveredPoint, setHoveredPoint] = React.useState<{ income: number; month: string } | null>(null);
+  const [hoveredPoint, setHoveredPoint] = React.useState<{ income: number; month: string; parent1Days: number; parent2Days: number; bothDays: number } | null>(null);
 
   if (periods.length === 0) return null;
 
@@ -158,13 +158,23 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
       <h3 className="text-xl font-semibold">Inkomsttidslinje</h3>
 
       <div className="relative h-64 bg-muted/30 rounded-lg p-4" aria-label="Inkomsttidslinje diagram">
-        {/* Hover tooltip box - top right */}
-        {hoveredPoint && (
-          <div className="absolute top-4 right-4 bg-popover text-popover-foreground border border-border rounded-lg shadow-lg p-3 z-20">
-            <div className="text-xs text-muted-foreground mb-1">{hoveredPoint.month}</div>
-            <div className="text-sm font-bold">{formatCurrency(hoveredPoint.income)}</div>
-          </div>
-        )}
+        {/* Fixed tooltip box in top right corner */}
+        <div className="absolute top-4 right-4 bg-white dark:bg-card rounded-lg shadow-lg p-3 min-w-[200px] border border-border z-20">
+          {hoveredPoint ? (
+            <>
+              <div className="text-xs text-muted-foreground mb-1">{hoveredPoint.month}</div>
+              <div className="text-lg font-semibold text-foreground">{formatCurrency(hoveredPoint.income)}</div>
+              <div className="text-xs text-muted-foreground mt-2">
+                {hoveredPoint.parent1Days > 0 && "Förälder 1"}
+                {hoveredPoint.parent1Days > 0 && hoveredPoint.parent2Days > 0 && " & "}
+                {hoveredPoint.parent2Days > 0 && "Förälder 2"}
+                {hoveredPoint.bothDays > 0 && (hoveredPoint.parent1Days === 0 && hoveredPoint.parent2Days === 0) && "Båda föräldrar"}
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-muted-foreground">Hovra över grafen för att se detaljer</div>
+          )}
+        </div>
 
         {/* Y-axis labels */}
         <div
@@ -248,10 +258,17 @@ export function TimelineChart({ periods, minHouseholdIncome, calendarMonthsLimit
                   <circle
                     cx={`${x}%`}
                     cy={`${y}%`}
-                    r="10"
+                    r="12"
                     fill="transparent"
-                    onMouseEnter={() => setHoveredPoint({ income: data.income, month: data.month })}
+                    onMouseEnter={() => setHoveredPoint({ 
+                      income: data.income, 
+                      month: data.month,
+                      parent1Days: data.parent1Days,
+                      parent2Days: data.parent2Days,
+                      bothDays: data.bothDays
+                    })}
                     onMouseLeave={() => setHoveredPoint(null)}
+                    className="cursor-pointer"
                   />
                   {/* Visible colored point */}
                   <circle

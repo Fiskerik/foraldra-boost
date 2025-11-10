@@ -740,6 +740,7 @@ function createTopUpPeriods({
         otherParentDailyIncome: safeOtherIncome && calendarDays > 0 ? safeOtherIncome / calendarDays : 0,
         otherParentMonthlyIncome: safeOtherIncome,
         isPreferenceFiller: true,
+        needsSequencing: true,  // Allow "none" periods to be reordered by top-ups
       });
 
       cursor = startOfDay(addDays(endDate, 1));
@@ -1256,7 +1257,9 @@ function ensureMinimumIncomePerMonth(
       const otherParentMonthlyNet = owner === 'parent1'
         ? context.parent2NetIncome
         : context.parent1NetIncome;
-      const otherParentDailyNet = otherParentMonthlyNet > 0 ? otherParentMonthlyNet / 30 : 0;
+      // Use actual month length instead of fixed 30 days
+      const monthLength = Math.max(1, differenceInCalendarDays(fullMonthEnd, fullMonthStart) + 1);
+      const otherParentDailyNet = otherParentMonthlyNet > 0 ? otherParentMonthlyNet / monthLength : 0;
       const totalOtherIncome = otherParentDailyNet * calendarDays;
       const combinedDailyIncome = calendarDays > 0
         ? (totalBenefitIncome + totalOtherIncome) / calendarDays
@@ -1281,7 +1284,8 @@ function ensureMinimumIncomePerMonth(
 
       remainingDaysPool[owner] = Math.max(0, remainingDaysPool[owner] - takeDays);
       remainingCapacityDays = Math.max(0, remainingCapacityDays - takeDays);
-      remainingDeficit = Math.max(0, remainingDeficit - (totalBenefitIncome + totalOtherIncome));
+      // Only reduce deficit by benefit income, not other parent income (already counted in monthIncome)
+      remainingDeficit = Math.max(0, remainingDeficit - totalBenefitIncome);
 
       if (effectiveBenefitLevel === 'high') {
         const chronologicalTracker = owner === 'parent1'
@@ -1325,6 +1329,50 @@ function ensureMinimumIncomePerMonth(
         break;
       }
       safetyCounter += 1;
+    }
+
+    // Escalation: If deficit remains and days are available, try increasing daysPerWeek for existing top-ups
+    if (remainingDeficit > 5 && (remainingLowDays[owner] > 0 || remainingHighDays[owner] > 0)) {
+      let escalationAttempts = 0;
+      const maxEscalationAttempts = 3;
+      
+      while (remainingDeficit > 5 && escalationAttempts < maxEscalationAttempts) {
+        const monthTopUps = periods.filter(p => 
+          p.parent === owner &&
+          p.isPreferenceFiller &&
+          p.startDate >= monthStart &&
+          p.endDate <= monthEnd &&
+          p.benefitLevel !== 'none' &&
+          (p.daysPerWeek ?? 0) < 7
+        );
+        
+        if (monthTopUps.length === 0) break;
+        
+        let anyIncreased = false;
+        for (const topUp of monthTopUps) {
+          const currentDaysPerWeek = topUp.daysPerWeek ?? 0;
+          if (currentDaysPerWeek < 7 && remainingDeficit > 0) {
+            const newDaysPerWeek = Math.min(7, currentDaysPerWeek + 1);
+            const additionalWeeks = WEEKS_PER_MONTH;
+            const additionalDays = (newDaysPerWeek - currentDaysPerWeek) * additionalWeeks;
+            
+            const remainingPool = topUp.benefitLevel === 'high' ? remainingHighDays : remainingLowDays;
+            if (remainingPool[owner] >= additionalDays) {
+              topUp.daysPerWeek = newDaysPerWeek;
+              topUp.benefitDaysUsed = (topUp.benefitDaysUsed || 0) + additionalDays;
+              remainingPool[owner] = Math.max(0, remainingPool[owner] - additionalDays);
+              
+              const benefitDaily = topUp.benefitLevel === 'high' ? highDaily : lowDaily;
+              const additionalIncome = additionalDays * benefitDaily;
+              remainingDeficit = Math.max(0, remainingDeficit - additionalIncome);
+              anyIncreased = true;
+            }
+          }
+        }
+        
+        if (!anyIncreased) break;
+        escalationAttempts++;
+      }
     }
 
     if (remainingDeficit > 0 && process.env.NODE_ENV !== 'production') {

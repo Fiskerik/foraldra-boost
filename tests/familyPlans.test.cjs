@@ -60,6 +60,7 @@ test("Familjescenarier", async (t) => {
 
       const monthlyTotals = getMonthlyIncomeTotals(targetResult.periods);
 
+      // Test 1: Minimum income requirement
       if (scenario.expectations.requireMinIncome) {
         const fullMonths = monthlyTotals.filter(
           (month) => month.totalCalendarDays >= month.monthLength
@@ -75,35 +76,42 @@ test("Familjescenarier", async (t) => {
           deficits.forEach(({ month, deficit }) => {
             assert.ok(
               deficit <= scenario.expectations.maxAllowedDeficit,
-              `Månaden ${month.monthStart.toISOString()} har underskott på ${deficit} kr`
+              `Månaden ${month.monthStart.toISOString()} har underskott på ${deficit} kr (max tillåtet: ${scenario.expectations.maxAllowedDeficit} kr)`
             );
           });
         } else {
-          assert.strictEqual(
-            deficits.length,
-            0,
-            "Det finns månader som understiger minimibeloppet"
-          );
+          // No deficit allowed - all months must meet minimum income
+          if (deficits.length > 0) {
+            const deficitInfo = deficits.map(d => 
+              `${d.month.monthStart.toISOString().slice(0, 7)}: ${Math.round(d.month.totalIncome)} kr (saknar ${d.deficit} kr)`
+            ).join(', ');
+            assert.fail(
+              `${deficits.length} månader understiger minimibeloppet ${minIncome} kr: ${deficitInfo}`
+            );
+          }
         }
       }
 
+      // Test 2: Minimum days saved
       if (typeof scenario.expectations.minDaysSaved === "number") {
         assert.ok(
           targetResult.daysSaved >= scenario.expectations.minDaysSaved,
-          `För få sparade dagar: ${targetResult.daysSaved}`
+          `För få sparade dagar: ${targetResult.daysSaved} (förväntat: minst ${scenario.expectations.minDaysSaved})`
         );
       }
 
+      // Test 3: Strategy comparison
       const otherStrategyKey = targetResult.strategy === "save-days" ? "maximize-income" : "save-days";
       const alternativeResult = resultMap.get(otherStrategyKey);
 
       if (scenario.expectations.strategyBeatsAlternative && alternativeResult) {
         assert.ok(
           targetResult.totalIncome >= alternativeResult.totalIncome,
-          "Vald strategi gav inte högsta totalinkomst"
+          `Vald strategi gav inte högsta totalinkomst: ${targetResult.totalIncome} vs ${alternativeResult.totalIncome}`
         );
       }
 
+      // Test 4: Timeline points
       const timelinePoints = computeTimelineMonthlyData(
         targetResult.periods,
         Number(prefs.totalMonths) || 0
@@ -112,21 +120,22 @@ test("Familjescenarier", async (t) => {
       if (typeof scenario.expectations.timelinePoints === "number") {
         assert.ok(
           timelinePoints.length >= scenario.expectations.timelinePoints,
-          `Tidslinjen innehåller färre punkter (${timelinePoints.length}) än förväntat`
+          `Tidslinjen innehåller färre punkter (${timelinePoints.length}) än förväntat (${scenario.expectations.timelinePoints})`
         );
       }
 
+      // Test 5: Condensed timeline
       const condensedTimeline = condenseTimelinePoints(timelinePoints, 15);
       assert.ok(
         condensedTimeline.length <= 15,
-        `Komprimerad tidslinje har för många punkter (${condensedTimeline.length})`
+        `Komprimerad tidslinje har för många punkter (${condensedTimeline.length}, max: 15)`
       );
 
       if (typeof scenario.expectations.expectedCondensedPoints === "number") {
         assert.strictEqual(
           condensedTimeline.length,
           scenario.expectations.expectedCondensedPoints,
-          "Komprimerad tidslinje matchar inte förväntad punktmängd"
+          `Komprimerad tidslinje matchar inte förväntad punktmängd (${condensedTimeline.length} vs ${scenario.expectations.expectedCondensedPoints})`
         );
       }
     });

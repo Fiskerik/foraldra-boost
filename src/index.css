@@ -8,44 +8,47 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 220 15% 20%;
+    /* Wellness-inspired warm color palette */
+    --background: 30 40% 97%;
+    --foreground: 25 20% 25%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 15% 20%;
+    --card-foreground: 25 20% 25%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 15% 20%;
+    --popover-foreground: 25 20% 25%;
 
-    --primary: 200 60% 45%;
+    --primary: 145 60% 45%;  /* Warm green */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 160 55% 50%;
+    --secondary: 35 80% 60%;  /* Warm orange */
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 220 15% 45%;
+    --muted: 30 30% 94%;
+    --muted-foreground: 25 15% 50%;
 
-    --accent: 280 50% 65%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 25 90% 65%;  /* Light orange accent */
+    --accent-foreground: 25 20% 20%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 90%;
-    --input: 220 13% 90%;
-    --ring: 200 60% 45%;
+    --border: 30 20% 88%;
+    --input: 30 20% 88%;
+    --ring: 145 60% 45%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;  /* More rounded for wellness feel */
 
-    --parent1: 200 60% 45%;
-    --parent1-light: 200 60% 85%;
-    --parent2: 160 55% 50%;
-    --parent2-light: 160 55% 85%;
+    --parent1: 145 60% 45%;
+    --parent1-light: 145 60% 85%;
+    --parent2: 35 80% 60%;
+    --parent2-light: 35 80% 85%;
 
-    --gradient-hero: linear-gradient(135deg, hsl(200 60% 45%), hsl(160 55% 50%));
-    --shadow-soft: 0 4px 20px -4px hsl(220 15% 20% / 0.1);
-    --shadow-card: 0 2px 10px -2px hsl(220 15% 20% / 0.08);
+    --gradient-hero: linear-gradient(135deg, hsl(145 60% 45%), hsl(35 80% 60%));
+    --gradient-subtle: linear-gradient(180deg, hsl(30 40% 97%), hsl(30 30% 94%));
+    --shadow-soft: 0 4px 20px -4px hsl(25 20% 25% / 0.08);
+    --shadow-card: 0 2px 10px -2px hsl(25 20% 25% / 0.06);
+    --shadow-elegant: 0 10px 30px -10px hsl(145 60% 45% / 0.15);
   }
 
   .dark {
@@ -91,10 +94,16 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.7;  /* More spacious, wellness-inspired */
   }
   
   .shadow-soft {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-soft);
+  }
+  
+  .card {
+    @apply rounded-2xl;  /* Generous rounded corners */
   }
   
   /* Slider color overrides */
