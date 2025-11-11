@@ -45,7 +45,7 @@ export interface LeavePeriod {
   calendarDays: number;
   dailyBenefit: number;
   dailyIncome: number;
-  benefitLevel: 'parental-salary' | 'high' | 'low' | 'none';
+  benefitLevel: 'high' | 'low' | 'none';
   daysPerWeek?: number;
   otherParentDailyIncome?: number;
   otherParentMonthlyIncome?: number;
@@ -591,7 +591,7 @@ function calculateRemainingBenefitDays(
       if (period.benefitLevel === 'low') {
         usedLow.parent1 += share;
         usedLow.parent2 += share;
-      } else if (period.benefitLevel === 'high' || period.benefitLevel === 'parental-salary') {
+      } else if (period.benefitLevel === 'high') {
         usedHigh.parent1 += share;
         usedHigh.parent2 += share;
       }
@@ -613,7 +613,7 @@ function calculateRemainingBenefitDays(
       if (transferSource && transferCount > 0) {
         usedLow[transferSource] += transferCount;
       }
-    } else if (period.benefitLevel === 'high' || period.benefitLevel === 'parental-salary') {
+    } else if (period.benefitLevel === 'high') {
       usedHigh[ownerKey] += ownerContribution;
       if (transferSource && transferCount > 0) {
         usedHigh[transferSource] += transferCount;
@@ -1224,10 +1224,6 @@ function ensureMinimumIncomePerMonth(
       }
 
       if (effectiveBenefitLevel === 'low') {
-        if (ownerHasParentalSalary) {
-          return;
-        }
-
         const potentialIncome = maximumPossibleDays * effectiveBenefitDaily;
         if (potentialIncome < remainingDeficit) {
           return;
@@ -1296,14 +1292,6 @@ function ensureMinimumIncomePerMonth(
 
       parentCalendarUsage[owner] += calendarDays;
     };
-
-    // Check if this month has parental salary periods for the owner
-    const ownerHasParentalSalary = periods.some(p =>
-      p.parent === owner &&
-      p.benefitLevel === 'parental-salary' &&
-      p.startDate <= monthEnd &&
-      p.endDate >= monthStart
-    );
 
     // Iteratively top up within this month until threshold is met or capacity/days are exhausted
     const order: Array<'high' | 'low'> = ['high', 'low'];
@@ -1474,14 +1462,10 @@ export function calculateAvailableIncome(parent: ParentData): CalculationResult 
   const parentalBenefitGrossPerDay = calculateDailyParentalBenefit(parent.income);
   const parentalBenefitNetPerDay = calculateNetIncome(parentalBenefitGrossPerDay * 30, parent.taxRate) / 30;
 
-  let parentalSalaryPerDay = 0;
-  if (parent.hasCollectiveAgreement) {
-    const parentalSalaryMonthlyGross = calculateParentalSalaryMonthly(parent.income);
-    const parentalSalaryMonthlyNet = calculateNetIncome(parentalSalaryMonthlyGross, parent.taxRate);
-    parentalSalaryPerDay = parentalSalaryMonthlyNet / 30;
-  }
+  // Föräldralön disabled - only using Föräldrapenning
+  const parentalSalaryPerDay = 0;
 
-  const availableIncome = (parentalBenefitNetPerDay + parentalSalaryPerDay) * 30;
+  const availableIncome = parentalBenefitNetPerDay * 30;
 
   return {
     netIncome,
@@ -1615,7 +1599,7 @@ function getMinDays(plan: LegacyPlan, fallbackDaysPerWeek: number): number {
 interface SegmentConfig {
   plan: LegacyPlan;
   parent: 'parent1' | 'parent2' | 'both';
-  benefitLevel: 'parental-salary' | 'high' | 'low' | 'none';
+  benefitLevel: 'high' | 'low' | 'none';
   otherParentMonthlyIncome: number;
   usedDays: number;
   fallbackDaysPerWeek: number;
@@ -1839,7 +1823,7 @@ function addSegment(
   });
 
   // Track qualifying high days usage
-  if (parent !== 'both' && (benefitLevel === 'high' || benefitLevel === 'parental-salary')) {
+  if (parent !== 'both' && benefitLevel === 'high') {
     const qualifyingDaysTracker = parent === 'parent1' ? parent1QualifyingHighDaysUsed : parent2QualifyingHighDaysUsed;
     const chronologicalTracker = parent === 'parent1' ? parent1ChronologicalHighDays : parent2ChronologicalHighDays;
     
@@ -2048,7 +2032,7 @@ function convertLegacyResult(
     addSegment(periods, {
       plan: legacyResult.plan1Overlap,
       parent: 'both',
-      benefitLevel: legacyResult.extra1 > 0 || legacyResult.extra2 > 0 ? 'parental-salary' : 'high',
+      benefitLevel: 'high',
       otherParentMonthlyIncome: 0,
       usedDays: overlapDaysUsed,
       fallbackDaysPerWeek: resolveDaysPerWeek(legacyResult.plan1Overlap?.dagarPerVecka),
@@ -2081,7 +2065,7 @@ function convertLegacyResult(
     addSegment(periods, {
       plan: legacyResult.plan1,
       parent: 'parent1',
-      benefitLevel: legacyResult.extra1 > 0 ? 'parental-salary' : 'high',
+      benefitLevel: 'high',
       otherParentMonthlyIncome: context.parent2NetIncome,
       usedDays: plan1ExtraDays,
       fallbackDaysPerWeek: fallbackDays,
@@ -2162,7 +2146,7 @@ function convertLegacyResult(
     addSegment(periods, {
       plan: legacyResult.plan2,
       parent: 'parent2',
-      benefitLevel: legacyResult.extra2 > 0 ? 'parental-salary' : 'high',
+      benefitLevel: 'high',
       otherParentMonthlyIncome: context.parent1NetIncome,
       usedDays: plan2ExtraDays,
       fallbackDaysPerWeek: fallbackDays,
@@ -2238,11 +2222,8 @@ function convertLegacyResult(
   for (const period of periods) {
     const last = mergedPeriods[mergedPeriods.length - 1];
 
-    // Don't merge parental-salary with high, or initial periods with other periods
-    const shouldNotMerge = 
-      (last?.benefitLevel === 'parental-salary' && period.benefitLevel === 'high') ||
-      (last?.benefitLevel === 'high' && period.benefitLevel === 'parental-salary') ||
-      (last?.isInitialTenDayPeriod !== period.isInitialTenDayPeriod);
+    // Don't merge initial periods with other periods
+    const shouldNotMerge = (last?.isInitialTenDayPeriod !== period.isInitialTenDayPeriod);
 
     // Check if we can merge with the previous period
     if (
@@ -2649,13 +2630,6 @@ function convertLegacyResult(
           const monthKey = format(monthStart, 'yyyy-MM');
           const owner = context.monthOwnership?.get(monthKey) ??
             (parentDayTotals.parent1 > parentDayTotals.parent2 + 0.5 ? 'parent1' : 'parent2');
-          
-          const hasParentalSalary = mergedPeriods.some(p =>
-            p.parent === owner &&
-            p.benefitLevel === 'parental-salary' &&
-            p.startDate <= monthEnd &&
-            p.endDate >= monthStart
-          );
 
           worstDeficit = deficit;
           worstMonth = {
@@ -2663,7 +2637,7 @@ function convertLegacyResult(
             end: monthEnd,
             owner,
             usedDaysPerWeek: Math.min(7, Math.max(0, Math.round(parentMaxDaysPerWeek[owner] || 0))),
-            hasParentalSalary
+            hasParentalSalary: false
           };
         }
       }
@@ -3261,7 +3235,7 @@ function convertLegacyResult(
   
   // Calculate days used by benefit level
   const highBenefitDaysUsed = mergedPeriods.reduce((sum, period) => {
-    if (period.benefitLevel === 'high' || period.benefitLevel === 'parental-salary') {
+    if (period.benefitLevel === 'high') {
       return sum + (period.benefitDaysUsed ?? period.daysCount);
     }
     return sum;
@@ -3422,16 +3396,18 @@ export function optimizeLeave(
   const dayAllocation = deriveParentDayAllocation(preferredParent1Months, preferredParent2Months);
   const parent1MinDailyNet = calculateNetIncome(MINIMUM_RATE * 30, parent1.taxRate) / 30;
   const parent2MinDailyNet = calculateNetIncome(MINIMUM_RATE * 30, parent2.taxRate) / 30;
-  const parent1HighDailyNet = calc1.parentalBenefitPerDay + calc1.parentalSalaryPerDay;
-  const parent2HighDailyNet = calc2.parentalBenefitPerDay + calc2.parentalSalaryPerDay;
+  // Only using parental benefit (Föräldrapenning), not parental salary (Föräldralön)
+  const parent1HighDailyNet = calc1.parentalBenefitPerDay;
+  const parent2HighDailyNet = calc2.parentalBenefitPerDay;
 
   const conversionContext: ConversionContext = {
     parent1,
     parent2,
     parent1NetIncome: calc1.netIncome,
     parent2NetIncome: calc2.netIncome,
-    parent1LeaveDailyIncome: calc1.parentalBenefitPerDay + calc1.parentalSalaryPerDay,
-    parent2LeaveDailyIncome: calc2.parentalBenefitPerDay + calc2.parentalSalaryPerDay,
+    // Only using parental benefit (Föräldrapenning), not parental salary
+    parent1LeaveDailyIncome: calc1.parentalBenefitPerDay,
+    parent2LeaveDailyIncome: calc2.parentalBenefitPerDay,
     parent1MinDailyNet,
     parent2MinDailyNet,
     parent1HighDailyNet,
