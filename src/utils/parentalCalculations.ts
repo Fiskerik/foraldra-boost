@@ -1607,6 +1607,8 @@ interface SegmentConfig {
   leaveMonthlyIncome: number;
   preferredDaysPerWeek?: number;
   forceRecomputeWeeks?: boolean;
+  baseDailyBenefit?: number;
+  monthlyExtraIncome?: number;
 }
 
 interface SegmentContext {
@@ -1649,6 +1651,8 @@ function addSegment(
     leaveMonthlyIncome,
     preferredDaysPerWeek,
     forceRecomputeWeeks,
+    baseDailyBenefit,
+    monthlyExtraIncome,
   } = config;
 
   const { baseStartDate, parentLastEndDates, parentEarliestStart } = context;
@@ -1799,13 +1803,26 @@ function addSegment(
   }
   
   const otherDailyIncome = otherParentIncomeForPeriod / Math.max(1, effectiveCalendarDays);
-  // When benefitLevel is 'none', there's no benefit income for the leave parent
-  const effectiveLeaveMonthlyIncome = benefitLevel === 'none' ? 0 : leaveMonthlyIncome;
-  const totalPeriodIncome = (effectiveLeaveMonthlyIncome / 30) * effectiveCalendarDays + otherParentIncomeForPeriod;
+  const normalizedDaysPerWeek = Math.max(1, Math.round(dagarPerVecka));
+  const benefitDaysPerMonth = normalizedDaysPerWeek * WEEKS_PER_MONTH;
+  const roundedBenefitDaysPerMonth = Math.max(1, Math.round(benefitDaysPerMonth));
+  const resolvedMonthlyExtra = Math.max(0, Number.isFinite(monthlyExtraIncome) ? (monthlyExtraIncome as number) : leaveMonthlyIncome - benefitMonthly);
+  const baseBenefitPerDay = benefitLevel === 'none'
+    ? 0
+    : Number.isFinite(baseDailyBenefit)
+    ? (baseDailyBenefit as number)
+    : benefitMonthly > 0
+    ? benefitMonthly / roundedBenefitDaysPerMonth
+    : 0;
+  const extraBenefitPerDay = benefitLevel === 'none'
+    ? 0
+    : resolvedMonthlyExtra / roundedBenefitDaysPerMonth;
+  const totalBenefitIncome = baseBenefitPerDay * benefitDaysUsed;
+  const totalExtraIncome = extraBenefitPerDay * benefitDaysUsed;
+  const totalLeaveIncome = benefitLevel === 'none' ? 0 : totalBenefitIncome + totalExtraIncome;
+  const totalPeriodIncome = totalLeaveIncome + otherParentIncomeForPeriod;
   const dailyIncome = totalPeriodIncome / Math.max(1, effectiveCalendarDays);
-  // dailyBenefit should only represent actual parental benefits (föräldrapenning + föräldralön)
-  // For periods with benefitLevel 'none', there's no benefit, so dailyBenefit should be 0
-  const dailyBenefit = benefitLevel === 'none' ? 0 : benefitMonthly / 30;
+  const dailyBenefit = benefitLevel === 'none' ? 0 : baseBenefitPerDay;
 
   periods.push({
     parent,
@@ -2052,6 +2069,30 @@ function convertLegacyResult(
     return Number.isFinite(fallbackValue) && fallbackValue > 0 ? fallbackValue : 0;
   };
 
+  const resolveBaseDailyBenefit = (
+    parentKey: 'parent1' | 'parent2',
+    level: 'high' | 'low' | 'none'
+  ): number => {
+    if (level === 'none') {
+      return 0;
+    }
+
+    if (level === 'high') {
+      return parentKey === 'parent1' ? context.parent1HighDailyNet : context.parent2HighDailyNet;
+    }
+
+    return parentKey === 'parent1' ? context.parent1MinDailyNet : context.parent2MinDailyNet;
+  };
+
+  const computeMonthlyExtraIncome = (benefitMonthlyValue: number, leaveMonthlyValue: number): number => {
+    if (!Number.isFinite(leaveMonthlyValue) || leaveMonthlyValue <= 0) {
+      return 0;
+    }
+
+    const normalizedBenefit = Number.isFinite(benefitMonthlyValue) ? Math.max(0, benefitMonthlyValue) : 0;
+    return Math.max(0, leaveMonthlyValue - normalizedBenefit);
+  };
+
   if (plan1ExtraDays > 0) {
     const fallbackDays = Math.max(1, Math.round(plan1DaysPerWeek));
     const benefitMonthly = ensurePositive(
@@ -2062,6 +2103,7 @@ function convertLegacyResult(
       toNumber(legacyResult.plan1?.inkomst),
       () => Math.round(beräknaMånadsinkomst(dag1, fallbackDays, extra1, 0, 0))
     );
+    const baseDailyBenefit = resolveBaseDailyBenefit('parent1', 'high');
     addSegment(periods, {
       plan: legacyResult.plan1,
       parent: 'parent1',
@@ -2073,6 +2115,8 @@ function convertLegacyResult(
       leaveMonthlyIncome,
       preferredDaysPerWeek: undefined,
       forceRecomputeWeeks: false,
+      baseDailyBenefit,
+      monthlyExtraIncome: computeMonthlyExtraIncome(benefitMonthly, leaveMonthlyIncome),
     }, segmentContext, parentData);
   }
 
@@ -2101,6 +2145,8 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek: undefined,
       forceRecomputeWeeks: false,
+      baseDailyBenefit: resolveBaseDailyBenefit('parent1', 'high'),
+      monthlyExtraIncome: computeMonthlyExtraIncome(benefitMonthly, benefitMonthly),
     };
     addSegment(periods, segment, segmentContext, parentData);
   }
@@ -2130,6 +2176,8 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek: undefined,
       forceRecomputeWeeks: false,
+      baseDailyBenefit: resolveBaseDailyBenefit('parent1', 'low'),
+      monthlyExtraIncome: 0,
     }, segmentContext, parentData);
   }
 
@@ -2143,6 +2191,7 @@ function convertLegacyResult(
       toNumber(legacyResult.plan2?.inkomst),
       () => Math.round(beräknaMånadsinkomst(dag2, fallbackDays, extra2, 0, 0))
     );
+    const baseDailyBenefit = resolveBaseDailyBenefit('parent2', 'high');
     addSegment(periods, {
       plan: legacyResult.plan2,
       parent: 'parent2',
@@ -2154,6 +2203,8 @@ function convertLegacyResult(
       leaveMonthlyIncome,
       preferredDaysPerWeek: undefined,
       forceRecomputeWeeks: false,
+      baseDailyBenefit,
+      monthlyExtraIncome: computeMonthlyExtraIncome(benefitMonthly, leaveMonthlyIncome),
     }, segmentContext, parentData);
   }
 
@@ -2182,6 +2233,8 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek: undefined,
       forceRecomputeWeeks: false,
+      baseDailyBenefit: resolveBaseDailyBenefit('parent2', 'high'),
+      monthlyExtraIncome: 0,
     };
     addSegment(periods, segment, segmentContext, parentData);
   }
@@ -2211,6 +2264,8 @@ function convertLegacyResult(
       leaveMonthlyIncome: benefitMonthly,
       preferredDaysPerWeek: plan2MinPlanDaysPerWeek,
       forceRecomputeWeeks: false,
+      baseDailyBenefit: resolveBaseDailyBenefit('parent2', 'low'),
+      monthlyExtraIncome: 0,
     }, segmentContext, parentData);
   }
 
