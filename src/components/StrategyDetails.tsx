@@ -88,6 +88,19 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
     }
   };
 
+  const getBenefitBadgeStyles = (level: string): string => {
+    switch (level) {
+      case 'parental-salary':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'low':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'high':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      default:
+        return 'bg-muted text-muted-foreground border-muted';
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card className={`${strategy.strategy === 'save-days' ? 'border-parent1/30 bg-parent1/5' : 'border-parent2/30 bg-parent2/5'}`}>
@@ -236,12 +249,20 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                               <div className="text-sm text-muted-foreground">Föräldrapenning</div>
                               <div className="font-semibold">{formatCurrency(month.benefitIncome)}</div>
                             </div>
-                            {month.parentalSalaryIncome > 0 && (
-                              <div>
-                                <div className="text-sm text-muted-foreground">Föräldralön</div>
-                                <div className="font-semibold">{formatCurrency(month.parentalSalaryIncome)}</div>
+                            <div>
+                              <div className="text-sm text-muted-foreground">Föräldralön</div>
+                              <div
+                                className={
+                                  month.parentalSalaryIncome > 0
+                                    ? 'font-semibold'
+                                    : 'text-muted-foreground font-medium'
+                                }
+                              >
+                                {month.parentalSalaryIncome > 0
+                                  ? formatCurrency(month.parentalSalaryIncome)
+                                  : '–'}
                               </div>
-                            )}
+                            </div>
                             <div>
                               <div
                                 className="text-sm text-muted-foreground"
@@ -261,13 +282,22 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                         <div className="mt-3">
                           <div className="text-sm text-muted-foreground mb-1">Typ av dagar:</div>
                             <div className="flex flex-wrap gap-2">
-                              {Object.entries(month.benefitDaysByLevel).map(([level, days]) => (
-                                days > 0 && (
-                                  <Badge key={level} variant="secondary" className="text-xs">
-                                    {getBenefitLevelLabel(level)}: {days} dagar
+                              {Object.entries(month.benefitDaysByLevel).map(([level, days]) => {
+                                const roundedDays = Math.round(days);
+                                if (roundedDays <= 0) {
+                                  return null;
+                                }
+
+                                return (
+                                  <Badge
+                                    key={level}
+                                    variant="outline"
+                                    className={`text-xs ${getBenefitBadgeStyles(level)}`}
+                                  >
+                                    {getBenefitLevelLabel(level)}: {roundedDays} dagar
                                   </Badge>
-                                )
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
