@@ -64,6 +64,10 @@ export interface LeavePeriod {
   needsSequencing?: boolean;
   isTopUp?: boolean;
   monthlyIncome?: number;
+  baseDailyIncome?: number;
+  collectiveAgreementEligibleCalendarDays?: number;
+  collectiveAgreementEligibleBenefitDays?: number;
+  collectiveAgreementTotalBonus?: number;
 }
 
 const PARENTAL_BENEFIT_CEILING = 49000;
@@ -705,6 +709,92 @@ function calculateRemainingBenefitDays(
   };
 }
 
+function maximizeHighBenefitUsageForMaximizeStrategy(
+  periods: LeavePeriod[],
+  context: ConversionContext,
+): void {
+  if (!Array.isArray(periods) || periods.length === 0) {
+    return;
+  }
+
+  const highDayTotals: RemainingBenefitDays = {
+    parent1: Math.max(0, Math.round(context.parent1HighTotalDays || 0)),
+    parent2: Math.max(0, Math.round(context.parent2HighTotalDays || 0)),
+  };
+
+  const initiallyUsed: RemainingBenefitDays = {
+    parent1: INITIAL_SHARED_WORKING_DAYS,
+    parent2: INITIAL_SHARED_WORKING_DAYS,
+  };
+
+  periods.forEach(period => {
+    if (period.parent === 'parent1' && period.benefitLevel === 'high') {
+      initiallyUsed.parent1 += Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount ?? 0));
+    } else if (period.parent === 'parent2' && period.benefitLevel === 'high') {
+      initiallyUsed.parent2 += Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount ?? 0));
+    }
+  });
+
+  const remaining: RemainingBenefitDays = {
+    parent1: Math.max(0, highDayTotals.parent1 - initiallyUsed.parent1),
+    parent2: Math.max(0, highDayTotals.parent2 - initiallyUsed.parent2),
+  };
+
+  if (remaining.parent1 <= 0 && remaining.parent2 <= 0) {
+    return;
+  }
+
+  const sortable = periods
+    .filter(period => (period.parent === 'parent1' || period.parent === 'parent2') && period.benefitLevel === 'high')
+    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+  sortable.forEach(period => {
+    const parentKey = period.parent as 'parent1' | 'parent2';
+    const available = remaining[parentKey];
+    if (available <= 0) {
+      return;
+    }
+
+    const calendarDays = Math.max(
+      1,
+      Number.isFinite(period.calendarDays)
+        ? Math.round(period.calendarDays)
+        : differenceInCalendarDays(period.endDate, period.startDate) + 1,
+    );
+
+    const currentDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount ?? 0));
+    if (currentDays >= calendarDays) {
+      return;
+    }
+
+    const additional = Math.min(calendarDays - currentDays, available);
+    if (additional <= 0) {
+      return;
+    }
+
+    const newDays = currentDays + additional;
+    period.benefitDaysUsed = newDays;
+    period.daysCount = newDays;
+
+    const otherParentDailyIncome = Number.isFinite(period.otherParentDailyIncome)
+      ? (period.otherParentDailyIncome as number)
+      : 0;
+    const otherParentIncome = otherParentDailyIncome * calendarDays;
+    const leaveIncome = period.dailyBenefit * newDays;
+    const totalIncome = leaveIncome + otherParentIncome;
+
+    period.dailyIncome = calendarDays > 0 ? totalIncome / calendarDays : period.dailyIncome;
+    period.monthlyIncome = totalIncome;
+
+    const recalculatedDaysPerWeek = Math.round((newDays / calendarDays) * 7);
+    if (recalculatedDaysPerWeek > 0) {
+      period.daysPerWeek = Math.min(7, Math.max(1, recalculatedDaysPerWeek));
+    }
+
+    remaining[parentKey] = Math.max(0, available - additional);
+  });
+}
+
 function applyCollectiveAgreementBonuses(
   periods: LeavePeriod[],
   context: ConversionContext
@@ -787,13 +877,20 @@ function applyCollectiveAgreementBonuses(
         continue;
       }
 
-      const bonusPerCalendarDay = (bonusPerBenefitDay * eligibleBenefitDays) / effectiveCalendarDays;
+      const totalBonus = bonusPerBenefitDay * eligibleBenefitDays;
+      if (totalBonus > 0) {
+        period.collectiveAgreementEligibleCalendarDays =
+          (period.collectiveAgreementEligibleCalendarDays ?? 0) + eligibleDays;
+        period.collectiveAgreementEligibleBenefitDays =
+          (period.collectiveAgreementEligibleBenefitDays ?? 0) + eligibleBenefitDays;
+        period.collectiveAgreementTotalBonus =
+          (period.collectiveAgreementTotalBonus ?? 0) + totalBonus;
 
-      if (Number.isFinite(bonusPerCalendarDay) && bonusPerCalendarDay > 0) {
+        const bonusPerCalendarDay = totalBonus / Math.max(1, effectiveCalendarDays);
         period.dailyIncome = (period.dailyIncome ?? 0) + bonusPerCalendarDay;
+
         if (period.monthlyIncome !== undefined) {
-          const bonusMonthly = bonusPerCalendarDay * effectiveCalendarDays;
-          period.monthlyIncome = (period.monthlyIncome ?? 0) + bonusMonthly;
+          period.monthlyIncome = (period.monthlyIncome ?? 0) + totalBonus;
         }
       }
 
@@ -3506,6 +3603,17 @@ function convertLegacyResult(
       });
     }
   }
+
+  if (meta.key === 'maximize-income') {
+    maximizeHighBenefitUsageForMaximizeStrategy(mergedPeriods, context);
+  }
+
+  mergedPeriods.forEach(period => {
+    period.baseDailyIncome = period.dailyIncome;
+    period.collectiveAgreementEligibleCalendarDays = 0;
+    period.collectiveAgreementEligibleBenefitDays = 0;
+    period.collectiveAgreementTotalBonus = 0;
+  });
 
   applyCollectiveAgreementBonuses(mergedPeriods, context);
 
