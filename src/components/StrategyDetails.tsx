@@ -5,7 +5,7 @@ import { TimelineChart } from "./TimelineChart";
 import { TrendingUp, PiggyBank, Calendar, Users, Clock, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { calculateStrategyIncomeSummary, buildMonthlyBreakdownEntries, MonthlyBreakdownEntry } from "@/utils/incomeSummary";
 
@@ -29,6 +29,42 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
     lowestFullMonthLabel,
   } = calculateStrategyIncomeSummary(filteredPeriods);
   const belowMinimum = hasEligibleFullMonths && (lowestFullMonthIncome ?? Infinity) < minHouseholdIncome;
+  const minimumDeficit = lowestFullMonthIncome != null
+    ? Math.max(0, minHouseholdIncome - lowestFullMonthIncome)
+    : 0;
+
+  const minimumWarningSuggestion = useMemo(() => {
+    if (!strategy.warnings?.length) {
+      return null;
+    }
+
+    const target = strategy.warnings.find((warning) => {
+      const normalized = warning.toLowerCase();
+      return normalized.includes('minimikrav') || normalized.includes('minimi');
+    });
+
+    if (!target) {
+      return null;
+    }
+
+    const lower = target.toLowerCase();
+    const triggerKeywords = ['överväg', 'öka', 'justera', 'förkorta'];
+    const triggerIndex = triggerKeywords
+      .map(keyword => lower.indexOf(keyword))
+      .filter(index => index >= 0)
+      .sort((a, b) => a - b)[0];
+
+    if (triggerIndex !== undefined) {
+      return target.slice(triggerIndex).trim();
+    }
+
+    const secondSentenceIndex = target.indexOf('. ');
+    if (secondSentenceIndex >= 0 && secondSentenceIndex + 2 < target.length) {
+      return target.slice(secondSentenceIndex + 2).trim();
+    }
+
+    return target.trim();
+  }, [strategy.warnings]);
 
   const getBenefitLevelLabel = (level: string): string => {
     switch (level) {
@@ -76,19 +112,6 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
         </CardHeader>
 
         <CardContent className="pt-6">
-          {strategy.warnings?.map((warning, warningIndex) => (
-            <Alert
-              key={warningIndex}
-              className="mb-4 border border-amber-300 bg-amber-50 text-amber-900"
-            >
-              <AlertTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                Viktigt att veta
-              </AlertTitle>
-              <AlertDescription>{warning}</AlertDescription>
-            </Alert>
-          ))}
-
           {belowMinimum && (
             <Alert variant="destructive" className="mb-4">
               <AlertTitle className="flex items-center gap-2">
@@ -102,8 +125,20 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                   </>
                 ) : (
                   <>Minsta fulla månaden är {formatCurrency(lowestFullMonthIncome!)}.</>
-                )}{" "}
-                Dagar/vecka har ökats där det gick, men dagarna räckte inte. Överväg att justera fördelningen eller höj minimiinkomsten.
+                )}
+                {minimumDeficit > 0 && (
+                  <span className="block mt-1">
+                    Det är {formatCurrency(minimumDeficit)} under minimikravet på {formatCurrency(minHouseholdIncome)}.
+                  </span>
+                )}
+                <span className="block mt-1">
+                  Dagar/vecka har ökats där det gick, men dagarna räckte inte. Överväg att justera fördelningen eller höj minimiinkomsten.
+                </span>
+                {minimumWarningSuggestion && (
+                  <span className="block mt-2 text-sm text-muted-foreground">
+                    {minimumWarningSuggestion}
+                  </span>
+                )}
               </AlertDescription>
             </Alert>
           )}
