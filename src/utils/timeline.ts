@@ -1,13 +1,13 @@
 import {
   addDays,
   addMonths,
-  differenceInCalendarDays,
   eachMonthOfInterval,
   endOfMonth,
   startOfMonth,
 } from "date-fns";
 
 import { LeavePeriod } from "./parentalCalculations";
+import { buildMonthlyBreakdownEntries } from "./incomeSummary";
 
 export interface TimelinePoint {
   monthDate: Date;
@@ -30,41 +30,6 @@ function computeLimitDate(base: Date, months: number): Date {
     limit = addDays(limit, Math.round(fractional * 30));
   }
   return limit;
-}
-
-function calculateWorkingParentIncome(
-  period: LeavePeriod,
-  daysInOverlap: number,
-  monthStart: Date,
-  monthEnd: Date
-): number {
-  if (period.parent === "both") {
-    return 0;
-  }
-
-  const workingParentMonthlyIncome = period.otherParentMonthlyIncome || 0;
-  if (workingParentMonthlyIncome <= 0) {
-    return 0;
-  }
-
-  const monthLength = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
-  const proportion = daysInOverlap / monthLength;
-  return workingParentMonthlyIncome * proportion;
-}
-
-function calculateBenefitIncome(period: LeavePeriod, daysInOverlap: number): number {
-  if (period.parent === "both") {
-    return (period.dailyIncome || 0) * daysInOverlap;
-  }
-
-  const benefitDaily = period.dailyBenefit || 0;
-  if (benefitDaily <= 0) {
-    return 0;
-  }
-
-  const expectedBenefitDaysPerDay = (period.daysPerWeek || 7) / 7;
-  const benefitDays = Math.round(daysInOverlap * expectedBenefitDaysPerDay);
-  return benefitDaily * benefitDays;
 }
 
 export function computeTimelineMonthlyData(
@@ -94,60 +59,28 @@ export function computeTimelineMonthlyData(
     chartEndDate = startDate;
   }
 
+  const monthlyBreakdownEntries = buildMonthlyBreakdownEntries(sortedPeriods);
+  const breakdownByKey = new Map(
+    monthlyBreakdownEntries.map(entry => [entry.monthKey, entry])
+  );
+
   const months = eachMonthOfInterval({ start: startDate, end: chartEndDate });
 
-  return months.map((month) => {
+  return months.map(month => {
     const monthStart = startOfMonth(month);
     const rawMonthEnd = endOfMonth(monthStart);
     const monthEnd = rawMonthEnd.getTime() > chartEndDate.getTime() ? chartEndDate : rawMonthEnd;
-
-    let totalIncome = 0;
-    let parent1Days = 0;
-    let parent2Days = 0;
-    let bothDays = 0;
-
-    sortedPeriods.forEach((period) => {
-      if (period.startDate.getTime() > chartEndDate.getTime()) {
-        return;
-      }
-
-      const boundedEnd =
-        period.endDate.getTime() > chartEndDate.getTime() ? chartEndDate : period.endDate;
-      const overlapStart = period.startDate > monthStart ? period.startDate : monthStart;
-      const overlapEnd = boundedEnd < monthEnd ? boundedEnd : monthEnd;
-      const hasOverlap = overlapStart <= overlapEnd;
-      if (!hasOverlap) {
-        return;
-      }
-
-      const daysInOverlap = differenceInCalendarDays(overlapEnd, overlapStart) + 1;
-
-      const workingIncome = calculateWorkingParentIncome(
-        period,
-        daysInOverlap,
-        monthStart,
-        monthEnd
-      );
-      const benefitIncome = calculateBenefitIncome(period, daysInOverlap);
-      totalIncome += workingIncome + benefitIncome;
-
-      if (period.parent === "parent1" && period.benefitLevel !== "none") {
-        parent1Days += daysInOverlap;
-      } else if (period.parent === "parent2" && period.benefitLevel !== "none") {
-        parent2Days += daysInOverlap;
-      } else if (period.parent === "both") {
-        bothDays += daysInOverlap;
-      }
-    });
+    const key = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
+    const breakdown = breakdownByKey.get(key);
 
     return {
       monthDate: monthStart,
-      labelStartDate: monthStart,
-      labelEndDate: monthEnd,
-      income: totalIncome,
-      parent1Days,
-      parent2Days,
-      bothDays,
+      labelStartDate: breakdown ? breakdown.startDate : monthStart,
+      labelEndDate: breakdown ? breakdown.endDate : monthEnd,
+      income: breakdown ? breakdown.monthlyIncome : 0,
+      parent1Days: breakdown ? breakdown.parentDayTotals.parent1 : 0,
+      parent2Days: breakdown ? breakdown.parentDayTotals.parent2 : 0,
+      bothDays: breakdown ? breakdown.parentDayTotals.both : 0,
     } satisfies TimelinePoint;
   });
 }

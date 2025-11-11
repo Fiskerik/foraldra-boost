@@ -41,7 +41,7 @@ families:
     expectations:
       requireMinIncome: true
       timelinePoints: 18
-      expectedCondensedPoints: 10
+      expectedCondensedPoints: 19
       strategyBeatsAlternative: true
       maxAllowedDeficit: 6000
   - name: "Ensamboende förälder"
