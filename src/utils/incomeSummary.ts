@@ -77,42 +77,52 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     return [];
   }
 
-  const daysPerWeek = period.daysPerWeek && period.daysPerWeek > 0 ? period.daysPerWeek : 7;
-  const expectedBenefitDaysPerMonth = daysPerWeek * 4.33;
-
   const totalCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
-  let remainingBenefitDays = totalBenefitDays;
+  if (segments.length === 1) {
+    segments[0].benefitDays = Math.min(totalBenefitDays, segments[0].calendarDays);
+  } else if (totalBenefitDays > 0) {
+    const allocations = segments.map(segment => {
+      const proportion = segment.calendarDays / totalCalendarDays;
+      const rawAllocation = totalBenefitDays * proportion;
+      const baseAllocation = Math.floor(rawAllocation);
+      return {
+        segment,
+        baseAllocation,
+        remainder: rawAllocation - baseAllocation,
+      };
+    });
 
-  segments.forEach(segment => {
-    if (remainingBenefitDays <= 0) {
-      segment.benefitDays = 0;
-    } else {
-      const monthStart = startOfMonth(segment.startDate);
-      const monthEnd = endOfMonth(monthStart);
-      const monthLength = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
-      const isFullMonth = segment.calendarDays >= monthLength;
-      
-      let allocated: number;
-      if (isFullMonth) {
-        // Full month: use expectedBenefitDaysPerMonth (max 30)
-        allocated = Math.min(
-          Math.round(expectedBenefitDaysPerMonth),
-          30,
-          remainingBenefitDays
-        );
-      } else {
-        // Partial month: proportional based on how much of the month it is
-        const proportion = segment.calendarDays / monthLength;
-        allocated = Math.min(
-          Math.round(expectedBenefitDaysPerMonth * proportion),
-          remainingBenefitDays
-        );
+    let allocated = 0;
+    allocations.forEach(({ segment, baseAllocation }) => {
+      const capped = Math.min(segment.calendarDays, baseAllocation);
+      segment.benefitDays = capped;
+      allocated += capped;
+    });
+
+    let remaining = Math.max(0, totalBenefitDays - allocated);
+
+    if (remaining > 0) {
+      const sorted = allocations.slice().sort((a, b) => b.remainder - a.remainder);
+      for (const { segment } of sorted) {
+        if (remaining <= 0) break;
+        if (segment.benefitDays >= segment.calendarDays) continue;
+        segment.benefitDays += 1;
+        remaining -= 1;
       }
-      
-      segment.benefitDays = Math.max(0, allocated);
-      remainingBenefitDays -= segment.benefitDays;
     }
 
+    if (remaining > 0 && allocations.length > 0) {
+      let index = 0;
+      while (remaining > 0) {
+        const target = allocations[index % allocations.length].segment;
+        target.benefitDays += 1;
+        remaining -= 1;
+        index += 1;
+      }
+    }
+  }
+
+  segments.forEach(segment => {
     const benefitDaily = period.dailyBenefit;
     const monthStart = startOfMonth(segment.startDate);
     const monthEnd = endOfMonth(monthStart);
