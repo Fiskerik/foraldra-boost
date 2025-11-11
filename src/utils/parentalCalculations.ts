@@ -495,21 +495,44 @@ function enforceMonthlyMinimumIncome(
       }
     }
 
-    const highDaily = owner === 'parent1' ? context.parent1HighDailyNet : context.parent2HighDailyNet;
-    const lowDaily = owner === 'parent1' ? context.parent1MinDailyNet : context.parent2MinDailyNet;
+    const ownerInfo = owner === 'parent1' ? context.parent1 : context.parent2;
+    const workingParent: 'parent1' | 'parent2' = owner === 'parent1' ? 'parent2' : 'parent1';
+    const workingParentNetMonthly = workingParent === 'parent1'
+      ? context.parent1NetIncome
+      : context.parent2NetIncome;
+
+    const ownerHighDailyBase = owner === 'parent1'
+      ? context.parent1HighDailyNet
+      : context.parent2HighDailyNet;
+    const ownerLowDaily = owner === 'parent1'
+      ? context.parent1MinDailyNet
+      : context.parent2MinDailyNet;
+
+    const ownerBonusPerBenefitDay = ownerInfo.hasCollectiveAgreement && ownerHighDailyBase > 0
+      ? computeCollectiveAgreementBonusPerBenefitDay(ownerInfo, ownerHighDailyBase)
+      : 0;
+    const ownerHighDailyEffective = ownerHighDailyBase + ownerBonusPerBenefitDay;
 
     let effectiveLevel: 'high' | 'low' | null = null;
     let effectiveDaily = 0;
+    let benefitDailyBase = 0;
+    let bonusPerBenefitDay = 0;
 
-    if (availableHigh > 0 && highDaily > lowDaily) {
+    if (availableHigh > 0 && ownerHighDailyEffective > ownerLowDaily) {
       effectiveLevel = 'high';
-      effectiveDaily = highDaily;
-    } else if (availableLow > 0 && lowDaily > 0) {
+      effectiveDaily = ownerHighDailyEffective;
+      benefitDailyBase = ownerHighDailyBase;
+      bonusPerBenefitDay = ownerBonusPerBenefitDay;
+    } else if (availableLow > 0 && ownerLowDaily > 0) {
       effectiveLevel = 'low';
-      effectiveDaily = lowDaily;
-    } else if (availableHigh > 0 && highDaily > 0) {
+      effectiveDaily = ownerLowDaily;
+      benefitDailyBase = ownerLowDaily;
+      bonusPerBenefitDay = 0;
+    } else if (availableHigh > 0 && ownerHighDailyEffective > 0) {
       effectiveLevel = 'high';
-      effectiveDaily = highDaily;
+      effectiveDaily = ownerHighDailyEffective;
+      benefitDailyBase = ownerHighDailyBase;
+      bonusPerBenefitDay = ownerBonusPerBenefitDay;
     }
 
     if (!effectiveLevel || effectiveDaily <= 0) {
@@ -533,6 +556,29 @@ function enforceMonthlyMinimumIncome(
       periodEnd = new Date(targetMonth.end);
     }
 
+    const monthStart = startOfMonth(periodStart);
+    const monthEndCandidate = endOfMonth(monthStart);
+    const monthLength = Math.max(1, differenceInCalendarDays(monthEndCandidate, monthStart) + 1);
+    const isFullMonth =
+      periodStart.getDate() === 1 &&
+      periodEnd.getDate() === monthEndCandidate.getDate() &&
+      calendarDays >= monthLength;
+
+    const benefitIncome = benefitDailyBase * takeDays;
+    const bonusIncome = bonusPerBenefitDay > 0 ? bonusPerBenefitDay * takeDays : 0;
+
+    let otherParentIncomeForPeriod = 0;
+    if (workingParentNetMonthly > 0) {
+      otherParentIncomeForPeriod = isFullMonth
+        ? workingParentNetMonthly
+        : workingParentNetMonthly * (calendarDays / monthLength);
+    }
+
+    const totalPeriodIncome = benefitIncome + bonusIncome + otherParentIncomeForPeriod;
+    const normalizedCalendarDays = Math.max(1, calendarDays);
+    const otherParentDailyIncome = otherParentIncomeForPeriod / normalizedCalendarDays;
+    const totalDailyIncome = totalPeriodIncome / normalizedCalendarDays;
+
     const topUpPeriod: LeavePeriod = {
       parent: owner,
       startDate: periodStart,
@@ -540,14 +586,15 @@ function enforceMonthlyMinimumIncome(
       daysCount: takeDays,
       benefitDaysUsed: takeDays,
       calendarDays,
-      dailyBenefit: effectiveDaily,
-      dailyIncome: effectiveDaily,
+      dailyBenefit: benefitDailyBase,
+      dailyIncome: totalDailyIncome,
       benefitLevel: effectiveLevel,
       daysPerWeek: 7,
-      otherParentDailyIncome: 0,
-      otherParentMonthlyIncome: 0,
+      otherParentDailyIncome,
+      otherParentMonthlyIncome: workingParentNetMonthly,
       isTopUp: true,
       needsSequencing: true,
+      monthlyIncome: totalPeriodIncome,
     };
 
     if (sourceParent !== owner) {
