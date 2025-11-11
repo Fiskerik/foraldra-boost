@@ -1497,7 +1497,7 @@ function ensureMinimumIncomePerMonth(
     if (remainingDeficit > 5 && (remainingLowDays[owner] > 0 || remainingHighDays[owner] > 0)) {
       let escalationAttempts = 0;
       const maxEscalationAttempts = 3;
-      
+
       while (remainingDeficit > 5 && escalationAttempts < maxEscalationAttempts) {
         const monthTopUps = periods.filter(p => 
           p.parent === owner &&
@@ -1534,6 +1534,70 @@ function ensureMinimumIncomePerMonth(
         
         if (!anyIncreased) break;
         escalationAttempts++;
+      }
+    }
+
+    if (
+      remainingDeficit > 0 &&
+      (remainingHighDays[owner] > 0 || remainingLowDays[owner] > 0)
+    ) {
+      const hasHighDaysAvailable = remainingHighDays[owner] > 0 && parentHighDaily[owner] > 0;
+      const hasLowDaysAvailable = remainingLowDays[owner] > 0 && parentLowDaily[owner] > 0;
+
+      const chosenLevel: 'high' | 'low' | null = hasHighDaysAvailable
+        ? 'high'
+        : hasLowDaysAvailable
+        ? 'low'
+        : null;
+
+      if (chosenLevel) {
+        const benefitDaily = chosenLevel === 'high' ? parentHighDaily[owner] : parentLowDaily[owner];
+
+        if (benefitDaily > 0) {
+          const takeDays = 1;
+          const periodStart = new Date(monthEnd);
+          const periodEnd = new Date(monthEnd);
+          const monthLength = Math.max(1, differenceInCalendarDays(fullMonthEnd, fullMonthStart) + 1);
+          const otherParentMonthlyNet = owner === 'parent1'
+            ? context.parent2NetIncome
+            : context.parent1NetIncome;
+          const otherParentDailyNet = otherParentMonthlyNet > 0 ? otherParentMonthlyNet / monthLength : 0;
+          const totalBenefitIncome = benefitDaily * takeDays;
+          const totalOtherIncome = otherParentDailyNet * takeDays;
+          const combinedDailyIncome = takeDays > 0
+            ? (totalBenefitIncome + totalOtherIncome) / takeDays
+            : 0;
+
+          periods.push({
+            parent: owner,
+            startDate: periodStart,
+            endDate: periodEnd,
+            daysCount: takeDays,
+            benefitDaysUsed: takeDays,
+            calendarDays: takeDays,
+            dailyBenefit: benefitDaily,
+            dailyIncome: combinedDailyIncome,
+            benefitLevel: chosenLevel,
+            daysPerWeek: 1,
+            otherParentDailyIncome: otherParentDailyNet,
+            otherParentMonthlyIncome: otherParentMonthlyNet,
+            isPreferenceFiller: true,
+            needsSequencing: true,
+          });
+
+          if (chosenLevel === 'high') {
+            remainingHighDays[owner] = Math.max(0, remainingHighDays[owner] - takeDays);
+            const chronologicalTracker = owner === 'parent1'
+              ? parent1ChronologicalHighDays
+              : parent2ChronologicalHighDays;
+            chronologicalTracker.count += takeDays;
+          } else {
+            remainingLowDays[owner] = Math.max(0, remainingLowDays[owner] - takeDays);
+          }
+
+          parentCalendarUsage[owner] += takeDays;
+          remainingDeficit = Math.max(0, remainingDeficit - totalBenefitIncome);
+        }
       }
     }
 
