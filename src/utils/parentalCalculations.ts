@@ -33,6 +33,14 @@ export interface OptimizationResult {
   lowBenefitDaysUsed?: number;
   highBenefitDaysSaved?: number;
   lowBenefitDaysSaved?: number;
+  parent1HighDaysUsed?: number;
+  parent1LowDaysUsed?: number;
+  parent2HighDaysUsed?: number;
+  parent2LowDaysUsed?: number;
+  parent1HighDaysSaved?: number;
+  parent1LowDaysSaved?: number;
+  parent2HighDaysSaved?: number;
+  parent2LowDaysSaved?: number;
   warnings?: string[];
 }
 
@@ -3679,6 +3687,9 @@ function buildSimpleSaveDaysResult(
 
   const minIncomeThreshold = Math.max(0, context.minHouseholdIncome || 0);
 
+  // Track worst month for consolidated warning
+  let worstMonth: { date: Date; income: number; deficit: number } | null = null;
+
   const resolveWorkingNet = (parent: 'parent1' | 'parent2'): number =>
     parent === 'parent1' ? context.parent1NetIncome : context.parent2NetIncome;
 
@@ -3716,9 +3727,9 @@ function buildSimpleSaveDaysResult(
     const activeParentInfo = activeParent === 'parent1' ? context.parent1 : context.parent2;
     if (activeParentInfo.hasCollectiveAgreement && caRemainingCalendarDays[activeParent] > 0 && leaveDailyIncome > 0) {
       eligibleCalendarDaysForCA = Math.min(caRemainingCalendarDays[activeParent], calendarDays);
-      const eligibleFraction = eligibleCalendarDaysForCA / calendarDays;
       const bonusPerBenefitDay = computeCollectiveAgreementBonusPerBenefitDay(activeParentInfo, leaveDailyIncome);
-      effectiveDailyIncome = leaveDailyIncome + (bonusPerBenefitDay * eligibleFraction);
+      // FIXED: Add full bonus per benefit day (not fractional)
+      effectiveDailyIncome = leaveDailyIncome + bonusPerBenefitDay;
     }
 
     let requiredDays = 0;
@@ -3753,13 +3764,10 @@ function buildSimpleSaveDaysResult(
     }
 
     if (minIncomeThreshold > 0 && monthlyTotalIncome < minIncomeThreshold) {
-      warnings.push(
-        `Hushållets inkomst uppnår inte gränsen på ${formatCurrency(minIncomeThreshold)} under ${format(
-          monthStart,
-          'MMMM yyyy',
-          { locale: sv },
-        )}.`,
-      );
+      const deficit = minIncomeThreshold - monthlyTotalIncome;
+      if (!worstMonth || deficit > worstMonth.deficit) {
+        worstMonth = { date: monthStart, income: monthlyTotalIncome, deficit };
+      }
     }
 
     const dailyIncome = calendarDays > 0 ? monthlyTotalIncome / calendarDays : 0;
@@ -3796,6 +3804,21 @@ function buildSimpleSaveDaysResult(
   const lowBenefitDaysSaved = totalLowDaysAvailable;
   const daysSaved = Math.max(0, TOTAL_BENEFIT_DAYS - totalBenefitDays);
 
+  // Generate consolidated warning for worst month
+  if (worstMonth) {
+    const remainingTotal = remainingHighDays.parent1 + remainingHighDays.parent2;
+    const suggestion = remainingTotal > 0
+      ? "Öka antalet dagar per vecka eller omfördela månader mellan föräldrarna."
+      : "Du behöver förkorta din föräldraledighet eller sänka ditt minimikrav.";
+      
+    warnings.push(
+      `Hushållets lägsta helnmånad är ${format(worstMonth.date, 'MMMM yyyy', { locale: sv })} ` +
+      `med en inkomst på ${formatCurrency(worstMonth.income)}. ` +
+      `Detta är ${formatCurrency(worstMonth.deficit)} under minimikravet på ${formatCurrency(minIncomeThreshold)}. ` +
+      suggestion
+    );
+  }
+
   const result: OptimizationResult = {
     strategy: meta.key,
     title: meta.title,
@@ -3809,6 +3832,14 @@ function buildSimpleSaveDaysResult(
     lowBenefitDaysUsed,
     highBenefitDaysSaved,
     lowBenefitDaysSaved,
+    parent1HighDaysUsed: usedHighDays.parent1,
+    parent1LowDaysUsed: 0,
+    parent2HighDaysUsed: usedHighDays.parent2,
+    parent2LowDaysUsed: 0,
+    parent1HighDaysSaved: Math.max(0, context.parent1HighTotalDays - usedHighDays.parent1),
+    parent1LowDaysSaved: context.parent1LowTotalDays,
+    parent2HighDaysSaved: Math.max(0, context.parent2HighTotalDays - usedHighDays.parent2),
+    parent2LowDaysSaved: context.parent2LowTotalDays,
   };
 
   if (warnings.length > 0) {

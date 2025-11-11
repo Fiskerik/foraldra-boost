@@ -495,10 +495,16 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                 Dagar använda
               </div>
               <div className="text-xs md:text-xl font-bold">{result.daysUsed}</div>
-              {result.highBenefitDaysUsed !== undefined && result.lowBenefitDaysUsed !== undefined && (
-                <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-0">
-                  <div>Vanliga: {result.highBenefitDaysUsed}</div>
-                  <div>Lägstanivå: {result.lowBenefitDaysUsed}</div>
+              {result.parent1HighDaysUsed !== undefined && (
+                <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-1">
+                  <div>
+                    <div className="font-semibold">Förälder 1:</div>
+                    <div>{result.parent1HighDaysUsed} vanliga, {result.parent1LowDaysUsed} lägstanivå</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">Förälder 2:</div>
+                    <div>{result.parent2HighDaysUsed} vanliga, {result.parent2LowDaysUsed} lägstanivå</div>
+                  </div>
                 </div>
               )}
             </div>
@@ -508,16 +514,22 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                 Dagar sparade
               </div>
               <div className="text-xs md:text-xl font-bold text-accent">{result.daysSaved}</div>
-              {result.highBenefitDaysSaved !== undefined && result.lowBenefitDaysSaved !== undefined && (
-                <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-0">
-                  <div>Vanliga: {result.highBenefitDaysSaved}</div>
-                  <div>Lägstanivå: {result.lowBenefitDaysSaved}</div>
+              {result.parent1HighDaysSaved !== undefined && (
+                <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-1">
+                  <div>
+                    <div className="font-semibold">Förälder 1:</div>
+                    <div>{result.parent1HighDaysSaved} vanliga, {result.parent1LowDaysSaved} lägstanivå</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">Förälder 2:</div>
+                    <div>{result.parent2HighDaysSaved} vanliga, {result.parent2LowDaysSaved} lägstanivå</div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
-          {result.warnings?.length ? (
+          {isInOverlay && result.warnings?.length ? (
             <div className="mt-2 md:mt-4 space-y-1">
               {result.warnings.map((warning, warningIndex) => (
                 <div

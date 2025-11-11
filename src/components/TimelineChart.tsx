@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import { LeavePeriod, formatCurrency } from "@/utils/parentalCalculations";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
@@ -45,6 +45,25 @@ export function TimelineChart({
     parent2Days: number;
     bothDays: number;
   } | null>(null);
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handlePointHover = (data: { income: number; month: string; parent1Days: number; parent2Days: number; bothDays: number } | null) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredPoint(data);
+    }, 50);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
   if (periods.length === 0) return null;
   const monthsLimit = calendarMonthsLimit && calendarMonthsLimit > 0 ? calendarMonthsLimit : null;
   const rawMonthlyPoints = computeTimelineMonthlyData(periods, monthsLimit);
@@ -206,13 +225,13 @@ export function TimelineChart({
             const color = getColorForData(data);
             return <g key={index} className="group">
                   {/* Larger invisible hover area for accessibility */}
-                  <circle cx={`${x}%`} cy={`${y}%`} r="12" fill="transparent" onMouseEnter={() => setHoveredPoint({
+                  <circle cx={`${x}%`} cy={`${y}%`} r="16" fill="transparent" onMouseEnter={() => handlePointHover({
                 income: data.income,
                 month: data.month,
                 parent1Days: data.parent1Days,
                 parent2Days: data.parent2Days,
                 bothDays: data.bothDays
-              })} onMouseLeave={() => setHoveredPoint(null)} className="cursor-pointer" />
+              })} onMouseLeave={() => handlePointHover(null)} className="cursor-pointer" />
                   {/* Visible colored point */}
                   <circle cx={`${x}%`} cy={`${y}%`} r="4" fill={color} stroke={color} strokeWidth="1" className="transition-all" aria-label={`${data.month}: ${formatCurrency(data.income)}`} />
                 </g>;
