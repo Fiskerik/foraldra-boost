@@ -33,6 +33,19 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
     ? Math.max(0, minHouseholdIncome - lowestFullMonthIncome)
     : 0;
 
+  const minimumWarningVariant = useMemo<"destructive" | "warning">(() => {
+    if (!belowMinimum || !lowestFullMonthIncome || minHouseholdIncome <= 0) {
+      return "destructive";
+    }
+
+    const deficitRatio = (minHouseholdIncome - lowestFullMonthIncome) / minHouseholdIncome;
+    if (deficitRatio <= 0.05) {
+      return "warning";
+    }
+
+    return "destructive";
+  }, [belowMinimum, lowestFullMonthIncome, minHouseholdIncome]);
+
   const minimumWarningSuggestion = useMemo(() => {
     if (!strategy.warnings?.length) {
       return null;
@@ -107,15 +120,27 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col justify-between min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar sparade</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysSaved}</div>
+              {strategy.parent1HighDaysSaved !== undefined && (
+                <div className="mt-2 space-y-1 text-[10px] md:text-xs text-muted-foreground">
+                  <div>
+                    <div className="font-semibold">Förälder 1:</div>
+                    <div>{strategy.parent1HighDaysSaved} vanliga, {strategy.parent1LowDaysSaved} lägstanivå</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">Förälder 2:</div>
+                    <div>{strategy.parent2HighDaysSaved} vanliga, {strategy.parent2LowDaysSaved} lägstanivå</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </CardHeader>
 
         <CardContent className="pt-6">
           {belowMinimum && (
-            <Alert variant="destructive" className="mb-4">
+            <Alert variant={minimumWarningVariant} className="mb-4">
               <AlertTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
+                <AlertTriangle className={`h-4 w-4 ${minimumWarningVariant === 'warning' ? 'text-amber-500' : ''}`} />
                 Under minimi-inkomst
               </AlertTitle>
               <AlertDescription>
