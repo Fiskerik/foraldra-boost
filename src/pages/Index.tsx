@@ -55,6 +55,13 @@ const Index = () => {
   const [planName, setPlanName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Auto-recalculate when collective agreement checkbox changes
+  useEffect(() => {
+    if (optimizationResults.length > 0 && !isFirstOptimization) {
+      handleOptimize({ silent: true });
+    }
+  }, [parent1HasAgreement, parent2HasAgreement]);
+
   type OptimizeOverrides = {
     totalMonths?: number;
     parent1Months?: number;

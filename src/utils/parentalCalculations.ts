@@ -666,12 +666,12 @@ function applyCollectiveAgreementBonuses(
       .filter(period => period.parent === parentKey)
       .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
-    let remainingBonusDays = 0;
+    // Track total consumed calendar days across entire plan (never reset to full 6 months)
+    let totalConsumedCalendarDays = 0;
     let lastEnd: Date | null = null;
 
     relevantPeriods.forEach(period => {
       if (period.benefitLevel === 'none') {
-        remainingBonusDays = 0;
         lastEnd = new Date(period.endDate);
         return;
       }
@@ -683,12 +683,8 @@ function applyCollectiveAgreementBonuses(
         period.calendarDays ?? differenceInCalendarDays(periodEnd, periodStart) + 1
       );
 
-      if (
-        !lastEnd ||
-        periodStart.getTime() > addDays(lastEnd, COLLECTIVE_GAP_ALLOWANCE_DAYS).getTime()
-      ) {
-        remainingBonusDays = COLLECTIVE_MAX_CALENDAR_DAYS;
-      }
+      // Calculate remaining bonus eligibility based on total consumed (not per-sequence)
+      const remainingBonusDays = Math.max(0, COLLECTIVE_MAX_CALENDAR_DAYS - totalConsumedCalendarDays);
 
       lastEnd = new Date(periodEnd);
 
@@ -707,13 +703,13 @@ function applyCollectiveAgreementBonuses(
       );
 
       if (bonusPerBenefitDay <= 0) {
-        remainingBonusDays -= eligibleDays;
+        totalConsumedCalendarDays += eligibleDays;
         return;
       }
 
       const benefitDaysUsed = Math.max(0, period.benefitDaysUsed ?? period.daysCount ?? 0);
       if (benefitDaysUsed <= 0) {
-        remainingBonusDays -= eligibleDays;
+        totalConsumedCalendarDays += eligibleDays;
         return;
       }
 
@@ -729,7 +725,7 @@ function applyCollectiveAgreementBonuses(
         }
       }
 
-      remainingBonusDays -= eligibleDays;
+      totalConsumedCalendarDays += eligibleDays;
     });
   });
 }
@@ -3675,6 +3671,12 @@ function buildSimpleSaveDaysResult(
 
   const usedHighDays: RemainingBenefitDays = { parent1: 0, parent2: 0 };
 
+  // Track collective agreement remaining days per parent (6 months = ~183 days)
+  const caRemainingCalendarDays: RemainingBenefitDays = {
+    parent1: context.parent1.hasCollectiveAgreement ? COLLECTIVE_MAX_CALENDAR_DAYS : 0,
+    parent2: context.parent2.hasCollectiveAgreement ? COLLECTIVE_MAX_CALENDAR_DAYS : 0,
+  };
+
   const minIncomeThreshold = Math.max(0, context.minHouseholdIncome || 0);
 
   const resolveWorkingNet = (parent: 'parent1' | 'parent2'): number =>
@@ -3707,11 +3709,23 @@ function buildSimpleSaveDaysResult(
     const workingNetMonthly = resolveWorkingNet(workingParent);
     const leaveDailyIncome = resolveDailyBenefit(activeParent);
 
+    // Calculate effective daily income including Föräldralön if eligible
+    let effectiveDailyIncome = leaveDailyIncome;
+    let eligibleCalendarDaysForCA = 0;
+    
+    const activeParentInfo = activeParent === 'parent1' ? context.parent1 : context.parent2;
+    if (activeParentInfo.hasCollectiveAgreement && caRemainingCalendarDays[activeParent] > 0 && leaveDailyIncome > 0) {
+      eligibleCalendarDaysForCA = Math.min(caRemainingCalendarDays[activeParent], calendarDays);
+      const eligibleFraction = eligibleCalendarDaysForCA / calendarDays;
+      const bonusPerBenefitDay = computeCollectiveAgreementBonusPerBenefitDay(activeParentInfo, leaveDailyIncome);
+      effectiveDailyIncome = leaveDailyIncome + (bonusPerBenefitDay * eligibleFraction);
+    }
+
     let requiredDays = 0;
     if (minIncomeThreshold > 0) {
       const deficit = Math.max(0, minIncomeThreshold - workingNetMonthly);
-      if (deficit > 0 && leaveDailyIncome > 0) {
-        requiredDays = Math.ceil(deficit / leaveDailyIncome);
+      if (deficit > 0 && effectiveDailyIncome > 0) {
+        requiredDays = Math.ceil(deficit / effectiveDailyIncome);
       }
     }
 
@@ -3723,6 +3737,11 @@ function buildSimpleSaveDaysResult(
     if (requiredDays > 0) {
       requiredDays = Math.min(requiredDays, availableHigh);
       requiredDays = Math.min(requiredDays, 30);
+    }
+    
+    // Update collective agreement remaining days
+    if (eligibleCalendarDaysForCA > 0 && requiredDays > 0) {
+      caRemainingCalendarDays[activeParent] = Math.max(0, caRemainingCalendarDays[activeParent] - eligibleCalendarDaysForCA);
     }
 
     const monthlyBenefitIncome = leaveDailyIncome * requiredDays;
