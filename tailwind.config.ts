@@ -55,6 +55,10 @@ export default {
           DEFAULT: "hsl(var(--parent2))",
           light: "hsl(var(--parent2-light))",
         },
+        both: {
+          DEFAULT: "hsl(var(--both))",
+          light: "hsl(var(--both-light))",
+        },
       },
       backgroundImage: {
         'gradient-hero': 'var(--gradient-hero)',

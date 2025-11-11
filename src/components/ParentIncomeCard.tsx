@@ -51,24 +51,23 @@ export function ParentIncomeCard({
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 p-1.5 md:p-4 bg-muted rounded-lg opacity-50">
+        <div className="flex items-center space-x-2 p-1.5 md:p-4 bg-muted rounded-lg">
           <Checkbox
             id={`collective-${parentNumber}`}
             checked={hasCollectiveAgreement}
             onCheckedChange={(checked) =>
               onCollectiveAgreementChange(checked === true)
             }
-            disabled
-            className={parentNumber === 1 
-              ? "data-[state=checked]:bg-parent1 data-[state=checked]:border-parent1 h-3 w-3 md:h-4 md:w-4" 
+            className={parentNumber === 1
+              ? "data-[state=checked]:bg-parent1 data-[state=checked]:border-parent1 h-3 w-3 md:h-4 md:w-4"
               : "data-[state=checked]:bg-parent2 data-[state=checked]:border-parent2 h-3 w-3 md:h-4 md:w-4"}
           />
           <Label
             htmlFor={`collective-${parentNumber}`}
-            className="text-[10px] md:text-sm font-medium cursor-not-allowed"
-            title="Föräldralön är tillfälligt inaktiverad - endast föräldrapenning används i beräkningarna"
+            className="text-[10px] md:text-sm font-medium cursor-pointer"
+            title="När kollektivavtal är markerat får föräldern även föräldralön de första sex månaderna av sammanhängande ledighet"
           >
-            Har du kollektivavtal? (inaktiverad)
+            Har du kollektivavtal? (inkl. föräldralön)
           </Label>
         </div>
       </CardContent>

@@ -465,6 +465,8 @@ const Index = () => {
             parent2NetIncome={calc2.netIncome}
             parent1AvailableIncome={calc1.availableIncome}
             parent2AvailableIncome={calc2.availableIncome}
+            parent1ParentalSalaryPerDay={calc1.parentalSalaryPerDay}
+            parent2ParentalSalaryPerDay={calc2.parentalSalaryPerDay}
           />
         )}
 

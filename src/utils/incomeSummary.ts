@@ -154,9 +154,12 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       benefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
     }
 
+    const totalIncome = Math.max(0, Math.round((period.dailyIncome || 0) * segment.calendarDays));
+    const parentalSalaryIncome = Math.max(0, totalIncome - otherParentIncome - benefitIncome);
+
     segment.otherParentIncome = otherParentIncome;
     segment.benefitIncome = benefitIncome;
-    segment.monthlyIncome = otherParentIncome + benefitIncome;
+    segment.monthlyIncome = otherParentIncome + benefitIncome + parentalSalaryIncome;
   });
 
   return segments;
