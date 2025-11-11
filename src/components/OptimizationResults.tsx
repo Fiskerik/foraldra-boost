@@ -421,11 +421,11 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     return (
       <Card
         key={index}
-        className={`shadow-soft transition-all cursor-pointer hover:shadow-lg ${
-          selectedIndex === index
-            ? 'ring-2 md:ring-4 ring-primary shadow-xl'
-            : ''
-        }`}
+          className={`shadow-soft transition-all cursor-pointer hover:shadow-lg ${
+            selectedIndex === index
+              ? `ring-2 md:ring-4 ${result.strategy === 'maximize-income' ? 'ring-blue-500' : 'ring-primary'} shadow-xl`
+              : ''
+          }`}
         onClick={() => !isInOverlay && handleCardClick(index)}
       >
         <CardHeader className={`${result.strategy === 'save-days' ? 'bg-parent1/10' : 'bg-parent2/10'} p-2 md:p-6 relative`}>

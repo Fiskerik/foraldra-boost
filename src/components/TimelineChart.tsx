@@ -54,7 +54,7 @@ export function TimelineChart({
     
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredPoint(data);
-    }, 50);
+    }, 150);
   };
 
   useEffect(() => {
@@ -231,7 +231,7 @@ export function TimelineChart({
                 parent1Days: data.parent1Days,
                 parent2Days: data.parent2Days,
                 bothDays: data.bothDays
-              })} onMouseLeave={() => handlePointHover(null)} className="cursor-pointer" />
+              })} onMouseLeave={() => {}} className="cursor-pointer" />
                   {/* Visible colored point */}
                   <circle cx={`${x}%`} cy={`${y}%`} r="4" fill={color} stroke={color} strokeWidth="1" className="transition-all" aria-label={`${data.month}: ${formatCurrency(data.income)}`} />
                 </g>;

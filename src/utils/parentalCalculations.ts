@@ -3714,6 +3714,29 @@ function convertLegacyResult(
 
   const averageMonthlyIncome = coveredDays > 0 ? (totalIncome / coveredDays) * 30 : 0;
 
+  // Calculate per-parent day breakdowns
+  const usage = { parent1High: 0, parent1Low: 0, parent2High: 0, parent2Low: 0 };
+  mergedPeriods.forEach(period => {
+    const days = Math.round(period.benefitDaysUsed ?? period.daysCount ?? 0);
+    if (period.parent === 'parent1') {
+      if (period.benefitLevel === 'high') usage.parent1High += days;
+      else if (period.benefitLevel === 'low') usage.parent1Low += days;
+    } else if (period.parent === 'parent2') {
+      if (period.benefitLevel === 'high') usage.parent2High += days;
+      else if (period.benefitLevel === 'low') usage.parent2Low += days;
+    } else if (period.parent === 'both') {
+      // Split both periods evenly
+      const halfDays = days / 2;
+      if (period.benefitLevel === 'high') {
+        usage.parent1High += halfDays;
+        usage.parent2High += halfDays;
+      } else if (period.benefitLevel === 'low') {
+        usage.parent1Low += halfDays;
+        usage.parent2Low += halfDays;
+      }
+    }
+  });
+
   return {
     strategy: meta.key,
     title: meta.title,
@@ -3728,6 +3751,14 @@ function convertLegacyResult(
     highBenefitDaysSaved,
     lowBenefitDaysSaved,
     warnings: warnings.length ? warnings : undefined,
+    parent1HighDaysUsed: Math.round(usage.parent1High),
+    parent1LowDaysUsed: Math.round(usage.parent1Low),
+    parent2HighDaysUsed: Math.round(usage.parent2High),
+    parent2LowDaysUsed: Math.round(usage.parent2Low),
+    parent1HighDaysSaved: Math.max(0, context.parent1HighTotalDays - Math.round(usage.parent1High)),
+    parent1LowDaysSaved: Math.max(0, context.parent1LowTotalDays - Math.round(usage.parent1Low)),
+    parent2HighDaysSaved: Math.max(0, context.parent2HighTotalDays - Math.round(usage.parent2High)),
+    parent2LowDaysSaved: Math.max(0, context.parent2LowTotalDays - Math.round(usage.parent2Low)),
   };
 }
 

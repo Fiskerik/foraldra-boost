@@ -81,8 +81,8 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
   const getBenefitLevelLabel = (level: string): string => {
     switch (level) {
-      case 'parental-salary': return 'Föräldrapenning + Föräldralön (90%)';
-      case 'high': return 'Föräldrapenning (≈80%)';
+      case 'parental-salary': return 'Föräldrapenning + Föräldralön';
+      case 'high': return 'Föräldrapenning';
       case 'low': return 'Lägstanivå (250 kr/dag)';
       default: return level;
     }
@@ -285,6 +285,12 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                               {Object.entries(month.benefitDaysByLevel).map(([level, days]) => {
                                 const roundedDays = Math.round(days);
                                 if (roundedDays <= 0) {
+                                  return null;
+                                }
+                                
+                                // Skip showing "high" benefit badge if "parental-salary" exists
+                                // because parental-salary already includes the high benefit
+                                if (level === 'high' && month.benefitDaysByLevel['parental-salary'] > 0) {
                                   return null;
                                 }
 
