@@ -57,7 +57,7 @@ const Index = () => {
 
   // Auto-recalculate when collective agreement checkbox changes
   useEffect(() => {
-    if (optimizationResults.length > 0 && !isFirstOptimization) {
+    if (optimizationResults && optimizationResults.length > 0 && !isFirstOptimization) {
       handleOptimize({ silent: true });
     }
   }, [parent1HasAgreement, parent2HasAgreement]);
