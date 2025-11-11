@@ -125,10 +125,10 @@ test("Familjescenarier", async (t) => {
       }
 
       // Test 5: Condensed timeline
-      const condensedTimeline = condenseTimelinePoints(timelinePoints, 15);
+      const condensedTimeline = condenseTimelinePoints(timelinePoints, 19);
       assert.ok(
-        condensedTimeline.length <= 15,
-        `Komprimerad tidslinje har för många punkter (${condensedTimeline.length}, max: 15)`
+        condensedTimeline.length <= 19,
+        `Komprimerad tidslinje har för många punkter (${condensedTimeline.length}, max: 19)`
       );
 
       if (typeof scenario.expectations.expectedCondensedPoints === "number") {

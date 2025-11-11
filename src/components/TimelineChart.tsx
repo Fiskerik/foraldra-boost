@@ -54,7 +54,7 @@ export function TimelineChart({
       locale: sv
     }))
   }));
-  const desktopBasePoints: TimelinePoint[] = condenseTimelinePoints(rawMonthlyPoints, 15);
+  const desktopBasePoints: TimelinePoint[] = condenseTimelinePoints(rawMonthlyPoints, 19);
   const chartData = React.useMemo<ChartPoint[]>(() => {
     const formattedDesktopPoints: ChartPoint[] = desktopBasePoints.map(point => ({
       ...point,
@@ -72,12 +72,19 @@ export function TimelineChart({
   const chartBottomPadding = isMobile ? 110 : 80;
   const axisWidth = isMobile ? 68 : 80;
   const allIncomeValues = rawMonthlyPoints.map(d => d.income);
-  const maxIncome = Math.max(minHouseholdIncome, ...allIncomeValues, 0);
-  const getNiceStep = (maxValue: number) => {
-    if (maxValue <= 0) {
+  const incomePool = allIncomeValues.length > 0 ? [...allIncomeValues] : [0];
+  incomePool.push(minHouseholdIncome);
+  const minIncomeValue = Math.min(...incomePool);
+  const maxIncomeValue = Math.max(...incomePool);
+  const paddingBelow = minIncomeValue > 0 ? minIncomeValue * 0.25 : 0;
+  const rawYMin = Math.max(0, minIncomeValue - paddingBelow);
+  const baseRange = Math.max(1, maxIncomeValue - rawYMin);
+  const paddedMax = maxIncomeValue + baseRange * 0.1;
+  const getNiceStep = (rangeValue: number) => {
+    if (rangeValue <= 0) {
       return 1000;
     }
-    const roughStep = maxValue / 4;
+    const roughStep = rangeValue / 4;
     const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
     const residual = roughStep / magnitude;
     if (residual >= 5) return 5 * magnitude;
@@ -86,22 +93,23 @@ export function TimelineChart({
     if (residual >= 1) return magnitude;
     return 0.5 * magnitude;
   };
-  const step = getNiceStep(maxIncome * 1.1);
+  const step = getNiceStep(paddedMax - rawYMin);
   const safeStep = step > 0 ? step : 1000;
-  const yMax = Math.max(safeStep, Math.ceil(maxIncome * 1.1 / safeStep) * safeStep);
-  const safeYMax = yMax > 0 ? yMax : 1;
+  const yMin = Math.max(0, Math.floor(rawYMin / safeStep) * safeStep);
+  const yMax = Math.max(yMin + safeStep, Math.ceil(paddedMax / safeStep) * safeStep);
+  const safeRange = Math.max(1, yMax - yMin);
   const baseTicks: number[] = [];
-  for (let value = 0; value <= yMax; value += safeStep) {
+  for (let value = yMin; value <= yMax + safeStep / 2; value += safeStep) {
     baseTicks.push(Math.round(value));
   }
   if (!baseTicks.includes(Math.round(minHouseholdIncome))) {
     baseTicks.push(minHouseholdIncome);
   }
-  const yTicks = Array.from(new Set(baseTicks)).filter(value => value >= 0).sort((a, b) => b - a);
+  const yTicks = Array.from(new Set(baseTicks)).sort((a, b) => b - a);
   const clampToUnitInterval = (value: number) => {
-    if (value <= 0) return 0;
-    if (value >= safeYMax) return 1;
-    return value / safeYMax;
+    if (value <= yMin) return 0;
+    if (value >= yMax) return 1;
+    return (value - yMin) / safeRange;
   };
   const getYPercent = (value: number) => 100 - clampToUnitInterval(value) * 100;
   const minIncomePosition = getYPercent(minHouseholdIncome);
@@ -132,11 +140,10 @@ export function TimelineChart({
   };
   const labelStride = computeLabelStride();
   return <div className="space-y-4">
-      <h3 className="text-xl font-semibold">Inkomsttidslinje</h3>
+      <h3 className="sr-only" id="income-timeline-heading">Inkomsttidslinje</h3>
 
-      <div className="relative h-64 bg-muted/30 rounded-lg p-4" aria-label="Inkomsttidslinje diagram">
-        {/* Fixed tooltip box in top right corner */}
-        <div className="absolute -top-10 right-2 bg-white dark:bg-card rounded-lg shadow-lg p-3 min-w-[200px] border border-border z-20">
+      <div className="flex w-full justify-end">
+        <div className="bg-white dark:bg-card rounded-lg shadow-lg p-3 min-w-[200px] border border-border">
           {hoveredPoint ? <>
               <div className="text-xs text-muted-foreground mb-1">{hoveredPoint.month}</div>
               <div className="text-lg font-semibold text-foreground">{formatCurrency(hoveredPoint.income)}</div>
@@ -146,9 +153,11 @@ export function TimelineChart({
                 {hoveredPoint.parent2Days > 0 && "Förälder 2"}
                 {hoveredPoint.bothDays > 0 && hoveredPoint.parent1Days === 0 && hoveredPoint.parent2Days === 0 && "Båda föräldrar"}
               </div>
-            </> : <div className="text-sm text-muted-foreground my-0 px-0 py-0">Hovra över grafen för att se detaljer</div>}
+            </> : <div className="text-sm text-muted-foreground">Hovra över grafen för att se detaljer</div>}
         </div>
+      </div>
 
+      <div className="relative h-64 bg-muted/30 rounded-lg p-4" aria-labelledby="income-timeline-heading">
         {/* Y-axis labels */}
         <div className="absolute top-0 text-xs text-muted-foreground" style={{
         left: 0,

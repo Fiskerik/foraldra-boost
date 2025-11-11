@@ -1,13 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { OptimizationResult, LeavePeriod, formatCurrency } from "@/utils/parentalCalculations";
+import { OptimizationResult, formatCurrency } from "@/utils/parentalCalculations";
 import { TimelineChart } from "./TimelineChart";
 import { TrendingUp, PiggyBank, Calendar, Users, Clock, AlertTriangle } from "lucide-react";
-import { format, startOfMonth, endOfMonth, differenceInCalendarDays, addDays } from "date-fns";
+import { format } from "date-fns";
 import { sv } from "date-fns/locale";
 import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { calculateStrategyIncomeSummary } from "@/utils/incomeSummary";
+import { calculateStrategyIncomeSummary, buildMonthlyBreakdownEntries, MonthlyBreakdownEntry } from "@/utils/incomeSummary";
 
 const capitalizeFirstLetter = (str: string) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -19,286 +19,10 @@ interface StrategyDetailsProps {
   timelineMonths: number;
 }
 
-interface MonthlyBreakdown {
-  startDate: Date;
-  endDate: Date;
-  calendarDays: number;
-  benefitDays: number;
-  monthlyIncome: number;
-  leaveParentIncome: number;
-  otherParentIncome: number;
-  benefitIncome: number;
-  parentalSalaryIncome: number;
-  daysPerWeekValue: number;
-  otherParentMonthlyBase: number;
-}
-
-interface MonthlyBreakdownEntry extends MonthlyBreakdown {
-  monthKey: string;
-  monthStart: Date;
-  monthLength: number;
-  daysPerWeekValues: number[];
-  benefitLevels: Array<'parental-salary' | 'high' | 'low' | 'none'>;
-  benefitDaysByLevel: Record<string, number>;
-  parents: string[];
-}
-
 export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }: StrategyDetailsProps) {
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
-
-  const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
-    const startDate = new Date(period.startDate);
-    const endDate = new Date(period.endDate);
-    
-    const rawBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
-    const totalBenefitDays = rawBenefitDays;
-
-    const segments: MonthlyBreakdown[] = [];
-    let cursor = new Date(startDate);
-
-    const normalizedDaysPerWeek = period.daysPerWeek && period.daysPerWeek > 0 ? period.daysPerWeek : 7;
-
-    while (cursor <= endDate) {
-      const monthStart = new Date(cursor);
-      const monthEndCandidate = endOfMonth(monthStart);
-      const monthEnd = monthEndCandidate < endDate ? monthEndCandidate : endDate;
-      const calendarDays = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
-
-      segments.push({
-        startDate: monthStart,
-        endDate: monthEnd,
-        calendarDays,
-        benefitDays: 0,
-        monthlyIncome: 0,
-        leaveParentIncome: 0,
-        otherParentIncome: 0,
-        benefitIncome: 0,
-        parentalSalaryIncome: 0,
-        daysPerWeekValue: normalizedDaysPerWeek,
-        otherParentMonthlyBase: period.parent === 'both' ? 0 : period.otherParentMonthlyIncome || 0,
-      });
-
-      cursor = addDays(monthEnd, 1);
-    }
-
-    if (segments.length === 0) {
-      return [];
-    }
-
-    const totalCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
-
-    if (segments.length === 1) {
-      segments[0].benefitDays = Math.min(totalBenefitDays, segments[0].calendarDays);
-    } else if (totalBenefitDays > 0) {
-      const allocations = segments.map(segment => {
-        const proportion = segment.calendarDays / totalCalendarDays;
-        const rawAllocation = totalBenefitDays * proportion;
-        const baseAllocation = Math.floor(rawAllocation);
-        return {
-          segment,
-          baseAllocation,
-          remainder: rawAllocation - baseAllocation,
-        };
-      });
-
-      let allocated = 0;
-      allocations.forEach(({ segment, baseAllocation }) => {
-        const capped = Math.min(segment.calendarDays, baseAllocation);
-        segment.benefitDays = capped;
-        allocated += capped;
-      });
-
-      let remaining = Math.max(0, totalBenefitDays - allocated);
-
-      if (remaining > 0) {
-        const sorted = allocations.slice().sort((a, b) => b.remainder - a.remainder);
-        for (const { segment } of sorted) {
-          if (remaining <= 0) break;
-          if (segment.benefitDays >= segment.calendarDays) continue;
-          segment.benefitDays += 1;
-          remaining -= 1;
-        }
-      }
-
-      if (remaining > 0 && allocations.length > 0) {
-        let index = 0;
-        while (remaining > 0) {
-          const target = allocations[index % allocations.length].segment;
-          target.benefitDays += 1;
-          remaining -= 1;
-          index += 1;
-        }
-      }
-    }
-
-    segments.forEach((segment) => {
-      const benefitDaily = period.dailyBenefit;
-      const monthStart = startOfMonth(new Date(segment.startDate));
-      const monthEndDate = endOfMonth(monthStart);
-      const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
-
-      const isFullMonthSegment =
-        segment.calendarDays >= monthLength &&
-        new Date(segment.startDate).getDate() === 1 &&
-        new Date(segment.endDate).getDate() === monthEndDate.getDate();
-
-      // Handle "both parents on leave" case separately
-      if (period.parent === 'both') {
-        const totalIncome = Math.max(0, Math.round((period.dailyIncome || 0) * segment.calendarDays));
-        segment.benefitIncome = totalIncome;
-        segment.otherParentIncome = 0;
-        segment.leaveParentIncome = totalIncome;
-        segment.monthlyIncome = totalIncome;
-        segment.daysPerWeekValue = normalizedDaysPerWeek;
-        segment.otherParentMonthlyBase = 0;
-        return;
-      }
-
-      // 1. Calculate working parent's income (exact net salary or prorated)
-      let otherParentIncome = 0;
-      if (period.otherParentMonthlyIncome) {
-        if (isFullMonthSegment) {
-          // Full month: use exact net salary
-          otherParentIncome = period.otherParentMonthlyIncome;
-        } else {
-          // Partial month: prorate based on proportion of month
-          const proportion = segment.calendarDays / monthLength;
-          otherParentIncome = period.otherParentMonthlyIncome * proportion;
-        }
-        otherParentIncome = Math.max(0, Math.round(otherParentIncome));
-      }
-
-      // 2. Calculate benefit income
-      let benefitIncome = 0;
-      if (benefitDaily > 0 && segment.benefitDays > 0) {
-        const benefitDaysForMonth = isFullMonthSegment ? Math.min(segment.benefitDays, 30) : segment.benefitDays;
-        benefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
-      }
-      benefitIncome = Math.max(0, Math.round(benefitIncome));
-
-      // 3. Calculate total monthly income (including föräldralön bonus)
-      const totalIncome = Math.max(0, Math.round((period.dailyIncome || 0) * segment.calendarDays));
-      const parentalSalaryIncome = Math.max(0, totalIncome - otherParentIncome - benefitIncome);
-      const monthlyIncome = otherParentIncome + benefitIncome + parentalSalaryIncome;
-
-      // 4. Set segment data
-      segment.benefitIncome = benefitIncome;
-      segment.otherParentIncome = otherParentIncome;
-      segment.parentalSalaryIncome = parentalSalaryIncome;
-      segment.leaveParentIncome = benefitIncome + parentalSalaryIncome;
-      segment.monthlyIncome = monthlyIncome;
-      segment.daysPerWeekValue = normalizedDaysPerWeek;
-      segment.otherParentMonthlyBase = period.otherParentMonthlyIncome || 0;
-    });
-
-    return segments;
-  };
-
-  const createMonthlyBreakdownEntries = (periodList: LeavePeriod[]): MonthlyBreakdownEntry[] => {
-    if (periodList.length === 0) {
-      return [];
-    }
-
-    const monthMap = new Map<string, MonthlyBreakdownEntry>();
-
-    periodList.forEach(period => {
-      breakDownByMonth(period).forEach(segment => {
-        const monthStart = startOfMonth(new Date(segment.startDate));
-        const key = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
-        const monthLength = differenceInCalendarDays(endOfMonth(monthStart), monthStart) + 1;
-        const existing = monthMap.get(key);
-
-        const parentLabel = period.parent === 'parent1' ? 'Parent 1' : period.parent === 'parent2' ? 'Parent 2' : 'Båda';
-
-        if (!existing) {
-          const initialBenefitLevels: Array<'parental-salary' | 'high' | 'low' | 'none'> = [];
-          const initialBenefitDaysByLevel: Record<string, number> = {};
-
-          if (segment.benefitDays > 0) {
-            initialBenefitLevels.push(period.benefitLevel);
-            initialBenefitDaysByLevel[period.benefitLevel] = segment.benefitDays;
-            if (segment.parentalSalaryIncome > 0) {
-              initialBenefitLevels.push('parental-salary');
-              initialBenefitDaysByLevel['parental-salary'] = segment.benefitDays;
-            }
-          } else {
-            initialBenefitLevels.push('none');
-          }
-
-          monthMap.set(key, {
-            ...segment,
-            startDate: new Date(segment.startDate),
-            endDate: new Date(segment.endDate),
-            monthKey: key,
-            monthStart,
-            monthLength,
-            monthlyIncome: segment.monthlyIncome,
-            daysPerWeekValues: [segment.daysPerWeekValue],
-            benefitLevels: initialBenefitLevels,
-            benefitDaysByLevel: initialBenefitDaysByLevel,
-            parents: [parentLabel]
-          });
-          return;
-        }
-
-        existing.startDate =
-          existing.startDate.getTime() <= segment.startDate.getTime()
-            ? existing.startDate
-            : new Date(segment.startDate);
-        existing.endDate =
-          existing.endDate.getTime() >= segment.endDate.getTime()
-            ? existing.endDate
-            : new Date(segment.endDate);
-        existing.calendarDays += segment.calendarDays;
-        existing.benefitDays += segment.benefitDays;
-        existing.monthlyIncome += segment.monthlyIncome;
-        existing.monthLength = monthLength;
-        existing.leaveParentIncome += segment.leaveParentIncome;
-        existing.otherParentIncome += segment.otherParentIncome;
-        existing.benefitIncome += segment.benefitIncome;
-        existing.parentalSalaryIncome += segment.parentalSalaryIncome;
-
-        if (!existing.daysPerWeekValues.includes(segment.daysPerWeekValue)) {
-          existing.daysPerWeekValues.push(segment.daysPerWeekValue);
-        }
-        if (segment.otherParentMonthlyBase > existing.otherParentMonthlyBase) {
-          existing.otherParentMonthlyBase = segment.otherParentMonthlyBase;
-        }
-
-        const ensureLevel = (level: 'parental-salary' | 'high' | 'low' | 'none') => {
-          if (!existing.benefitLevels.includes(level)) {
-            existing.benefitLevels.push(level);
-          }
-        };
-
-        if (segment.benefitDays > 0) {
-          existing.benefitLevels = existing.benefitLevels.filter(level => level !== 'none');
-          ensureLevel(period.benefitLevel);
-          if (!existing.benefitDaysByLevel[period.benefitLevel]) {
-            existing.benefitDaysByLevel[period.benefitLevel] = 0;
-          }
-          existing.benefitDaysByLevel[period.benefitLevel] += segment.benefitDays;
-
-          if (segment.parentalSalaryIncome > 0) {
-            ensureLevel('parental-salary');
-            if (!existing.benefitDaysByLevel['parental-salary']) {
-              existing.benefitDaysByLevel['parental-salary'] = 0;
-            }
-            existing.benefitDaysByLevel['parental-salary'] += segment.benefitDays;
-          }
-        }
-
-        if (!existing.parents.includes(parentLabel)) {
-          existing.parents.push(parentLabel);
-        }
-      });
-    });
-
-    return Array.from(monthMap.values()).sort((a, b) => a.monthStart.getTime() - b.monthStart.getTime());
-  };
-
   const filteredPeriods = strategy.periods;
-  const monthlyBreakdown = createMonthlyBreakdownEntries(strategy.periods);
+  const monthlyBreakdown = buildMonthlyBreakdownEntries(strategy.periods);
   const {
     lowestFullMonthIncome,
     hasEligibleFullMonths,
@@ -447,26 +171,32 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
                       {isExpanded && (
                         <div className="mt-4 pt-4 border-t space-y-2">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                               <div className="text-sm text-muted-foreground">Föräldrapenning</div>
                               <div className="font-semibold">{formatCurrency(month.benefitIncome)}</div>
                             </div>
-                          <div>
-                            <div
-                              className="text-sm text-muted-foreground"
-                              title="Visar nettolönen för föräldern som jobbar. För hela månader: full nettolön. För brutna månader: proportionell del."
-                            >
-                              Arbetande förälder (lön)
-                            </div>
-                            <div className="font-semibold">{formatCurrency(month.otherParentIncome)}</div>
-                            {!isFullMonth && month.otherParentIncome > 0 && (
-                              <div className="mt-1 text-xs font-semibold text-amber-500">
-                                Bruten månadslön
+                            {month.parentalSalaryIncome > 0 && (
+                              <div>
+                                <div className="text-sm text-muted-foreground">Föräldralön</div>
+                                <div className="font-semibold">{formatCurrency(month.parentalSalaryIncome)}</div>
                               </div>
                             )}
+                            <div>
+                              <div
+                                className="text-sm text-muted-foreground"
+                                title="Visar nettolönen för föräldern som jobbar. För hela månader: full nettolön. För brutna månader: proportionell del."
+                              >
+                                Arbetande förälder (lön)
+                              </div>
+                              <div className="font-semibold">{formatCurrency(month.otherParentIncome)}</div>
+                              {!isFullMonth && month.otherParentIncome > 0 && (
+                                <div className="mt-1 text-xs font-semibold text-amber-500">
+                                  Bruten månadslön
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
 
                         <div className="mt-3">
                           <div className="text-sm text-muted-foreground mb-1">Typ av dagar:</div>
