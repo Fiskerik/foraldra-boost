@@ -161,6 +161,12 @@ interface TopUpOptions {
 }
 
 const APPROX_CALENDAR_DAYS_PER_MONTH = 30;
+const DAYS_PER_YEAR = 365;
+const MONTHS_PER_YEAR = 12;
+const AVERAGE_DAYS_PER_MONTH = DAYS_PER_YEAR / MONTHS_PER_YEAR;
+const COLLECTIVE_AGREEMENT_MAX_MONTHS = 6;
+const COLLECTIVE_MAX_CALENDAR_DAYS = Math.round(COLLECTIVE_AGREEMENT_MAX_MONTHS * AVERAGE_DAYS_PER_MONTH);
+const COLLECTIVE_GAP_ALLOWANCE_DAYS = 1;
 
 interface MonthMetrics {
   totalIncome: number;
@@ -180,7 +186,7 @@ function computeMonthMetrics(
   const parentDayTotals: Record<'parent1' | 'parent2', number> = { parent1: 0, parent2: 0 };
   const parentMaxDaysPerWeek: Record<'parent1' | 'parent2', number> = { parent1: 0, parent2: 0 };
   let totalIncome = 0;
-  let coveredDays = 0;
+  const coveredDaySet = new Set<number>();
   let hasInitialTenDay = false;
   let hasNonInitialOwnerLeave = false;
   const overlappingPeriods: LeavePeriod[] = [];
@@ -201,7 +207,13 @@ function computeMonthMetrics(
       continue;
     }
 
-    coveredDays += overlapDays;
+    for (let offset = 0; offset < overlapDays; offset++) {
+      const dayIndex = differenceInCalendarDays(addDays(overlapStart, offset), monthStart);
+      if (dayIndex >= 0) {
+        coveredDaySet.add(dayIndex);
+      }
+    }
+
     totalIncome += (period.dailyIncome || 0) * overlapDays;
 
     if (period.parent === 'parent1' || period.parent === 'parent2') {
@@ -231,7 +243,7 @@ function computeMonthMetrics(
     totalIncome,
     parentDayTotals,
     parentMaxDaysPerWeek,
-    coveredDays,
+    coveredDays: coveredDaySet.size,
     hasInitialTenDay,
     hasNonInitialOwnerLeave,
     overlappingPeriods,
@@ -313,6 +325,11 @@ function detectMinimumIncomeWarnings(
       if (monthIncome + 1 < context.minHouseholdIncome) {
         const monthLabel = format(monthStart, 'MMMM yyyy', { locale: sv });
         const dominantParent: 'parent1' | 'parent2' = parent1Days >= parent2Days ? 'parent1' : 'parent2';
+        const dominantMaxDaysPerWeek = metrics.parentMaxDaysPerWeek[dominantParent];
+        if (dominantMaxDaysPerWeek < 5) {
+          cursor = startOfDay(addMonths(monthStart, 1));
+          continue;
+        }
 
         deficitMonths.push({
           monthStart: monthStart,
@@ -631,6 +648,90 @@ function calculateRemainingBenefitDays(
       parent2: Math.max(0, context.parent2HighTotalDays - usedHigh.parent2),
     },
   };
+}
+
+function applyCollectiveAgreementBonuses(
+  periods: LeavePeriod[],
+  context: ConversionContext
+): void {
+  const parentKeys: Array<'parent1' | 'parent2'> = ['parent1', 'parent2'];
+
+  parentKeys.forEach(parentKey => {
+    const parentInfo = parentKey === 'parent1' ? context.parent1 : context.parent2;
+    if (!parentInfo.hasCollectiveAgreement) {
+      return;
+    }
+
+    const relevantPeriods = periods
+      .filter(period => period.parent === parentKey)
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+    let remainingBonusDays = 0;
+    let lastEnd: Date | null = null;
+
+    relevantPeriods.forEach(period => {
+      if (period.benefitLevel === 'none') {
+        remainingBonusDays = 0;
+        lastEnd = new Date(period.endDate);
+        return;
+      }
+
+      const periodStart = startOfDay(new Date(period.startDate));
+      const periodEnd = startOfDay(new Date(period.endDate));
+      const effectiveCalendarDays = Math.max(
+        1,
+        period.calendarDays ?? differenceInCalendarDays(periodEnd, periodStart) + 1
+      );
+
+      if (
+        !lastEnd ||
+        periodStart.getTime() > addDays(lastEnd, COLLECTIVE_GAP_ALLOWANCE_DAYS).getTime()
+      ) {
+        remainingBonusDays = COLLECTIVE_MAX_CALENDAR_DAYS;
+      }
+
+      lastEnd = new Date(periodEnd);
+
+      if (remainingBonusDays <= 0) {
+        return;
+      }
+
+      const eligibleDays = Math.min(remainingBonusDays, effectiveCalendarDays);
+      if (eligibleDays <= 0) {
+        return;
+      }
+
+      const bonusPerBenefitDay = computeCollectiveAgreementBonusPerBenefitDay(
+        parentInfo,
+        period.dailyBenefit
+      );
+
+      if (bonusPerBenefitDay <= 0) {
+        remainingBonusDays -= eligibleDays;
+        return;
+      }
+
+      const benefitDaysUsed = Math.max(0, period.benefitDaysUsed ?? period.daysCount ?? 0);
+      if (benefitDaysUsed <= 0) {
+        remainingBonusDays -= eligibleDays;
+        return;
+      }
+
+      const eligibleFraction = eligibleDays / effectiveCalendarDays;
+      const eligibleBenefitDays = benefitDaysUsed * eligibleFraction;
+      const bonusPerCalendarDay = (bonusPerBenefitDay * eligibleBenefitDays) / effectiveCalendarDays;
+
+      if (Number.isFinite(bonusPerCalendarDay) && bonusPerCalendarDay > 0) {
+        period.dailyIncome += bonusPerCalendarDay;
+        if (period.monthlyIncome !== undefined) {
+          const bonusMonthly = bonusPerCalendarDay * effectiveCalendarDays;
+          period.monthlyIncome = (period.monthlyIncome ?? 0) + bonusMonthly;
+        }
+      }
+
+      remainingBonusDays -= eligibleDays;
+    });
+  });
 }
 
 function createTopUpPeriods({
@@ -1443,18 +1544,18 @@ export function calculateDailyParentalBenefit(monthlyIncome: number): number {
   return Math.min(MAX_PARENTAL_BENEFIT_PER_DAY, Math.max(MINIMUM_RATE, daily));
 }
 
-function calculateParentalSalaryMonthly(monthlyIncome: number): number {
-  if (!isFiniteNumber(monthlyIncome) || monthlyIncome <= 0) {
+function computeCollectiveAgreementBonusPerBenefitDay(parent: ParentData, baseDailyBenefit: number): number {
+  if (!parent.hasCollectiveAgreement || baseDailyBenefit <= 0) {
     return 0;
   }
 
-  if (monthlyIncome <= PARENTAL_SALARY_THRESHOLD) {
-    return monthlyIncome * 0.1;
-  }
+  const baseBonus = baseDailyBenefit * 0.1;
+  const excessMonthly = Math.max(0, parent.income - PARENTAL_BENEFIT_CEILING);
+  const monthlyExtraAboveGross = excessMonthly * 0.9;
+  const monthlyExtraAboveNet = calculateNetIncome(monthlyExtraAboveGross, parent.taxRate);
+  const extraAbovePerBenefitDay = monthlyExtraAboveNet * (MONTHS_PER_YEAR / DAYS_PER_YEAR);
 
-  const basePart = PARENTAL_SALARY_THRESHOLD * 0.1;
-  const excessPart = (monthlyIncome - PARENTAL_SALARY_THRESHOLD) * 0.9;
-  return basePart + excessPart;
+  return Math.max(0, baseBonus + extraAbovePerBenefitDay);
 }
 
 export function calculateAvailableIncome(parent: ParentData): CalculationResult {
@@ -1462,10 +1563,9 @@ export function calculateAvailableIncome(parent: ParentData): CalculationResult 
   const parentalBenefitGrossPerDay = calculateDailyParentalBenefit(parent.income);
   const parentalBenefitNetPerDay = calculateNetIncome(parentalBenefitGrossPerDay * 30, parent.taxRate) / 30;
 
-  // Föräldralön disabled - only using Föräldrapenning
-  const parentalSalaryPerDay = 0;
+  const parentalSalaryPerDay = computeCollectiveAgreementBonusPerBenefitDay(parent, parentalBenefitNetPerDay);
 
-  const availableIncome = parentalBenefitNetPerDay * 30;
+  const availableIncome = (parentalBenefitNetPerDay + parentalSalaryPerDay) * 30;
 
   return {
     netIncome,
@@ -1806,7 +1906,7 @@ function addSegment(
   const normalizedDaysPerWeek = Math.max(1, Math.round(dagarPerVecka));
   const benefitDaysPerMonth = normalizedDaysPerWeek * WEEKS_PER_MONTH;
   const roundedBenefitDaysPerMonth = Math.max(1, Math.round(benefitDaysPerMonth));
-  const resolvedMonthlyExtra = Math.max(0, Number.isFinite(monthlyExtraIncome) ? (monthlyExtraIncome as number) : leaveMonthlyIncome - benefitMonthly);
+  const resolvedMonthlyExtra = 0;
   const baseBenefitPerDay = benefitLevel === 'none'
     ? 0
     : Number.isFinite(baseDailyBenefit)
@@ -3263,6 +3363,8 @@ function convertLegacyResult(
       });
     }
   }
+
+  applyCollectiveAgreementBonuses(mergedPeriods, context);
 
   enforceMonthlyMinimumIncome(
     mergedPeriods,

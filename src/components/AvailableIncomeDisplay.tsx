@@ -6,6 +6,8 @@ interface AvailableIncomeDisplayProps {
   parent2NetIncome: number;
   parent1AvailableIncome: number;
   parent2AvailableIncome: number;
+  parent1ParentalSalaryPerDay: number;
+  parent2ParentalSalaryPerDay: number;
 }
 
 export function AvailableIncomeDisplay({
@@ -13,11 +15,16 @@ export function AvailableIncomeDisplay({
   parent2NetIncome,
   parent1AvailableIncome,
   parent2AvailableIncome,
+  parent1ParentalSalaryPerDay,
+  parent2ParentalSalaryPerDay,
 }: AvailableIncomeDisplayProps) {
-  // Check if parents have collective agreement (föräldralön) based on if available income > benefit income
-  const parent1HasParentalSalary = parent1AvailableIncome > (parent1NetIncome * 0.8);
-  const parent2HasParentalSalary = parent2AvailableIncome > (parent2NetIncome * 0.8);
-  
+  const DAYS_PER_MONTH = 30;
+  const parent1ParentalSalaryMonthly = Math.max(0, parent1ParentalSalaryPerDay * DAYS_PER_MONTH);
+  const parent2ParentalSalaryMonthly = Math.max(0, parent2ParentalSalaryPerDay * DAYS_PER_MONTH);
+
+  const parent1HasParentalSalary = parent1ParentalSalaryPerDay > 0.01;
+  const parent2HasParentalSalary = parent2ParentalSalaryPerDay > 0.01;
+
   return (
     <Card className="shadow-card bg-gradient-hero text-primary-foreground">
       <CardHeader className="p-2 md:p-6">
@@ -39,8 +46,14 @@ export function AvailableIncomeDisplay({
                 </span>
               </div>
               {parent1HasParentalSalary && (
+                <div className="flex justify-between items-center gap-1 text-[7px] md:text-xs opacity-80">
+                  <span>Föräldralön (est.):</span>
+                  <span className="font-semibold">{formatCurrency(parent1ParentalSalaryMonthly)}</span>
+                </div>
+              )}
+              {parent1HasParentalSalary && (
                 <div className="text-[7px] md:text-xs opacity-70 italic mt-0.5 md:mt-1">
-                  * Est. föräldralön inkl.
+                  * Föräldralön ingår första 6 mån sammanhängande ledighet
                 </div>
               )}
             </div>
@@ -60,8 +73,14 @@ export function AvailableIncomeDisplay({
                 </span>
               </div>
               {parent2HasParentalSalary && (
+                <div className="flex justify-between items-center gap-1 text-[7px] md:text-xs opacity-80">
+                  <span>Föräldralön (est.):</span>
+                  <span className="font-semibold">{formatCurrency(parent2ParentalSalaryMonthly)}</span>
+                </div>
+              )}
+              {parent2HasParentalSalary && (
                 <div className="text-[7px] md:text-xs opacity-70 italic mt-0.5 md:mt-1">
-                  * Est. föräldralön inkl.
+                  * Föräldralön ingår första 6 mån sammanhängande ledighet
                 </div>
               )}
             </div>

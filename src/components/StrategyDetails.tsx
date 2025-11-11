@@ -28,6 +28,7 @@ interface MonthlyBreakdown {
   leaveParentIncome: number;
   otherParentIncome: number;
   benefitIncome: number;
+  parentalSalaryIncome: number;
   daysPerWeekValue: number;
   otherParentMonthlyBase: number;
 }
@@ -72,6 +73,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
         leaveParentIncome: 0,
         otherParentIncome: 0,
         benefitIncome: 0,
+        parentalSalaryIncome: 0,
         daysPerWeekValue: normalizedDaysPerWeek,
         otherParentMonthlyBase: period.parent === 'both' ? 0 : period.otherParentMonthlyIncome || 0,
       });
@@ -174,13 +176,16 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
       }
       benefitIncome = Math.max(0, Math.round(benefitIncome));
 
-      // 3. Calculate total monthly income
-      const monthlyIncome = otherParentIncome + benefitIncome;
+      // 3. Calculate total monthly income (including föräldralön bonus)
+      const totalIncome = Math.max(0, Math.round((period.dailyIncome || 0) * segment.calendarDays));
+      const parentalSalaryIncome = Math.max(0, totalIncome - otherParentIncome - benefitIncome);
+      const monthlyIncome = otherParentIncome + benefitIncome + parentalSalaryIncome;
 
       // 4. Set segment data
       segment.benefitIncome = benefitIncome;
       segment.otherParentIncome = otherParentIncome;
-      segment.leaveParentIncome = benefitIncome; // Leave parent only gets benefit
+      segment.parentalSalaryIncome = parentalSalaryIncome;
+      segment.leaveParentIncome = benefitIncome + parentalSalaryIncome;
       segment.monthlyIncome = monthlyIncome;
       segment.daysPerWeekValue = normalizedDaysPerWeek;
       segment.otherParentMonthlyBase = period.otherParentMonthlyIncome || 0;
@@ -206,6 +211,20 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
         const parentLabel = period.parent === 'parent1' ? 'Parent 1' : period.parent === 'parent2' ? 'Parent 2' : 'Båda';
 
         if (!existing) {
+          const initialBenefitLevels: Array<'parental-salary' | 'high' | 'low' | 'none'> = [];
+          const initialBenefitDaysByLevel: Record<string, number> = {};
+
+          if (segment.benefitDays > 0) {
+            initialBenefitLevels.push(period.benefitLevel);
+            initialBenefitDaysByLevel[period.benefitLevel] = segment.benefitDays;
+            if (segment.parentalSalaryIncome > 0) {
+              initialBenefitLevels.push('parental-salary');
+              initialBenefitDaysByLevel['parental-salary'] = segment.benefitDays;
+            }
+          } else {
+            initialBenefitLevels.push('none');
+          }
+
           monthMap.set(key, {
             ...segment,
             startDate: new Date(segment.startDate),
@@ -215,10 +234,8 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             monthLength,
             monthlyIncome: segment.monthlyIncome,
             daysPerWeekValues: [segment.daysPerWeekValue],
-            benefitLevels: [segment.daysPerWeekValue > 0 ? period.benefitLevel : 'none'],
-            benefitDaysByLevel: {
-              [period.benefitLevel]: segment.benefitDays
-            },
+            benefitLevels: initialBenefitLevels,
+            benefitDaysByLevel: initialBenefitDaysByLevel,
             parents: [parentLabel]
           });
           return;
@@ -239,22 +256,38 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
         existing.leaveParentIncome += segment.leaveParentIncome;
         existing.otherParentIncome += segment.otherParentIncome;
         existing.benefitIncome += segment.benefitIncome;
-        
+        existing.parentalSalaryIncome += segment.parentalSalaryIncome;
+
         if (!existing.daysPerWeekValues.includes(segment.daysPerWeekValue)) {
           existing.daysPerWeekValues.push(segment.daysPerWeekValue);
         }
         if (segment.otherParentMonthlyBase > existing.otherParentMonthlyBase) {
           existing.otherParentMonthlyBase = segment.otherParentMonthlyBase;
         }
-        
-        if (!existing.benefitLevels.includes(period.benefitLevel)) {
-          existing.benefitLevels.push(period.benefitLevel);
+
+        const ensureLevel = (level: 'parental-salary' | 'high' | 'low' | 'none') => {
+          if (!existing.benefitLevels.includes(level)) {
+            existing.benefitLevels.push(level);
+          }
+        };
+
+        if (segment.benefitDays > 0) {
+          existing.benefitLevels = existing.benefitLevels.filter(level => level !== 'none');
+          ensureLevel(period.benefitLevel);
+          if (!existing.benefitDaysByLevel[period.benefitLevel]) {
+            existing.benefitDaysByLevel[period.benefitLevel] = 0;
+          }
+          existing.benefitDaysByLevel[period.benefitLevel] += segment.benefitDays;
+
+          if (segment.parentalSalaryIncome > 0) {
+            ensureLevel('parental-salary');
+            if (!existing.benefitDaysByLevel['parental-salary']) {
+              existing.benefitDaysByLevel['parental-salary'] = 0;
+            }
+            existing.benefitDaysByLevel['parental-salary'] += segment.benefitDays;
+          }
         }
-        if (!existing.benefitDaysByLevel[period.benefitLevel]) {
-          existing.benefitDaysByLevel[period.benefitLevel] = 0;
-        }
-        existing.benefitDaysByLevel[period.benefitLevel] += segment.benefitDays;
-        
+
         if (!existing.parents.includes(parentLabel)) {
           existing.parents.push(parentLabel);
         }
@@ -387,14 +420,14 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                           </div>
                           <div className="flex flex-wrap gap-1 mt-2">
                             {month.parents.map((parent, idx) => (
-                              <Badge 
+                              <Badge
                                 key={idx}
                                 className={
-                                  parent === 'Parent 1' 
-                                    ? 'bg-parent1/20 text-parent1 border-parent1/30' 
+                                  parent === 'Parent 1'
+                                    ? 'bg-parent1/20 text-parent1 border-parent1/30'
                                     : parent === 'Parent 2'
                                     ? 'bg-parent2/20 text-parent2 border-parent2/30'
-                                    : 'bg-both/20 text-purple-700 border-purple-300'
+                                    : 'bg-both/20 text-both border-both/30'
                                 }
                                 variant="outline"
                               >
