@@ -3255,7 +3255,42 @@ function convertLegacyResult(
         return false;
       }
 
+      const isSaveDaysStrategy = meta.key === 'save-days';
+      const canLowOptionCoverDeficit = (option: BenefitOption): boolean => {
+        if (!isSaveDaysStrategy || option.level !== 'low') {
+          return false;
+        }
+
+        const maxUsable = Math.min(option.available, remainingCapacityDays);
+        if (maxUsable <= 0 || option.daily <= 0) {
+          return false;
+        }
+
+        const potentialIncome = maxUsable * option.daily;
+        return potentialIncome >= deficitForOwner;
+      };
+
       options.sort((a, b) => {
+        const aLowPriority = canLowOptionCoverDeficit(a);
+        const bLowPriority = canLowOptionCoverDeficit(b);
+
+        if (aLowPriority && !bLowPriority) {
+          return -1;
+        }
+
+        if (!aLowPriority && bLowPriority) {
+          return 1;
+        }
+
+        if (isSaveDaysStrategy && a.level !== b.level) {
+          if (a.level === 'low' && b.level === 'high') {
+            return -1;
+          }
+          if (a.level === 'high' && b.level === 'low') {
+            return 1;
+          }
+        }
+
         if (b.daily !== a.daily) {
           return b.daily - a.daily;
         }
