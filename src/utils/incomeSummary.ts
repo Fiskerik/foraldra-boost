@@ -55,6 +55,8 @@ interface MonthlySegment {
   daysPerWeekValue: number;
   otherParentMonthlyBase: number;
   parent: "parent1" | "parent2" | "both";
+  highBenefitDays: number;
+  lowBenefitDays: number;
 }
 
 interface AggregatedMonthInfo {
@@ -89,8 +91,30 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     return [];
   }
 
-  const rawBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
-  const totalBenefitDays = rawBenefitDays;
+  const fallbackBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
+  let highBenefitDays = Math.max(
+    0,
+    Math.round(
+      period.highBenefitDaysUsed ?? (period.benefitLevel === "high" ? fallbackBenefitDays : 0)
+    )
+  );
+  let lowBenefitDays = Math.max(
+    0,
+    Math.round(
+      period.lowBenefitDaysUsed ?? (period.benefitLevel === "low" ? fallbackBenefitDays : 0)
+    )
+  );
+  let totalBenefitDays = highBenefitDays + lowBenefitDays;
+  if (totalBenefitDays <= 0 && fallbackBenefitDays > 0) {
+    totalBenefitDays = fallbackBenefitDays;
+    if (period.benefitLevel === "high") {
+      highBenefitDays = fallbackBenefitDays;
+      lowBenefitDays = 0;
+    } else if (period.benefitLevel === "low") {
+      lowBenefitDays = fallbackBenefitDays;
+      highBenefitDays = 0;
+    }
+  }
 
   const segments: MonthlySegment[] = [];
   let cursor = new Date(periodStart);
@@ -117,6 +141,8 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       daysPerWeekValue: normalizedDaysPerWeek,
       otherParentMonthlyBase: period.parent === "both" ? 0 : period.otherParentMonthlyIncome || 0,
       parent: period.parent,
+      highBenefitDays: 0,
+      lowBenefitDays: 0,
     });
 
     cursor = startOfDay(addDays(segmentEnd, 1));
@@ -168,6 +194,73 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
         target.benefitDays += 1;
         remaining -= 1;
         index += 1;
+      }
+    }
+  }
+
+  if (totalBenefitDays > 0) {
+    const totalAllocated = segments.reduce((sum, segment) => sum + segment.benefitDays, 0) || 1;
+    let remainingHigh = highBenefitDays;
+    let remainingLow = lowBenefitDays;
+
+    segments.forEach((segment, index) => {
+      if (segment.benefitDays <= 0) {
+        segment.highBenefitDays = 0;
+        segment.lowBenefitDays = 0;
+        return;
+      }
+
+      const proportion = segment.benefitDays / totalAllocated;
+      let highAlloc = Math.min(
+        remainingHigh,
+        Math.round(highBenefitDays * proportion),
+        segment.benefitDays
+      );
+      if (index === segments.length - 1) {
+        highAlloc = Math.min(segment.benefitDays, remainingHigh);
+      }
+      segment.highBenefitDays = highAlloc;
+      remainingHigh -= highAlloc;
+    });
+
+    if (remainingHigh > 0) {
+      for (const segment of segments) {
+        if (remainingHigh <= 0) break;
+        const capacity = segment.benefitDays - segment.highBenefitDays;
+        if (capacity <= 0) continue;
+        const add = Math.min(capacity, remainingHigh);
+        segment.highBenefitDays += add;
+        remainingHigh -= add;
+      }
+    }
+
+    segments.forEach((segment, index) => {
+      const capacity = Math.max(0, segment.benefitDays - segment.highBenefitDays);
+      if (capacity <= 0 || remainingLow <= 0) {
+        segment.lowBenefitDays = 0;
+        return;
+      }
+      const proportion = segment.benefitDays / totalAllocated;
+      let lowAlloc = Math.min(
+        remainingLow,
+        Math.round(lowBenefitDays * proportion),
+        capacity
+      );
+      if (index === segments.length - 1) {
+        lowAlloc = Math.min(capacity, remainingLow);
+      }
+      segment.lowBenefitDays = lowAlloc;
+      remainingLow -= lowAlloc;
+    });
+
+    if (remainingLow > 0) {
+      for (const segment of segments) {
+        if (remainingLow <= 0) break;
+        const capacity = Math.max(0, segment.benefitDays - segment.highBenefitDays - segment.lowBenefitDays);
+        if (capacity <= 0) continue;
+        const add = Math.min(capacity, remainingLow);
+        segment.lowBenefitDays += add;
+        remainingLow -= add;
       }
     }
   }
@@ -300,8 +393,18 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
         const initialBenefitDaysByLevel: Record<string, number> = {};
 
         if (segment.benefitDays > 0) {
-          initialBenefitLevels.push(period.benefitLevel);
-          initialBenefitDaysByLevel[period.benefitLevel] = segment.benefitDays;
+          if (segment.highBenefitDays > 0) {
+            initialBenefitLevels.push("high");
+            initialBenefitDaysByLevel["high"] = segment.highBenefitDays;
+          }
+          if (segment.lowBenefitDays > 0) {
+            initialBenefitLevels.push("low");
+            initialBenefitDaysByLevel["low"] = segment.lowBenefitDays;
+          }
+          if (segment.highBenefitDays <= 0 && segment.lowBenefitDays <= 0) {
+            initialBenefitLevels.push(period.benefitLevel);
+            initialBenefitDaysByLevel[period.benefitLevel] = segment.benefitDays;
+          }
           if (segment.parentalSalaryIncome > 0 && segment.caEligibleBenefitDays > 0) {
             initialBenefitLevels.push("parental-salary");
             initialBenefitDaysByLevel["parental-salary"] = Math.max(0, Math.round(segment.caEligibleBenefitDays));
@@ -376,11 +479,28 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
 
       if (segment.benefitDays > 0) {
         existing.benefitLevels = existing.benefitLevels.filter(level => level !== "none");
-        ensureLevel(period.benefitLevel);
-        if (!existing.benefitDaysByLevel[period.benefitLevel]) {
-          existing.benefitDaysByLevel[period.benefitLevel] = 0;
+
+        const addLevelDays = (level: "high" | "low", amount: number) => {
+          if (amount <= 0) {
+            return;
+          }
+          ensureLevel(level);
+          if (!existing.benefitDaysByLevel[level]) {
+            existing.benefitDaysByLevel[level] = 0;
+          }
+          existing.benefitDaysByLevel[level] += amount;
+        };
+
+        if (segment.highBenefitDays > 0) {
+          addLevelDays("high", segment.highBenefitDays);
         }
-        existing.benefitDaysByLevel[period.benefitLevel] += segment.benefitDays;
+        if (segment.lowBenefitDays > 0) {
+          addLevelDays("low", segment.lowBenefitDays);
+        }
+
+        if (segment.highBenefitDays <= 0 && segment.lowBenefitDays <= 0) {
+          addLevelDays(period.benefitLevel === "high" ? "high" : "low", segment.benefitDays);
+        }
 
         if (segment.parentalSalaryIncome > 0 && segment.caEligibleBenefitDays > 0) {
           ensureLevel("parental-salary");
