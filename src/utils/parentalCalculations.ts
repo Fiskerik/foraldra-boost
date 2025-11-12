@@ -41,6 +41,8 @@ export interface OptimizationResult {
   parent1LowDaysSaved?: number;
   parent2HighDaysSaved?: number;
   parent2LowDaysSaved?: number;
+  parent1TotalIncome?: number;
+  parent2TotalIncome?: number;
   warnings?: string[];
 }
 
@@ -3766,6 +3768,12 @@ function convertLegacyResult(
     parent1LowDaysSaved: Math.max(0, context.parent1LowTotalDays - Math.round(usage.parent1Low)),
     parent2HighDaysSaved: Math.max(0, context.parent2HighTotalDays - Math.round(usage.parent2High)),
     parent2LowDaysSaved: Math.max(0, context.parent2LowTotalDays - Math.round(usage.parent2Low)),
+    parent1TotalIncome: mergedPeriods
+      .filter(p => p.parent === 'parent1')
+      .reduce((sum, p) => sum + (p.monthlyIncome || 0) - (p.otherParentMonthlyIncome || 0), 0),
+    parent2TotalIncome: mergedPeriods
+      .filter(p => p.parent === 'parent2')
+      .reduce((sum, p) => sum + (p.monthlyIncome || 0) - (p.otherParentMonthlyIncome || 0), 0),
   };
 }
 
@@ -4145,6 +4153,12 @@ function buildSimpleSaveDaysResult(
     parent1LowDaysSaved: context.parent1LowTotalDays,
     parent2HighDaysSaved: Math.max(0, context.parent2HighTotalDays - usedHighDays.parent2),
     parent2LowDaysSaved: context.parent2LowTotalDays,
+    parent1TotalIncome: periods
+      .filter(p => p.parent === 'parent1')
+      .reduce((sum, p) => sum + (p.monthlyIncome || 0) - (p.otherParentMonthlyIncome || 0), 0),
+    parent2TotalIncome: periods
+      .filter(p => p.parent === 'parent2')
+      .reduce((sum, p) => sum + (p.monthlyIncome || 0) - (p.otherParentMonthlyIncome || 0), 0),
   };
 
   if (warnings.length > 0) {

@@ -430,6 +430,8 @@ export default function PlanEditor() {
             simultaneousMonths={simultaneousMonths}
             onSimultaneousLeaveChange={setSimultaneousLeave}
             onSimultaneousMonthsChange={setSimultaneousMonths}
+            parent1Data={parent1Data}
+            parent2Data={parent2Data}
           />
 
           <Button 

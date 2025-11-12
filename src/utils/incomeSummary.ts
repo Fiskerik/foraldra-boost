@@ -198,8 +198,9 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     const calendarFraction = segment.calendarDays > 0 ? caCalendar / segment.calendarDays : 0;
     const rawBenefit = segment.benefitDays * calendarFraction;
     const assignedBenefit = Math.min(rawBenefit, remainingCABenefitDays);
-    segment.caEligibleBenefitDays = assignedBenefit;
-    remainingCABenefitDays -= assignedBenefit;
+    // CRITICAL: Cap CA eligible benefit days at actual benefit days used
+    segment.caEligibleBenefitDays = Math.min(segment.benefitDays, assignedBenefit);
+    remainingCABenefitDays -= segment.caEligibleBenefitDays;
   });
 
   if (remainingCABenefitDays > 1e-6) {

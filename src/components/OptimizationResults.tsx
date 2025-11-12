@@ -488,6 +488,18 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               <div className="text-xs md:text-xl font-bold leading-none md:leading-tight">
                 {formatCurrency(result.totalIncome)}
               </div>
+              {result.parent1TotalIncome !== undefined && result.parent2TotalIncome !== undefined && (
+                <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-1">
+                  <div>
+                    <div className="font-semibold">Förälder 1:</div>
+                    <div>{formatCurrency(result.parent1TotalIncome)}</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">Förälder 2:</div>
+                    <div>{formatCurrency(result.parent2TotalIncome)}</div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-1.5 md:p-4 bg-muted rounded-lg flex flex-col gap-1">
               <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 min-h-[18px] md:min-h-[24px]">

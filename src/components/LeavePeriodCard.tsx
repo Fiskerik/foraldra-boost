@@ -5,8 +5,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, Users, DollarSign } from "lucide-react";
-import { TOTAL_BENEFIT_DAYS } from "@/utils/parentalCalculations";
+import { Button } from "@/components/ui/button";
+import { Calendar, Users, DollarSign, LineChart } from "lucide-react";
+import { TOTAL_BENEFIT_DAYS, ParentData } from "@/utils/parentalCalculations";
+import { IncomeDistributionGraph } from "./IncomeDistributionGraph";
 
 interface LeavePeriodCardProps {
   totalMonths: number;
@@ -22,6 +24,8 @@ interface LeavePeriodCardProps {
   simultaneousMonths: number;
   onSimultaneousLeaveChange: (value: boolean) => void;
   onSimultaneousMonthsChange: (months: number) => void;
+  parent1Data?: ParentData;
+  parent2Data?: ParentData;
 }
 
 export function LeavePeriodCard({
@@ -38,10 +42,13 @@ export function LeavePeriodCard({
   simultaneousMonths,
   onSimultaneousLeaveChange,
   onSimultaneousMonthsChange,
+  parent1Data,
+  parent2Data,
 }: LeavePeriodCardProps) {
   const [monthsInputValue, setMonthsInputValue] = useState(() =>
     Number.isInteger(totalMonths) ? totalMonths.toString() : totalMonths.toFixed(1)
   );
+  const [showGraph, setShowGraph] = useState(false);
 
   useEffect(() => {
     const formatted = Number.isInteger(totalMonths)
@@ -148,22 +155,48 @@ export function LeavePeriodCard({
                     <span className="z-10">Förälder 2</span>
                   </div>
                 </div>
-                <Slider
-                  min={0}
-                  max={totalMonths}
-                  step={0.5}
-                  value={[parent1Months]}
-                  onValueChange={(values) => onDistributionChange(values[0])}
-                  className="[&_[role=slider]]:bg-primary [&_[role=slider]]:border-primary"
-                />
+                <div className="flex items-center gap-2 md:gap-4">
+                  <div className="flex-1">
+                    <Slider
+                      min={0}
+                      max={totalMonths}
+                      step={1}
+                      value={[parent1Months]}
+                      onValueChange={(values) => onDistributionChange(values[0])}
+                      className="[&_[role=slider]]:bg-primary [&_[role=slider]]:border-primary"
+                    />
+                  </div>
+                  {parent1Data && parent2Data && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowGraph(!showGraph)}
+                      className="h-8 w-8 md:h-10 md:w-10 shrink-0"
+                    >
+                      <LineChart className="h-3 w-3 md:h-4 md:w-4" />
+                    </Button>
+                  )}
+                </div>
                 <div className="flex justify-between text-[10px] md:text-sm font-medium">
                   <span className="text-parent1">
-                    {parent1Months.toFixed(1)} månader
+                    {Math.round(parent1Months)} månader
                   </span>
                   <span className="text-parent2">
-                    {parent2Months.toFixed(1)} månader
+                    {Math.round(parent2Months)} månader
                   </span>
                 </div>
+                {showGraph && parent1Data && parent2Data && (
+                  <IncomeDistributionGraph
+                    totalMonths={totalMonths}
+                    currentParent1Months={parent1Months}
+                    minHouseholdIncome={minHouseholdIncome}
+                    parent1Data={parent1Data}
+                    parent2Data={parent2Data}
+                    simultaneousLeave={simultaneousLeave}
+                    simultaneousMonths={simultaneousMonths}
+                    onDistributionClick={(months) => onDistributionChange(months)}
+                  />
+                )}
               </div>
             </div>
 

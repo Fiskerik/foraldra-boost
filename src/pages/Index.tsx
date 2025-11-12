@@ -461,6 +461,8 @@ const Index = () => {
           simultaneousMonths={simultaneousMonths}
           onSimultaneousLeaveChange={handleSimultaneousLeaveChange}
           onSimultaneousMonthsChange={handleSimultaneousMonthsChange}
+          parent1Data={parent1Data}
+          parent2Data={parent2Data}
         />
 
         <div className="flex justify-center pt-2 md:pt-6">
