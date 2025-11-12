@@ -209,7 +209,7 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     }
   }
 
-  const bonusPerCalendarDay = totalCACalendarDays > 0 ? totalCABonus / totalCACalendarDays : 0;
+  const bonusPerBenefitDay = totalCABenefitDays > 0 ? totalCABonus / totalCABenefitDays : 0;
 
   segments.forEach(segment => {
     const benefitDaily = period.dailyBenefit;
@@ -254,8 +254,8 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     benefitIncome = Math.max(0, Math.round(benefitIncome));
 
     let parentalSalaryIncome = 0;
-    if (bonusPerCalendarDay > 0 && segment.caEligibleCalendarDays > 0 && segment.caEligibleBenefitDays > 0) {
-      parentalSalaryIncome = segment.caEligibleCalendarDays * bonusPerCalendarDay;
+    if (bonusPerBenefitDay > 0 && segment.caEligibleBenefitDays > 0) {
+      parentalSalaryIncome = segment.caEligibleBenefitDays * bonusPerBenefitDay;
     }
 
     const leaveParentIncome = benefitIncome + parentalSalaryIncome;

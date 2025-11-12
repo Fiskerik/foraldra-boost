@@ -49,7 +49,6 @@ const Index = () => {
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
   const [hasChosenStrategy, setHasChosenStrategy] = useState(false);
   const [showSliders, setShowSliders] = useState(false);
-  const [userHasManuallySetIncome, setUserHasManuallySetIncome] = useState(false);
   const [hasUnappliedIncomeChange, setHasUnappliedIncomeChange] = useState(false);
   const [isFirstOptimization, setIsFirstOptimization] = useState(true);
   const [planName, setPlanName] = useState("");
@@ -144,8 +143,7 @@ const Index = () => {
 
   const handleHouseholdIncomeChange = (value: number) => {
     setHouseholdIncome(value);
-    setUserHasManuallySetIncome(true);
-    
+
     // Mark that there's an unapplied change
     if (optimizationResults) {
       setHasUnappliedIncomeChange(true);
@@ -171,7 +169,6 @@ const Index = () => {
     const adjustedParent1Months = Math.min(parent1Months, adjustedTotalMonths);
 
     setDaysPerWeek(clampedDays);
-    setUserHasManuallySetIncome(false); // Reset flag when planning parameters change
     setHasUnappliedIncomeChange(false); // Clear unapplied changes when recalculating
 
     if (totalMonths !== adjustedTotalMonths) {
@@ -210,7 +207,6 @@ const Index = () => {
     const adjustedSimultaneousMonths = Math.min(simultaneousMonths, Math.floor(constrainedValue / 2));
 
     setTotalMonths(constrainedValue);
-    setUserHasManuallySetIncome(false); // Reset flag when planning parameters change
     setHasUnappliedIncomeChange(false); // Clear unapplied changes when recalculating
     // Adjust parent months to stay within bounds
     if (parent1Months > constrainedValue) {
@@ -356,32 +352,6 @@ const Index = () => {
     selectedStrategyIndex,
     user,
   ]);
-
-  useEffect(() => {
-    // Only auto-adjust when switching strategies, not on initial optimization
-    if (userHasManuallySetIncome || !optimizationResults) {
-      return;
-    }
-
-    if (!selectedIncomeSummary?.hasEligibleFullMonths) {
-      return;
-    }
-
-    const minimumIncome = selectedIncomeSummary.lowestFullMonthIncome;
-
-    if (minimumIncome === null || !Number.isFinite(minimumIncome)) {
-      return;
-    }
-
-    const roundedMinimum = Math.round(minimumIncome);
-
-    setHouseholdIncome(prevIncome => {
-      if (prevIncome >= roundedMinimum) {
-        return prevIncome;
-      }
-      return roundedMinimum;
-    });
-  }, [selectedStrategyIndex, selectedIncomeSummary?.hasEligibleFullMonths, userHasManuallySetIncome]);
 
   const { signOut } = useAuth();
 
