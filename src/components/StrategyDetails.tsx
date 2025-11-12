@@ -204,7 +204,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
               {strategy.parent1TotalIncome !== undefined && strategy.parent2TotalIncome !== undefined && (
                 <div className="mt-2 space-y-1 text-[10px] md:text-xs text-muted-foreground">
                   <div>
-                    <div className="font-semibold">F1: {formatCurrency(strategy.parent1TotalIncome)}</div>
+                    <div className="font-semibold">Förälder 1: {formatCurrency(strategy.parent1TotalIncome)}</div>
                     <div className="ml-2 text-[9px] md:text-[11px] space-y-0.5">
                       <div>FP: {formatCurrency(incomeBreakdown.parent1.parentalBenefit)}</div>
                       {incomeBreakdown.parent1.parentalSalary > 0 && (
@@ -216,7 +216,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                     </div>
                   </div>
                   <div>
-                    <div className="font-semibold">F2: {formatCurrency(strategy.parent2TotalIncome)}</div>
+                    <div className="font-semibold">Förälder 2: {formatCurrency(strategy.parent2TotalIncome)}</div>
                     <div className="ml-2 text-[9px] md:text-[11px] space-y-0.5">
                       <div>FP: {formatCurrency(incomeBreakdown.parent2.parentalBenefit)}</div>
                       {incomeBreakdown.parent2.parentalSalary > 0 && (

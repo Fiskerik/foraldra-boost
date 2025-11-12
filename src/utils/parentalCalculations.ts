@@ -172,6 +172,7 @@ interface TopUpOptions {
   parent1CutoffDate?: Date | null;
   parentCalendarUsage: Record<'parent1' | 'parent2', number>;
   parentCalendarCaps: Record<'parent1' | 'parent2', number>;
+  prioritizeLowBenefit?: boolean;
 }
 
 const APPROX_CALENDAR_DAYS_PER_MONTH = 30;
@@ -917,6 +918,7 @@ function createTopUpPeriods({
   parent1CutoffDate,
   parentCalendarUsage,
   parentCalendarCaps,
+  prioritizeLowBenefit = false,
 }: TopUpOptions): LeavePeriod[] {
   const normalizedStart = startOfDay(start);
   const normalizedEnd = startOfDay(end);
@@ -1024,7 +1026,7 @@ function createTopUpPeriods({
       ? Math.max(0, Math.floor(remainingCalendarCapForParent))
       : Number.POSITIVE_INFINITY;
 
-    const order: Array<'high' | 'low'> = ['high', 'low'];
+    const order: Array<'high' | 'low'> = prioritizeLowBenefit ? ['low', 'high'] : ['high', 'low'];
 
     for (const benefitType of order) {
       if (deficit <= 0 || remainingCapacity <= 0 || availableCalendarCap <= 0) {
@@ -1085,7 +1087,8 @@ function ensureMinimumIncomePerMonth(
   remainingLowDays: RemainingBenefitDays,
   remainingHighDays: RemainingBenefitDays,
   timelineLimit: Date | null,
-  parent1CutoffDate: Date | null
+  parent1CutoffDate: Date | null,
+  preferLowBenefit: boolean
 ): void {
   if (!context.minHouseholdIncome || context.minHouseholdIncome <= 0) {
     return;
@@ -1496,7 +1499,7 @@ function ensureMinimumIncomePerMonth(
         return;
       }
 
-      if (effectiveBenefitLevel === 'low') {
+      if (effectiveBenefitLevel === 'low' && !preferLowBenefit) {
         const potentialIncome = maximumPossibleDays * effectiveBenefitDaily;
         if (potentialIncome < remainingDeficit) {
           return;
@@ -1567,7 +1570,7 @@ function ensureMinimumIncomePerMonth(
     };
 
     // Iteratively top up within this month until threshold is met or capacity/days are exhausted
-    const order: Array<'high' | 'low'> = ['high', 'low'];
+    const order: Array<'high' | 'low'> = preferLowBenefit ? ['low', 'high'] : ['high', 'low'];
 
     let safetyCounter = 0;
     while (
@@ -2938,7 +2941,8 @@ function convertLegacyResult(
     remainingLowDays,
     remainingHighDays,
     timelineLimit ?? null,
-    parent1CutoffDate
+    parent1CutoffDate,
+    meta.key === 'save-days'
   );
 
   // Escalation loop: increase days/week for the lowest-income month until threshold is met
@@ -3076,7 +3080,8 @@ function convertLegacyResult(
       remainingLowDays,
       remainingHighDays,
       timelineLimit ?? null,
-      parent1CutoffDate
+      parent1CutoffDate,
+      meta.key === 'save-days'
     );
 
     // Check for progress
@@ -3610,6 +3615,7 @@ function convertLegacyResult(
             parent1CutoffDate,
             parentCalendarUsage: currentCalendarUsage,
             parentCalendarCaps,
+            prioritizeLowBenefit: meta.key === 'save-days',
           });
 
           for (const topUpPeriod of fillerTopUps) {
