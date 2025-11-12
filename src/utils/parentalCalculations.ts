@@ -2146,7 +2146,9 @@ function addSegment(
   const normalizedDaysPerWeek = Math.max(1, Math.round(dagarPerVecka));
   const benefitDaysPerMonth = normalizedDaysPerWeek * WEEKS_PER_MONTH;
   const roundedBenefitDaysPerMonth = Math.max(1, Math.round(benefitDaysPerMonth));
-  const resolvedMonthlyExtra = 0;
+  const resolvedMonthlyExtra = Number.isFinite(monthlyExtraIncome)
+    ? Math.max(0, Number(monthlyExtraIncome))
+    : 0;
   const baseBenefitPerDay = benefitLevel === 'none'
     ? 0
     : Number.isFinite(baseDailyBenefit)
@@ -2158,8 +2160,9 @@ function addSegment(
     ? 0
     : resolvedMonthlyExtra / roundedBenefitDaysPerMonth;
   const totalBenefitIncome = baseBenefitPerDay * benefitDaysUsed;
-  const totalExtraIncome = extraBenefitPerDay * benefitDaysUsed;
+  const totalExtraIncome = benefitLevel === 'none' ? 0 : extraBenefitPerDay * benefitDaysUsed;
   const totalLeaveIncome = benefitLevel === 'none' ? 0 : totalBenefitIncome + totalExtraIncome;
+  const hasCollectiveAgreementBonus = totalExtraIncome > 0;
   const totalPeriodIncome = totalLeaveIncome + otherParentIncomeForPeriod;
   const dailyIncome = totalPeriodIncome / Math.max(1, effectiveCalendarDays);
   const dailyBenefit = benefitLevel === 'none' ? 0 : baseBenefitPerDay;
@@ -2177,6 +2180,10 @@ function addSegment(
     daysPerWeek: Math.round(dagarPerVecka),
     otherParentDailyIncome: parent === 'both' ? 0 : otherDailyIncome,
     otherParentMonthlyIncome: parent === 'both' ? 0 : otherParentMonthlyIncome,
+    monthlyIncome: totalPeriodIncome,
+    collectiveAgreementEligibleCalendarDays: hasCollectiveAgreementBonus ? calendarDaysUsed : 0,
+    collectiveAgreementEligibleBenefitDays: hasCollectiveAgreementBonus ? benefitDaysUsed : 0,
+    collectiveAgreementTotalBonus: hasCollectiveAgreementBonus ? totalExtraIncome : 0,
   });
 
   // Track qualifying high days usage
@@ -4079,6 +4086,12 @@ function buildSimpleSaveDaysResult(
       otherParentDailyIncome: resolveOtherDaily(workingParent, calendarDays),
       otherParentMonthlyIncome: workingNetMonthly,
       monthlyIncome: monthlyTotalIncome,
+      collectiveAgreementEligibleCalendarDays:
+        monthlyParentalSalaryIncome > 0 ? eligibleCalendarDaysForCA : 0,
+      collectiveAgreementEligibleBenefitDays:
+        monthlyParentalSalaryIncome > 0 ? caBenefitDays : 0,
+      collectiveAgreementTotalBonus:
+        monthlyParentalSalaryIncome > 0 ? monthlyParentalSalaryIncome : 0,
     });
 
     totalIncome += monthlyTotalIncome;

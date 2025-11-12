@@ -481,20 +481,30 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
           
           {/* Summary - Always Visible */}
           <div className="grid grid-cols-2 gap-1.5 md:gap-4 mt-2 md:mt-4">
-            <div className="p-1.5 md:p-4 bg-muted rounded-lg">
-              <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5">Total inkomst</div>
-              <div className="text-xs md:text-xl font-bold">{formatCurrency(result.totalIncome)}</div>
+            <div className="p-1.5 md:p-4 bg-muted rounded-lg flex flex-col gap-1">
+              <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 min-h-[18px] md:min-h-[24px]">
+                Total inkomst
+              </div>
+              <div className="text-xs md:text-xl font-bold leading-none md:leading-tight">
+                {formatCurrency(result.totalIncome)}
+              </div>
             </div>
-            <div className="p-1.5 md:p-4 bg-muted rounded-lg">
-              <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5">Genomsnitt/mån</div>
-              <div className="text-xs md:text-xl font-bold">{formatCurrency(result.averageMonthlyIncome)}</div>
+            <div className="p-1.5 md:p-4 bg-muted rounded-lg flex flex-col gap-1">
+              <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 min-h-[18px] md:min-h-[24px]">
+                Genomsnitt/mån
+              </div>
+              <div className="text-xs md:text-xl font-bold leading-none md:leading-tight">
+                {formatCurrency(result.averageMonthlyIncome)}
+              </div>
             </div>
-            <div className="p-1.5 md:p-4 bg-accent/10 rounded-lg border border-accent/20">
-              <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 flex items-center gap-0.5 md:gap-1">
+            <div className="p-1.5 md:p-4 bg-accent/10 rounded-lg border border-accent/20 flex flex-col gap-1">
+              <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 flex items-center gap-0.5 md:gap-1 min-h-[18px] md:min-h-[24px]">
                 <Clock className="h-2 w-2 md:h-3 md:w-3" />
                 Dagar använda
               </div>
-              <div className="text-xs md:text-xl font-bold">{result.daysUsed}</div>
+              <div className="text-xs md:text-xl font-bold leading-none md:leading-tight">
+                {result.daysUsed}
+              </div>
               {result.parent1HighDaysUsed !== undefined && (
                 <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-1">
                   <div>
@@ -508,12 +518,14 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                 </div>
               )}
             </div>
-            <div className="p-1.5 md:p-4 bg-accent/10 rounded-lg border border-accent/20">
-              <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 flex items-center gap-0.5 md:gap-1">
+            <div className="p-1.5 md:p-4 bg-accent/10 rounded-lg border border-accent/20 flex flex-col gap-1">
+              <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 flex items-center gap-0.5 md:gap-1 min-h-[18px] md:min-h-[24px]">
                 <PiggyBank className="h-2 w-2 md:h-3 md:w-3" />
                 Dagar sparade
               </div>
-              <div className="text-xs md:text-xl font-bold text-accent">{result.daysSaved}</div>
+              <div className="text-xs md:text-xl font-bold text-accent leading-none md:leading-tight">
+                {result.daysSaved}
+              </div>
               {result.parent1HighDaysSaved !== undefined && (
                 <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-1">
                   <div>
