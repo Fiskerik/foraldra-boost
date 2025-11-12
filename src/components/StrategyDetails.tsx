@@ -313,9 +313,10 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
               {monthlyBreakdown.map((month) => {
                 const isExpanded = expandedMonths[month.monthKey] ?? false;
                 const isFullMonth = month.calendarDays >= month.monthLength;
+                const lowLevelDays = Math.round(month.benefitDaysByLevel["low"] ?? 0);
 
                 return (
-                  <Card 
+                  <Card
                     key={month.monthKey}
                     className="cursor-pointer hover:shadow-md transition-shadow"
                     onClick={() => setExpandedMonths(prev => ({ ...prev, [month.monthKey]: !prev[month.monthKey] }))}
@@ -348,6 +349,12 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                               </Badge>
                             ))}
                           </div>
+                          {lowLevelDays > 0 && (
+                            <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              <span className="inline-block h-2 w-2 rounded-sm bg-amber-500" />
+                              Lägstanivå: {lowLevelDays} dagar
+                            </div>
+                          )}
                         </div>
                         <div className="text-left sm:text-right w-full sm:w-auto">
                           <div className="font-bold text-base md:text-lg">{formatCurrency(month.monthlyIncome)}</div>
