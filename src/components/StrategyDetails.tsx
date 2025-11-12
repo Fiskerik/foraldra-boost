@@ -101,82 +101,6 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
     }
   };
 
-  const incomeBreakdown = useMemo(() => {
-    const totals = {
-      parent1: { benefit: 0, salary: 0, wage: 0 },
-      parent2: { benefit: 0, salary: 0, wage: 0 },
-    };
-
-    strategy.periods.forEach(period => {
-      const calendarDays = Math.max(0, period.calendarDays ?? 0);
-      const benefitDays = Math.max(0, period.benefitDaysUsed ?? period.daysCount ?? 0);
-      const dailyBenefit = Math.max(0, period.dailyBenefit ?? 0);
-      const benefitIncome = dailyBenefit * benefitDays;
-      const parentalSalaryIncome = Math.max(0, period.collectiveAgreementTotalBonus ?? 0);
-      const otherDailyIncome = Math.max(0, period.otherParentDailyIncome ?? 0);
-      const otherIncome = otherDailyIncome * calendarDays;
-
-      if (period.parent === "parent1") {
-        totals.parent1.benefit += benefitIncome;
-        totals.parent1.salary += parentalSalaryIncome;
-        totals.parent2.wage += otherIncome;
-      } else if (period.parent === "parent2") {
-        totals.parent2.benefit += benefitIncome;
-        totals.parent2.salary += parentalSalaryIncome;
-        totals.parent1.wage += otherIncome;
-      } else if (period.parent === "both") {
-        const splitBenefit = benefitIncome / 2;
-        const splitSalary = parentalSalaryIncome / 2;
-        totals.parent1.benefit += splitBenefit;
-        totals.parent2.benefit += splitBenefit;
-        totals.parent1.salary += splitSalary;
-        totals.parent2.salary += splitSalary;
-      }
-    });
-
-    const normalize = (value: number) => Math.max(0, Math.round(value));
-
-    return {
-      parent1: {
-        parentalBenefit: normalize(totals.parent1.benefit),
-        parentalSalary: normalize(totals.parent1.salary),
-        wage: normalize(totals.parent1.wage),
-      },
-      parent2: {
-        parentalBenefit: normalize(totals.parent2.benefit),
-        parentalSalary: normalize(totals.parent2.salary),
-        wage: normalize(totals.parent2.wage),
-      },
-    };
-  }, [strategy.periods]);
-
-  const dayBreakdown = useMemo(() => {
-    if (
-      strategy.parent1HighDaysUsed === undefined ||
-      strategy.parent1LowDaysUsed === undefined ||
-      strategy.parent2HighDaysUsed === undefined ||
-      strategy.parent2LowDaysUsed === undefined
-    ) {
-      return null;
-    }
-
-    return {
-      parent1: {
-        high: Math.max(0, strategy.parent1HighDaysUsed),
-        low: Math.max(0, strategy.parent1LowDaysUsed),
-      },
-      parent2: {
-        high: Math.max(0, strategy.parent2HighDaysUsed),
-        low: Math.max(0, strategy.parent2LowDaysUsed),
-      },
-    };
-  }, [
-    strategy.parent1HighDaysUsed,
-    strategy.parent1LowDaysUsed,
-    strategy.parent2HighDaysUsed,
-    strategy.parent2LowDaysUsed,
-  ]);
-
   return (
     <div className="space-y-6">
       <Card className={`${strategy.strategy === 'save-days' ? 'border-parent1/30 bg-parent1/5' : 'border-parent2/30 bg-parent2/5'}`}>
@@ -201,66 +125,14 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Total inkomst</div>
               <div className="text-xs md:text-xl font-bold break-words">{formatCurrency(strategy.totalIncome)}</div>
-              {strategy.parent1TotalIncome !== undefined && strategy.parent2TotalIncome !== undefined && (
-                <div className="mt-2 space-y-1 text-[10px] md:text-xs text-muted-foreground">
-                  <div>
-                    <div className="font-semibold">Förälder 1: {formatCurrency(strategy.parent1TotalIncome)}</div>
-                    <div className="ml-2 text-[9px] md:text-[11px] space-y-0.5">
-                      <div>FP: {formatCurrency(incomeBreakdown.parent1.parentalBenefit)}</div>
-                      {incomeBreakdown.parent1.parentalSalary > 0 && (
-                        <div>FL: {formatCurrency(incomeBreakdown.parent1.parentalSalary)}</div>
-                      )}
-                      {incomeBreakdown.parent1.wage > 0 && (
-                        <div>Lön: {formatCurrency(incomeBreakdown.parent1.wage)}</div>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-semibold">Förälder 2: {formatCurrency(strategy.parent2TotalIncome)}</div>
-                    <div className="ml-2 text-[9px] md:text-[11px] space-y-0.5">
-                      <div>FP: {formatCurrency(incomeBreakdown.parent2.parentalBenefit)}</div>
-                      {incomeBreakdown.parent2.parentalSalary > 0 && (
-                        <div>FL: {formatCurrency(incomeBreakdown.parent2.parentalSalary)}</div>
-                      )}
-                      {incomeBreakdown.parent2.wage > 0 && (
-                        <div>Lön: {formatCurrency(incomeBreakdown.parent2.wage)}</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar använda</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysUsed}</div>
-              {dayBreakdown && (
-                <div className="mt-2 space-y-1 text-[10px] md:text-xs text-muted-foreground">
-                  <div>
-                    <div className="font-semibold">Förälder 1:</div>
-                    <div className="text-[9px] md:text-[11px]">{dayBreakdown.parent1.high} vanliga, {dayBreakdown.parent1.low} lägsta</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold">Förälder 2:</div>
-                    <div className="text-[9px] md:text-[11px]">{dayBreakdown.parent2.high} vanliga, {dayBreakdown.parent2.low} lägsta</div>
-                  </div>
-                </div>
-              )}
             </div>
-            <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col justify-between min-h-[80px] md:min-h-[100px]">
+            <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar sparade</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysSaved}</div>
-              {strategy.parent1HighDaysSaved !== undefined && (
-                <div className="mt-2 space-y-1 text-[10px] md:text-xs text-muted-foreground">
-                  <div>
-                    <div className="font-semibold">Förälder 1:</div>
-                    <div className="text-[9px] md:text-[11px]">{strategy.parent1HighDaysSaved} vanliga, {strategy.parent1LowDaysSaved} lägsta</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold">Förälder 2:</div>
-                    <div className="text-[9px] md:text-[11px]">{strategy.parent2HighDaysSaved} vanliga, {strategy.parent2LowDaysSaved} lägsta</div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </CardHeader>

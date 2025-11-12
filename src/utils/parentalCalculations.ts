@@ -1786,17 +1786,21 @@ function deriveParentDayAllocation(parent1Months: number, parent2Months: number)
 
   const baseReserved = Math.min(RESERVED_HIGH_BENEFIT_DAYS_PER_PARENT, Math.floor(HIGH_BENEFIT_DAYS / 2));
   const transferable = Math.max(0, HIGH_BENEFIT_DAYS - baseReserved * 2);
+  const evenLowSplit = Math.floor(LOW_BENEFIT_DAYS / 2);
+  const defaultLowAllocation = {
+    parent1: evenLowSplit,
+    parent2: Math.max(0, LOW_BENEFIT_DAYS - evenLowSplit),
+  };
 
   if (totalPreferredMonths <= 0) {
     const halfTransferable = Math.round(transferable / 2);
     const halfIncome = baseReserved + halfTransferable;
-    const halfLow = Math.round(LOW_BENEFIT_DAYS / 2);
 
     return {
       parent1IncomeDays: halfIncome,
       parent2IncomeDays: HIGH_BENEFIT_DAYS - halfIncome,
-      parent1LowDays: halfLow,
-      parent2LowDays: LOW_BENEFIT_DAYS - halfLow,
+      parent1LowDays: defaultLowAllocation.parent1,
+      parent2LowDays: defaultLowAllocation.parent2,
     };
   }
 
@@ -1804,13 +1808,24 @@ function deriveParentDayAllocation(parent1Months: number, parent2Months: number)
   const parent1Transferable = Math.round(transferable * parent1Share);
   const parent1IncomeDays = Math.max(baseReserved, Math.min(baseReserved + transferable, baseReserved + parent1Transferable));
   const parent2IncomeDays = Math.max(baseReserved, HIGH_BENEFIT_DAYS - parent1IncomeDays);
-  const parent1LowDays = Math.max(0, Math.round(LOW_BENEFIT_DAYS * parent1Share));
+
+  let parent1LowDays = defaultLowAllocation.parent1;
+  let parent2LowDays = defaultLowAllocation.parent2;
+
+  const lowRemainder = LOW_BENEFIT_DAYS - (parent1LowDays + parent2LowDays);
+  if (lowRemainder !== 0) {
+    if (parent1Share >= 0.5) {
+      parent1LowDays += lowRemainder;
+    } else {
+      parent2LowDays += lowRemainder;
+    }
+  }
 
   return {
     parent1IncomeDays,
     parent2IncomeDays,
     parent1LowDays,
-    parent2LowDays: Math.max(0, LOW_BENEFIT_DAYS - parent1LowDays),
+    parent2LowDays,
   };
 }
 
@@ -4174,13 +4189,17 @@ function buildSimpleSaveDaysResult(
     let effectiveDailyIncome = leaveDailyIncome;
     let eligibleCalendarDaysForCA = 0;
     let bonusPerBenefitDay = 0;
+    let caEligibleFraction = 0;
 
     const activeParentInfo = activeParent === 'parent1' ? context.parent1 : context.parent2;
     if (activeParentInfo.hasCollectiveAgreement && caRemainingCalendarDays[activeParent] > 0 && leaveDailyIncome > 0) {
       eligibleCalendarDaysForCA = Math.min(caRemainingCalendarDays[activeParent], calendarDays);
       bonusPerBenefitDay = computeCollectiveAgreementBonusPerBenefitDay(activeParentInfo, leaveDailyIncome);
-      // FIXED: Add full bonus per benefit day (not fractional)
-      effectiveDailyIncome = leaveDailyIncome + bonusPerBenefitDay;
+      // Räkna endast med den del av Föräldralönen som faktiskt kan betalas ut denna månad
+      caEligibleFraction = calendarDays > 0
+        ? Math.min(1, eligibleCalendarDaysForCA / calendarDays)
+        : 0;
+      effectiveDailyIncome = leaveDailyIncome + bonusPerBenefitDay * caEligibleFraction;
     }
 
     const initialDeficit = Math.max(0, minIncomeThreshold - workingNetMonthly);
@@ -4209,7 +4228,7 @@ function buildSimpleSaveDaysResult(
           remainingDeficit = Math.max(0, remainingDeficit - ownHighDays * effectiveDailyIncome);
         }
 
-        let highCapacityLeft = MAX_BENEFIT_DAYS_PER_MONTH - totalHighDaysUsed;
+        const highCapacityLeft = MAX_BENEFIT_DAYS_PER_MONTH - totalHighDaysUsed;
         if (remainingDeficit > 0 && highCapacityLeft > 0) {
           const reservedBaseline = otherParent === 'parent1'
             ? Math.max(0, context.parent1ReservedHighDays)
@@ -4245,9 +4264,6 @@ function buildSimpleSaveDaysResult(
       usedHighDays[activeParent] += totalHighDaysUsed;
     }
 
-    const caEligibleFraction = calendarDays > 0 && eligibleCalendarDaysForCA > 0
-      ? Math.min(1, eligibleCalendarDaysForCA / calendarDays)
-      : 0;
     const caBenefitDays = totalHighDaysUsed > 0 && caEligibleFraction > 0
       ? totalHighDaysUsed * caEligibleFraction
       : 0;
@@ -4287,7 +4303,7 @@ function buildSimpleSaveDaysResult(
           remainingDeficit = Math.max(0, remainingDeficit - ownLowDays * lowDailyIncome);
         }
 
-        let lowCapacityLeft = lowCapacityBase - ownLowDays;
+        const lowCapacityLeft = lowCapacityBase - ownLowDays;
         if (remainingDeficit > 0 && lowCapacityLeft > 0) {
           const transferableLow = Math.max(0, remainingLowDays[otherParent]);
           if (transferableLow > 0) {
