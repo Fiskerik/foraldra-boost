@@ -463,6 +463,7 @@ const Index = () => {
           onSimultaneousMonthsChange={handleSimultaneousMonthsChange}
           parent1Data={parent1Data}
           parent2Data={parent2Data}
+          selectedStrategy={optimizationResults?.[selectedStrategyIndex]?.strategy || 'maximize-income'}
         />
 
         <div className="flex justify-center pt-2 md:pt-6">

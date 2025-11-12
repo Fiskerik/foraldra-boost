@@ -201,10 +201,50 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Total inkomst</div>
               <div className="text-xs md:text-xl font-bold break-words">{formatCurrency(strategy.totalIncome)}</div>
+              {strategy.parent1TotalIncome !== undefined && strategy.parent2TotalIncome !== undefined && (
+                <div className="mt-2 space-y-1 text-[10px] md:text-xs text-muted-foreground">
+                  <div>
+                    <div className="font-semibold">F1: {formatCurrency(strategy.parent1TotalIncome)}</div>
+                    <div className="ml-2 text-[9px] md:text-[11px] space-y-0.5">
+                      <div>FP: {formatCurrency(incomeBreakdown.parent1.parentalBenefit)}</div>
+                      {incomeBreakdown.parent1.parentalSalary > 0 && (
+                        <div>FL: {formatCurrency(incomeBreakdown.parent1.parentalSalary)}</div>
+                      )}
+                      {incomeBreakdown.parent1.wage > 0 && (
+                        <div>Lön: {formatCurrency(incomeBreakdown.parent1.wage)}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">F2: {formatCurrency(strategy.parent2TotalIncome)}</div>
+                    <div className="ml-2 text-[9px] md:text-[11px] space-y-0.5">
+                      <div>FP: {formatCurrency(incomeBreakdown.parent2.parentalBenefit)}</div>
+                      {incomeBreakdown.parent2.parentalSalary > 0 && (
+                        <div>FL: {formatCurrency(incomeBreakdown.parent2.parentalSalary)}</div>
+                      )}
+                      {incomeBreakdown.parent2.wage > 0 && (
+                        <div>Lön: {formatCurrency(incomeBreakdown.parent2.wage)}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar använda</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysUsed}</div>
+              {dayBreakdown && (
+                <div className="mt-2 space-y-1 text-[10px] md:text-xs text-muted-foreground">
+                  <div>
+                    <div className="font-semibold">Förälder 1:</div>
+                    <div className="text-[9px] md:text-[11px]">{dayBreakdown.parent1.high} vanliga, {dayBreakdown.parent1.low} lägsta</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">Förälder 2:</div>
+                    <div className="text-[9px] md:text-[11px]">{dayBreakdown.parent2.high} vanliga, {dayBreakdown.parent2.low} lägsta</div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col justify-between min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar sparade</div>
@@ -213,86 +253,15 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                 <div className="mt-2 space-y-1 text-[10px] md:text-xs text-muted-foreground">
                   <div>
                     <div className="font-semibold">Förälder 1:</div>
-                    <div>{strategy.parent1HighDaysSaved} vanliga, {strategy.parent1LowDaysSaved} lägstanivå</div>
+                    <div className="text-[9px] md:text-[11px]">{strategy.parent1HighDaysSaved} vanliga, {strategy.parent1LowDaysSaved} lägsta</div>
                   </div>
                   <div>
                     <div className="font-semibold">Förälder 2:</div>
-                    <div>{strategy.parent2HighDaysSaved} vanliga, {strategy.parent2LowDaysSaved} lägstanivå</div>
+                    <div className="text-[9px] md:text-[11px]">{strategy.parent2HighDaysSaved} vanliga, {strategy.parent2LowDaysSaved} lägsta</div>
                   </div>
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 mt-3 md:mt-6">
-            <div className="bg-background/80 rounded-lg p-2 md:p-4 border border-border/40">
-              <h4 className="text-[10px] md:text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Inkomster per förälder
-              </h4>
-              <div className="mt-2 space-y-2 text-[10px] md:text-sm">
-                <div>
-                  <div className="font-semibold text-xs md:text-base text-foreground mb-1">Förälder 1</div>
-                  <div className="flex justify-between">
-                    <span>Föräldrapenning</span>
-                    <span className="font-semibold">{formatCurrency(incomeBreakdown.parent1.parentalBenefit)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Föräldralön</span>
-                    <span className="font-semibold">{incomeBreakdown.parent1.parentalSalary > 0 ? formatCurrency(incomeBreakdown.parent1.parentalSalary) : '–'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Lön</span>
-                    <span className="font-semibold">{incomeBreakdown.parent1.wage > 0 ? formatCurrency(incomeBreakdown.parent1.wage) : '–'}</span>
-                  </div>
-                </div>
-                <div className="pt-2 border-t border-border/30">
-                  <div className="font-semibold text-xs md:text-base text-foreground mb-1">Förälder 2</div>
-                  <div className="flex justify-between">
-                    <span>Föräldrapenning</span>
-                    <span className="font-semibold">{formatCurrency(incomeBreakdown.parent2.parentalBenefit)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Föräldralön</span>
-                    <span className="font-semibold">{incomeBreakdown.parent2.parentalSalary > 0 ? formatCurrency(incomeBreakdown.parent2.parentalSalary) : '–'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Lön</span>
-                    <span className="font-semibold">{incomeBreakdown.parent2.wage > 0 ? formatCurrency(incomeBreakdown.parent2.wage) : '–'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {dayBreakdown && (
-              <div className="bg-background/80 rounded-lg p-2 md:p-4 border border-border/40">
-                <h4 className="text-[10px] md:text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Dagar använda
-                </h4>
-                <div className="mt-2 space-y-2 text-[10px] md:text-sm">
-                  <div>
-                    <div className="font-semibold text-xs md:text-base text-foreground mb-1">Förälder 1</div>
-                    <div className="flex justify-between">
-                      <span>Föräldradagar</span>
-                      <span className="font-semibold">{dayBreakdown.parent1.high}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Lägstanivådagar</span>
-                      <span className="font-semibold">{dayBreakdown.parent1.low}</span>
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t border-border/30">
-                    <div className="font-semibold text-xs md:text-base text-foreground mb-1">Förälder 2</div>
-                    <div className="flex justify-between">
-                      <span>Föräldradagar</span>
-                      <span className="font-semibold">{dayBreakdown.parent2.high}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Lägstanivådagar</span>
-                      <span className="font-semibold">{dayBreakdown.parent2.low}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </CardHeader>
 

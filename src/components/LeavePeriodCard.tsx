@@ -26,6 +26,7 @@ interface LeavePeriodCardProps {
   onSimultaneousMonthsChange: (months: number) => void;
   parent1Data?: ParentData;
   parent2Data?: ParentData;
+  selectedStrategy?: 'maximize-income' | 'save-days';
 }
 
 export function LeavePeriodCard({
@@ -44,6 +45,7 @@ export function LeavePeriodCard({
   onSimultaneousMonthsChange,
   parent1Data,
   parent2Data,
+  selectedStrategy = 'maximize-income',
 }: LeavePeriodCardProps) {
   const [monthsInputValue, setMonthsInputValue] = useState(() =>
     Number.isInteger(totalMonths) ? totalMonths.toString() : totalMonths.toFixed(1)
@@ -142,7 +144,7 @@ export function LeavePeriodCard({
                 <Users className="h-2.5 md:h-4 w-2.5 md:w-4" />
                 Hur vill ni dela upp ledigheten?
               </Label>
-              <div className="space-y-1.5 md:space-y-3">
+              <div className="space-y-1.5 md:space-y-3 -mx-2 md:-mx-6 px-2 md:px-6">
                 <div className="relative h-6 md:h-12 rounded-full overflow-hidden bg-parent2">
                   <div
                     className="absolute top-0 left-0 h-full bg-parent1 transition-all duration-300"
@@ -194,6 +196,7 @@ export function LeavePeriodCard({
                     parent2Data={parent2Data}
                     simultaneousLeave={simultaneousLeave}
                     simultaneousMonths={simultaneousMonths}
+                    selectedStrategy={selectedStrategy}
                     onDistributionClick={(months) => onDistributionChange(months)}
                   />
                 )}

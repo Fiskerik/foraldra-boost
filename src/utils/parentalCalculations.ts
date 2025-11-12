@@ -437,8 +437,8 @@ function enforceMonthlyMinimumIncome(
     }, null);
 
     const timelineEnd = limitDate && latestExistingEnd && latestExistingEnd.getTime() < limitDate.getTime()
-      ? new Date(latestExistingEnd)
-      : (limitDate ?? (latestExistingEnd ?? startOfDay(addMonths(timelineStart, 15))));
+      ? addMonths(new Date(limitDate), 1)
+      : (limitDate ?? (latestExistingEnd ? addMonths(latestExistingEnd, 1) : startOfDay(addMonths(timelineStart, 16))));
 
     let cursor = new Date(timelineStart);
     let worstDeficit = 0;
@@ -458,7 +458,7 @@ function enforceMonthlyMinimumIncome(
 
       const metrics = computeMonthMetrics(periods, monthStart, monthEnd);
       const monthLength = Math.max(1, differenceInCalendarDays(monthEndCandidate, monthStart) + 1);
-      const isFullMonth = metrics.coveredDays >= monthLength;
+      const isFullMonth = metrics.coveredDays >= Math.floor(monthLength * 0.85);
 
       if (isFullMonth && metrics.hasNonInitialOwnerLeave) {
         const deficit = context.minHouseholdIncome - metrics.totalIncome;

@@ -10,6 +10,7 @@ interface IncomeDistributionGraphProps {
   parent2Data: ParentData;
   simultaneousLeave: boolean;
   simultaneousMonths: number;
+  selectedStrategy: 'maximize-income' | 'save-days';
   onDistributionClick: (parent1Months: number) => void;
 }
 
@@ -21,6 +22,7 @@ export function IncomeDistributionGraph({
   parent2Data,
   simultaneousLeave,
   simultaneousMonths,
+  selectedStrategy,
   onDistributionClick,
 }: IncomeDistributionGraphProps) {
   const dataPoints = useMemo(() => {
@@ -36,33 +38,40 @@ export function IncomeDistributionGraph({
           parent1M,
           parent2M,
           minHouseholdIncome,
-          7, // Max days per week to maximize income
+          7, // Max days per week for theoretical best
           simultaneousMonths,
           false
         );
 
-        const maxIncomeStrategy = results.find(r => r.strategy === 'maximize-income');
-        if (maxIncomeStrategy) {
+        const targetStrategy = results.find(r => r.strategy === selectedStrategy);
+        if (targetStrategy) {
+          const yValue = selectedStrategy === 'maximize-income' 
+            ? targetStrategy.totalIncome 
+            : targetStrategy.daysSaved;
           points.push({
             x: parent1M,
-            y: maxIncomeStrategy.totalIncome,
+            y: yValue,
             isCurrent: parent1M === Math.round(currentParent1Months),
           });
         }
       } catch (error) {
-        console.error(`Failed to calculate income for ${parent1M} months:`, error);
+        console.error(`Failed to calculate for ${parent1M} months:`, error);
       }
     }
 
     return points;
-  }, [totalMonths, parent1Data, parent2Data, minHouseholdIncome, simultaneousLeave, simultaneousMonths, currentParent1Months]);
+  }, [totalMonths, parent1Data, parent2Data, minHouseholdIncome, simultaneousLeave, simultaneousMonths, currentParent1Months, selectedStrategy]);
 
-  const minTotalIncome = minHouseholdIncome * totalMonths;
-  const maxIncome = Math.max(...dataPoints.map(p => p.y), minTotalIncome);
-  const yAxisMax = Math.ceil(maxIncome / 50000) * 50000;
+  const maxValue = Math.max(...dataPoints.map(p => p.y), 0);
+  const yAxisMax = selectedStrategy === 'maximize-income'
+    ? Math.ceil(maxValue / 50000) * 50000
+    : Math.ceil(maxValue / 10) * 10;
 
-  const formatCurrency = (value: number) => {
-    return `${Math.round(value / 1000)}k`;
+  const formatYAxis = (value: number) => {
+    if (selectedStrategy === 'maximize-income') {
+      return `${Math.round(value / 1000)}k`;
+    }
+    return value.toString();
   };
 
   const CustomDot = (props: any) => {
@@ -84,6 +93,9 @@ export function IncomeDistributionGraph({
     }
   };
 
+  const yAxisLabel = selectedStrategy === 'maximize-income' ? 'Total inkomst' : 'Dagar sparade';
+  const tooltipLabel = selectedStrategy === 'maximize-income' ? 'Total inkomst' : 'Dagar sparade';
+
   return (
     <div className="w-full h-[200px] mt-4">
       <ResponsiveContainer width="100%" height="100%">
@@ -98,35 +110,30 @@ export function IncomeDistributionGraph({
             stroke="hsl(var(--foreground))"
           />
           <YAxis
-            tickFormatter={formatCurrency}
+            tickFormatter={formatYAxis}
             domain={[0, yAxisMax]}
-            label={{ value: 'Total inkomst', angle: -90, position: 'insideLeft', style: { fontSize: '12px' } }}
+            label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', style: { fontSize: '12px' } }}
             stroke="hsl(var(--foreground))"
           />
           <Tooltip
-            formatter={(value: number) => [
-              new Intl.NumberFormat('sv-SE', {
-                style: 'currency',
-                currency: 'SEK',
-                maximumFractionDigits: 0
-              }).format(value),
-              'Total inkomst'
-            ]}
+            formatter={(value: number) => {
+              if (selectedStrategy === 'maximize-income') {
+                return [
+                  new Intl.NumberFormat('sv-SE', {
+                    style: 'currency',
+                    currency: 'SEK',
+                    maximumFractionDigits: 0
+                  }).format(value),
+                  tooltipLabel
+                ];
+              }
+              return [value.toString(), tooltipLabel];
+            }}
             labelFormatter={(label) => `Förälder 1: ${label} mån`}
             contentStyle={{
               backgroundColor: 'hsl(var(--background))',
               border: '1px solid hsl(var(--border))',
               borderRadius: '6px',
-            }}
-          />
-          <ReferenceLine
-            y={minTotalIncome}
-            stroke="hsl(var(--destructive))"
-            strokeDasharray="5 5"
-            label={{
-              value: 'Minimum',
-              position: 'right',
-              style: { fontSize: '10px', fill: 'hsl(var(--destructive))' }
             }}
           />
           <Line

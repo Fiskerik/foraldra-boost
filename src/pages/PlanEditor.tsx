@@ -432,6 +432,7 @@ export default function PlanEditor() {
             onSimultaneousMonthsChange={setSimultaneousMonths}
             parent1Data={parent1Data}
             parent2Data={parent2Data}
+            selectedStrategy={optimizationResults?.[selectedStrategyIndex]?.strategy || 'maximize-income'}
           />
 
           <Button 
