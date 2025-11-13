@@ -359,47 +359,49 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <header className="bg-gradient-hero text-white py-4 md:py-12 px-2 md:px-4 shadow-soft">
         <div className="container mx-auto max-w-5xl">
-          <div className="flex justify-between items-center mb-2 md:mb-4">
-            <div className="flex items-center gap-1 md:gap-3">
-              <Baby className="h-6 md:h-12 w-6 md:w-12" />
-              <h1 className="text-xl md:text-5xl font-bold">
+          <div className="flex justify-between items-center gap-2 md:gap-4 mb-2 md:mb-4">
+            <div className="flex items-center gap-1 md:gap-3 flex-1 min-w-0">
+              <Baby className="h-6 md:h-12 w-6 md:w-12 flex-shrink-0" />
+              <h1 className="text-base md:text-5xl font-bold truncate">
                 Föräldrapenningskalkylator
               </h1>
             </div>
             
             {/* Navigation/Login */}
-            {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className="text-white border border-white/30 rounded-lg hover:bg-white/20 px-3"
-                  >
-                    <User className="h-6 w-6" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                    Mina planer
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={signOut}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Logga ut
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className="text-white border border-white/30 hover:bg-white/20"
-                onClick={() => navigate('/auth')}
-              >
-                <LogIn className="mr-1 md:mr-2 h-3 md:h-4 w-3 md:w-4" />
-                <span className="text-xs md:text-sm">Logga in</span>
-              </Button>
-            )}
+            <div className="flex-shrink-0 z-10">
+              {user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="text-white border border-white/30 rounded-lg hover:bg-white/20 px-3"
+                    >
+                      <User className="h-6 w-6" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                      Mina planer
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={signOut}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logga ut
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="text-white border border-white/30 hover:bg-white/20 whitespace-nowrap"
+                  onClick={() => navigate('/auth')}
+                >
+                  <LogIn className="h-4 w-4 md:mr-2" />
+                  <span className="hidden sm:inline text-sm">Logga in</span>
+                </Button>
+              )}
+            </div>
           </div>
           <p className="text-xs md:text-xl opacity-90 text-center">
             Optimera er föräldraledighet för bästa ekonomi

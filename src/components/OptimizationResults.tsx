@@ -488,18 +488,6 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               <div className="text-xs md:text-xl font-bold leading-none md:leading-tight">
                 {formatCurrency(result.totalIncome)}
               </div>
-              {result.parent1TotalIncome !== undefined && result.parent2TotalIncome !== undefined && (
-                <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-1">
-                  <div>
-                    <div className="font-semibold">Förälder 1:</div>
-                    <div>{formatCurrency(result.parent1TotalIncome)}</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold">Förälder 2:</div>
-                    <div>{formatCurrency(result.parent2TotalIncome)}</div>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="p-1.5 md:p-4 bg-muted rounded-lg flex flex-col gap-1">
               <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 min-h-[18px] md:min-h-[24px]">
@@ -517,18 +505,6 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               <div className="text-xs md:text-xl font-bold leading-none md:leading-tight">
                 {result.daysUsed}
               </div>
-              {result.parent1HighDaysUsed !== undefined && (
-                <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-1">
-                  <div>
-                    <div className="font-semibold">Förälder 1:</div>
-                    <div>{result.parent1HighDaysUsed} vanliga, {result.parent1LowDaysUsed} lägstanivå</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold">Förälder 2:</div>
-                    <div>{result.parent2HighDaysUsed} vanliga, {result.parent2LowDaysUsed} lägstanivå</div>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="p-1.5 md:p-4 bg-accent/10 rounded-lg border border-accent/20 flex flex-col gap-1">
               <div className="text-[9px] md:text-sm text-muted-foreground mb-0.5 flex items-center gap-0.5 md:gap-1 min-h-[18px] md:min-h-[24px]">
@@ -538,18 +514,6 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               <div className="text-xs md:text-xl font-bold text-accent leading-none md:leading-tight">
                 {result.daysSaved}
               </div>
-              {result.parent1HighDaysSaved !== undefined && (
-                <div className="text-[8px] md:text-xs text-muted-foreground mt-0.5 space-y-1">
-                  <div>
-                    <div className="font-semibold">Förälder 1:</div>
-                    <div>{result.parent1HighDaysSaved} vanliga, {result.parent1LowDaysSaved} lägstanivå</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold">Förälder 2:</div>
-                    <div>{result.parent2HighDaysSaved} vanliga, {result.parent2LowDaysSaved} lägstanivå</div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
