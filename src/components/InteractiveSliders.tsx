@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, LeavePeriod, calculateMaxLeaveMonths, TOTAL_BENEFIT_DAYS, quickOptimize, ParentData } from "@/utils/parentalCalculations";
 import { StrategyIncomeSummary, calculateStrategyIncomeSummary } from "@/utils/incomeSummary";
@@ -259,22 +260,42 @@ export function InteractiveSliders({
                 </div>
               )}
 
-              <div className="relative pt-1 pb-8">
-                <Slider
-                  value={[householdIncome]}
-                  onValueChange={(values) => onHouseholdIncomeChange(values[0])}
-                  min={0}
-                  max={maxHouseholdIncome}
-                  step={1000}
-                  className="py-2"
-                />
-                <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
-                {/* Current value indicator */}
-                <div
-                  className="absolute left-0 right-0 bottom-4 pointer-events-none"
-                  style={{ left: `${(householdIncome / maxHouseholdIncome) * 100}%`, transform: "translateX(-50%)" }}
-                >
-                  <div className="h-4 w-0.5 bg-primary" />
+              <div className="flex gap-2 md:gap-4 items-end">
+                <div className="flex-1 relative pt-1 pb-8">
+                  <Slider
+                    value={[householdIncome]}
+                    onValueChange={(values) => onHouseholdIncomeChange(values[0])}
+                    min={0}
+                    max={maxHouseholdIncome}
+                    step={1000}
+                    className="py-2"
+                  />
+                  <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
+                  {/* Current value indicator */}
+                  <div
+                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
+                    style={{ left: `${(householdIncome / maxHouseholdIncome) * 100}%`, transform: "translateX(-50%)" }}
+                  >
+                    <div className="h-4 w-0.5 bg-primary" />
+                  </div>
+                </div>
+                <div className="w-20 md:w-28 mb-8">
+                  <Input
+                    type="number"
+                    value={householdIncome}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      onHouseholdIncomeChange(Math.min(Math.max(val, 0), maxHouseholdIncome));
+                    }}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (isNaN(val)) onHouseholdIncomeChange(0);
+                    }}
+                    min={0}
+                    max={maxHouseholdIncome}
+                    step={1000}
+                    className="text-right text-xs md:text-sm h-8 md:h-10"
+                  />
                 </div>
               </div>
             </div>

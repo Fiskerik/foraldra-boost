@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/utils/parentalCalculations";
 
 interface ParentIncomeCardProps {
@@ -33,20 +34,40 @@ export function ParentIncomeCard({
           <Label htmlFor={`income-${parentNumber}`} className="text-[10px] md:text-base font-medium">
             Månadsinkomst
           </Label>
-          <div className="space-y-2">
-            <Slider
-              id={`income-${parentNumber}`}
-              min={0}
-              max={120000}
-              step={1000}
-              value={[income]}
-              onValueChange={(values) => onIncomeChange(values[0])}
-              className={`slider-single ${parentNumber === 1 ? "[&_[role=slider]]:bg-parent1 [&_[role=slider]]:border-parent1" : "[&_[role=slider]]:bg-parent2 [&_[role=slider]]:border-parent2"}`}
-            />
-            <div className="text-right">
-              <span className={`text-sm md:text-2xl font-bold ${parentNumber === 1 ? "text-parent1" : "text-parent2"}`}>
-                {formatCurrency(income)}
-              </span>
+          <div className="flex gap-2 md:gap-4 items-end">
+            <div className="flex-1 space-y-2">
+              <Slider
+                id={`income-${parentNumber}`}
+                min={0}
+                max={120000}
+                step={1000}
+                value={[income]}
+                onValueChange={(values) => onIncomeChange(values[0])}
+                className={`slider-single ${parentNumber === 1 ? "[&_[role=slider]]:bg-parent1 [&_[role=slider]]:border-parent1" : "[&_[role=slider]]:bg-parent2 [&_[role=slider]]:border-parent2"}`}
+              />
+              <div className="text-right">
+                <span className={`text-sm md:text-2xl font-bold ${parentNumber === 1 ? "text-parent1" : "text-parent2"}`}>
+                  {formatCurrency(income)}
+                </span>
+              </div>
+            </div>
+            <div className="w-20 md:w-28">
+              <Input
+                type="number"
+                value={income}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 0;
+                  onIncomeChange(Math.min(Math.max(val, 0), 120000));
+                }}
+                onBlur={(e) => {
+                  const val = parseInt(e.target.value);
+                  if (isNaN(val)) onIncomeChange(0);
+                }}
+                min={0}
+                max={120000}
+                step={1000}
+                className="text-right text-xs md:text-sm h-8 md:h-10"
+              />
             </div>
           </div>
         </div>
