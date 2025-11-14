@@ -158,7 +158,7 @@ export function TimelineChart({
     }
   };
   const labelStride = computeLabelStride();
-  return <div className="space-y-4">
+  return <div id="timeline-chart" className="space-y-4">
       <h3 className="sr-only" id="income-timeline-heading">Inkomsttidslinje</h3>
 
       <div className="flex w-full justify-end">

@@ -240,9 +240,22 @@ export function InteractiveSliders({
                   <TrendingUp className="h-3 w-3 text-primary" />
                   Min hushållsinkomst
                 </Label>
-                <span className="text-sm font-bold text-primary">
-                  {formatCurrency(householdIncome)}
-                </span>
+                <Input
+                  type="number"
+                  value={householdIncome}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    onHouseholdIncomeChange(Math.min(Math.max(val, 0), maxHouseholdIncome));
+                  }}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (isNaN(val)) onHouseholdIncomeChange(0);
+                  }}
+                  min={0}
+                  max={maxHouseholdIncome}
+                  step={1000}
+                  className="text-right text-sm font-bold text-primary border-0 bg-transparent p-0 h-auto w-28 focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
               </div>
               {hasUnappliedChanges && (
                 <div className="flex items-center gap-1 text-[10px] text-destructive font-medium animate-fade-in">
@@ -279,7 +292,7 @@ export function InteractiveSliders({
                     <div className="h-4 w-0.5 bg-primary" />
                   </div>
                 </div>
-                <div className="w-20 md:w-28 mb-8">
+                <div className="hidden md:block w-28 mb-8">
                   <Input
                     type="number"
                     value={householdIncome}

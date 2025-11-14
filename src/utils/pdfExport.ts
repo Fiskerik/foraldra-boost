@@ -20,6 +20,23 @@ export interface SavedPlan {
   optimization_results: any[];
 }
 
+async function captureElement(elementId: string): Promise<string | null> {
+  const element = document.getElementById(elementId);
+  if (!element) return null;
+  
+  try {
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+    return canvas.toDataURL('image/png');
+  } catch (error) {
+    console.error(`Failed to capture element ${elementId}:`, error);
+    return null;
+  }
+}
+
 export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
   try {
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -76,8 +93,11 @@ export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
     pdf.text(`Uttag per vecka: ${plan.days_per_week} dagar`, 20, yPosition);
     yPosition += 12;
 
-    // Selected strategy
+    // Selected strategy - Enhanced with highlighting
     const selectedStrategy = plan.optimization_results[plan.selected_strategy_index];
+    pdf.setFillColor(240, 240, 255);
+    pdf.roundedRect(15, yPosition - 5, pageWidth - 30, 50, 3, 3, 'F');
+    
     pdf.setFontSize(16);
     pdf.setFont('helvetica', 'bold');
     pdf.text('Vald strategi', 20, yPosition);
@@ -96,13 +116,33 @@ export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
     pdf.text(descLines, 20, yPosition);
     yPosition += descLines.length * 6 + 6;
 
-    // Summary
+    // Summary boxes
+    pdf.setFont('helvetica', 'bold');
     pdf.text(`Total inkomst: ${Math.round(selectedStrategy.totalIncome || 0).toLocaleString('sv-SE')} kr`, 20, yPosition);
     yPosition += 6;
     pdf.text(`Dagar använda: ${selectedStrategy.daysUsed || 0} dagar`, 20, yPosition);
     yPosition += 6;
     pdf.text(`Dagar sparade: ${480 - (selectedStrategy.daysUsed || 0)} dagar`, 20, yPosition);
-    yPosition += 12;
+    yPosition += 15;
+
+    // Try to capture distribution graph
+    const distributionGraph = await captureElement('income-distribution-graph');
+    if (distributionGraph) {
+      if (yPosition > pageHeight - 80) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+      
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Fördelningsanalys', 20, yPosition);
+      yPosition += 10;
+      
+      const graphWidth = pageWidth - 40;
+      const graphHeight = 60;
+      pdf.addImage(distributionGraph, 'PNG', 20, yPosition, graphWidth, graphHeight);
+      yPosition += graphHeight + 15;
+    }
 
     // Check if we need a new page
     if (yPosition > pageHeight - 40) {
@@ -110,16 +150,29 @@ export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
       yPosition = 20;
     }
 
-    // Leave periods
+    // Monthly breakdown with formatted table
     pdf.setFontSize(16);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Ledighetsperioder', 20, yPosition);
+    pdf.text('Månadsvis uppdelning', 20, yPosition);
     yPosition += 10;
 
     const periods = selectedStrategy.periods || [];
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    
+    // Table headers
+    const colX = [20, 60, 100, 140];
+    pdf.text('Förälder', colX[0], yPosition);
+    pdf.text('Period', colX[1], yPosition);
+    pdf.text('Inkomst/mån', colX[2], yPosition);
+    pdf.text('Dagar', colX[3], yPosition);
+    yPosition += 7;
+    
+    pdf.setLineWidth(0.5);
+    pdf.line(20, yPosition - 2, pageWidth - 20, yPosition - 2);
+    yPosition += 2;
 
+    pdf.setFont('helvetica', 'normal');
     periods.forEach((period: any, index: number) => {
       if (yPosition > pageHeight - 30) {
         pdf.addPage();
@@ -127,22 +180,37 @@ export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
       }
 
       const parentLabel = period.parent === 'parent1' ? 'Förälder 1' : 'Förälder 2';
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(`${index + 1}. ${parentLabel}`, 20, yPosition);
-      yPosition += 6;
-
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(`Period: ${period.calendarDays || period.months * 30} kalenderdagar`, 25, yPosition);
-      yPosition += 6;
-      pdf.text(`Månadsinkomst: ${Math.round(period.monthlyIncome || 0).toLocaleString('sv-SE')} kr`, 25, yPosition);
-      yPosition += 6;
-      pdf.text(`Förmånsdagar använda: ${period.benefitDaysUsed || 0} dagar`, 25, yPosition);
-      yPosition += 6;
+      const periodDays = period.calendarDays || Math.round(period.months * 30);
+      const income = Math.round(period.monthlyIncome || 0).toLocaleString('sv-SE');
+      const days = period.benefitDaysUsed || 0;
       
-      const benefitLevel = period.benefitLevel === 'high' ? 'Vanliga dagar' : 'Lägstanivådagar';
-      pdf.text(`Nivå: ${benefitLevel}`, 25, yPosition);
-      yPosition += 10;
+      pdf.text(parentLabel, colX[0], yPosition);
+      pdf.text(`${periodDays} dagar`, colX[1], yPosition);
+      pdf.text(`${income} kr`, colX[2], yPosition);
+      pdf.text(`${days} förmånsd.`, colX[3], yPosition);
+      yPosition += 6;
     });
+    
+    yPosition += 10;
+
+    // Try to capture timeline chart
+    const timelineChart = await captureElement('timeline-chart');
+    if (timelineChart) {
+      if (yPosition > pageHeight - 100) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+      
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Inkomst över tid', 20, yPosition);
+      yPosition += 10;
+      
+      const chartWidth = pageWidth - 40;
+      const chartHeight = 80;
+      pdf.addImage(timelineChart, 'PNG', 20, yPosition, chartWidth, chartHeight);
+      yPosition += chartHeight + 10;
+    }
 
     // Footer
     const now = new Date().toLocaleDateString('sv-SE', { 
