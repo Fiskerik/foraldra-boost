@@ -422,7 +422,7 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     let segmentBenefitIncome = 0;
     if (benefitDaily > 0 && segment.benefitDays > 0) {
       const benefitDaysForMonth = isFullMonthSegment
-        ? Math.min(segment.benefitDays, 30)
+        ? Math.min(segment.benefitDays, 31)
         : segment.benefitDays;
       segmentBenefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
     }
@@ -617,7 +617,7 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
           calendarDays: uniqueCalendarDays.size,
           benefitDays: segment.benefitDays,
           monthlyIncome: segment.monthlyIncome,
-          leaveParentIncome: segment.leaveParentIncome,
+          leaveParentIncome: segment.benefitIncome,
           otherParentIncome: segment.otherParentIncome,
           benefitIncome: segment.benefitIncome,
           parentalSalaryIncome: segment.parentalSalaryIncome,
@@ -653,7 +653,7 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
       existing.calendarDays = existing.uniqueCalendarDays.size;
       existing.benefitDays += segment.benefitDays;
       existing.monthlyIncome += segment.monthlyIncome;
-      existing.leaveParentIncome += segment.leaveParentIncome;
+      existing.leaveParentIncome += segment.benefitIncome;
       existing.otherParentIncome += segment.otherParentIncome;
       existing.benefitIncome += segment.benefitIncome;
       existing.parentalSalaryIncome += segment.parentalSalaryIncome;
@@ -725,10 +725,18 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
   });
 
   return Array.from(monthMap.values())
-    .map(({ uniqueCalendarDays, ...entry }) => ({
-      ...entry,
-      calendarDays: uniqueCalendarDays.size,
-    }))
+    .map(({ uniqueCalendarDays, ...entry }) => {
+      const recalculatedMonthlyIncome = Math.max(
+        0,
+        Math.round(entry.leaveParentIncome + entry.parentalSalaryIncome + entry.otherParentIncome)
+      );
+
+      return {
+        ...entry,
+        calendarDays: uniqueCalendarDays.size,
+        monthlyIncome: recalculatedMonthlyIncome,
+      };
+    })
     .sort((a, b) => a.monthStart.getTime() - b.monthStart.getTime());
 }
 
