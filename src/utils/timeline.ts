@@ -19,6 +19,7 @@ export interface TimelinePoint {
   bothDays: number;
   aggregatedSpan?: number;
   aggregationKind?: "average" | "minimum";
+  period?: LeavePeriod;
 }
 
 function computeLimitDate(base: Date, months: number): Date {

@@ -122,6 +122,13 @@ export function IncomeDistributionGraph({
     return points;
   }, [debouncedParams, currentParent1Months, calculationCache]);
 
+  const optimalPoint = useMemo(() => {
+    if (dataPoints.length === 0) return null;
+    return dataPoints.reduce((max, point) => 
+      point.y > max.y ? point : max
+    , dataPoints[0]);
+  }, [dataPoints]);
+
   const maxValue = Math.max(...dataPoints.map(p => p.y), 0);
   const yAxisMax = selectedStrategy === 'maximize-income'
     ? Math.ceil(maxValue / 50000) * 50000
@@ -144,6 +151,18 @@ export function IncomeDistributionGraph({
       );
     }
     return null;
+  };
+
+  const OptimalDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (!payload || !optimalPoint || payload.x !== optimalPoint.x) return null;
+    
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={8} fill="#ff6b35" stroke="#fff" strokeWidth={2} />
+        <circle cx={cx} cy={cy} r={4} fill="#fff" />
+      </g>
+    );
   };
 
   const handleClick = (data: any) => {
@@ -203,7 +222,14 @@ export function IncomeDistributionGraph({
             dataKey="y"
             stroke="hsl(var(--primary))"
             strokeWidth={2}
-            dot={<CustomDot />}
+            dot={(props) => {
+              // Render optimal dot if this is the optimal point
+              if (optimalPoint && props.payload.x === optimalPoint.x) {
+                return <OptimalDot {...props} />;
+              }
+              // Otherwise render current dot if this is current distribution
+              return <CustomDot {...props} />;
+            }}
             activeDot={{ r: 6 }}
           />
           <ReferenceLine
@@ -218,6 +244,13 @@ export function IncomeDistributionGraph({
           />
         </LineChart>
       </ResponsiveContainer>
+      {optimalPoint && (
+        <div className="text-xs text-center mt-2 text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <span style={{ color: '#ff6b35' }}>●</span> Optimal fördelning: {optimalPoint.x.toFixed(1)} mån (Förälder 1) / {(totalMonths - optimalPoint.x).toFixed(1)} mån (Förälder 2)
+          </span>
+        </div>
+      )}
     </div>
   );
 }
