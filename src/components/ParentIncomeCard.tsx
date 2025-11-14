@@ -34,24 +34,17 @@ export function ParentIncomeCard({
           <Label htmlFor={`income-${parentNumber}`} className="text-[10px] md:text-base font-medium">
             Månadsinkomst
           </Label>
-          <div className="flex gap-2 md:gap-4 items-end">
-            <div className="flex-1 space-y-2">
-              <Slider
-                id={`income-${parentNumber}`}
-                min={0}
-                max={120000}
-                step={1000}
-                value={[income]}
-                onValueChange={(values) => onIncomeChange(values[0])}
-                className={`slider-single ${parentNumber === 1 ? "[&_[role=slider]]:bg-parent1 [&_[role=slider]]:border-parent1" : "[&_[role=slider]]:bg-parent2 [&_[role=slider]]:border-parent2"}`}
-              />
-              <div className="text-right">
-                <span className={`text-sm md:text-2xl font-bold ${parentNumber === 1 ? "text-parent1" : "text-parent2"}`}>
-                  {formatCurrency(income)}
-                </span>
-              </div>
-            </div>
-            <div className="w-20 md:w-28">
+          <div className="space-y-2">
+            <Slider
+              id={`income-${parentNumber}`}
+              min={0}
+              max={120000}
+              step={1000}
+              value={[income]}
+              onValueChange={(values) => onIncomeChange(values[0])}
+              className={`slider-single ${parentNumber === 1 ? "[&_[role=slider]]:bg-parent1 [&_[role=slider]]:border-parent1" : "[&_[role=slider]]:bg-parent2 [&_[role=slider]]:border-parent2"}`}
+            />
+            <div className="text-right">
               <Input
                 type="number"
                 value={income}
@@ -66,7 +59,7 @@ export function ParentIncomeCard({
                 min={0}
                 max={120000}
                 step={1000}
-                className="text-right text-xs md:text-sm h-8 md:h-10"
+                className={`text-right text-sm md:text-2xl font-bold border-0 bg-transparent p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0 ${parentNumber === 1 ? "text-parent1" : "text-parent2"}`}
               />
             </div>
           </div>

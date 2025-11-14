@@ -157,7 +157,7 @@ export function IncomeDistributionGraph({
   const tooltipLabel = selectedStrategy === 'maximize-income' ? 'Total inkomst' : 'Dagar sparade';
 
   return (
-    <div className="w-full h-[200px] mt-4 relative">
+    <div id="income-distribution-graph" className="w-full h-[200px] mt-4 relative">
       {isCalculating && (
         <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10 rounded-lg">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
