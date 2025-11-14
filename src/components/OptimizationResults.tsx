@@ -176,7 +176,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       // Parental benefit: use allocated benefit days, with a max of 30 days for full months
       let benefitIncome = 0;
       if (benefitDaily > 0 && segment.benefitDays > 0) {
-        const benefitDaysForMonth = isFullMonthSegment ? Math.min(segment.benefitDays, 30) : segment.benefitDays;
+        const benefitDaysForMonth = isFullMonthSegment ? Math.min(segment.benefitDays, 31) : segment.benefitDays;
         benefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
       }
       benefitIncome = Math.min(totalSegmentIncome, Math.max(0, Math.round(benefitIncome)));

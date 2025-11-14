@@ -234,20 +234,18 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                 const parentLeaveEntries = showParentBreakdown
                   ? (['parent1', 'parent2'] as const)
                       .map((parentKey) => {
-                        const total = month.parentLeaveIncomeByParent[parentKey];
                         const benefitPart = month.parentBenefitIncomeByParent[parentKey];
                         const parentalSalaryPart = month.parentParentalSalaryIncomeByParent[parentKey];
                         const benefitDays = month.parentBenefitDaysByParent[parentKey];
 
                         return {
                           parentKey,
-                          total,
                           benefitPart,
                           parentalSalaryPart,
                           benefitDays,
                         };
                       })
-                      .filter(({ total }) => total > 0)
+                      .filter(({ benefitPart, parentalSalaryPart }) => benefitPart > 0 || parentalSalaryPart > 0)
                   : [];
 
                 return (
@@ -309,7 +307,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                             {renderDailyCalculation(month.leaveParentIncome, month.benefitDays)}
                             {showParentBreakdown && parentLeaveEntries.length > 0 && (
                               <div className="mt-2 space-y-1.5">
-                                  {parentLeaveEntries.map(({ parentKey, total, benefitPart, parentalSalaryPart, benefitDays }) => (
+                                  {parentLeaveEntries.map(({ parentKey, benefitPart, parentalSalaryPart, benefitDays }) => (
                                     <div
                                       key={parentKey}
                                       className="rounded-md border border-border/60 bg-muted/40 p-2 text-[10px] md:text-xs text-muted-foreground"
@@ -318,7 +316,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                                         <span className="font-medium">
                                           {parentKey === 'parent1' ? 'Förälder 1' : 'Förälder 2'}
                                         </span>
-                                        <span className="font-semibold">{formatCurrency(total)}</span>
+                                        <span className="font-semibold">{formatCurrency(benefitPart)}</span>
                                       </div>
                                       <div className="mt-1 flex items-center justify-between gap-2 pl-3">
                                         <span>Föräldrapenning</span>
@@ -330,7 +328,13 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                                           <span className="font-medium text-foreground/80">{formatCurrency(parentalSalaryPart)}</span>
                                         </div>
                                       )}
-                                      {renderDailyCalculation(total, benefitDays)}
+                                      {renderDailyCalculation(benefitPart, benefitDays)}
+                                      {parentalSalaryPart > 0 && (
+                                        <div className="mt-1 flex items-center justify-between gap-2 pl-3 text-[10px] md:text-xs text-muted-foreground">
+                                          <span>Totalt inkl. Föräldralön</span>
+                                          <span className="font-semibold text-foreground/70">{formatCurrency(benefitPart + parentalSalaryPart)}</span>
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>

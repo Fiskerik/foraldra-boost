@@ -94,7 +94,7 @@ export const TOTAL_BENEFIT_DAYS = HIGH_BENEFIT_DAYS + LOW_BENEFIT_DAYS;
 const RESERVED_HIGH_BENEFIT_DAYS_PER_PARENT = 90;
 const INITIAL_SHARED_WORKING_DAYS = 10;
 const INITIAL_SHARED_CALENDAR_DAYS = 14;
-const MAX_BENEFIT_DAYS_PER_MONTH = 30;
+const MAX_BENEFIT_DAYS_PER_MONTH = 31;
 const MAX_PARENTAL_BENEFIT_PER_DAY = 1250;
 const HIGH_BENEFIT_RATE = 0.8;
 const SGI_RATE = 0.97;
@@ -4331,19 +4331,202 @@ function buildSimpleSaveDaysResult(
     const isSimultaneousPeriod = monthIndex > 0 && monthIndex <= simultaneousMonths;
 
     let activeParent: 'parent1' | 'parent2' | 'both';
-    
+
     if (isSimultaneousPeriod) {
       activeParent = 'both';
     } else {
       // After simultaneous period, distribute remaining months
       const exclusiveStartIndex = simultaneousMonths + 1;
       const adjustedIndex = monthIndex - simultaneousMonths;
-      
+
       if (adjustedIndex <= safeParent1Months) {
         activeParent = 'parent1';
       } else {
         activeParent = 'parent2';
       }
+    }
+
+    if (activeParent === 'both') {
+      const perParentMaxDays = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
+
+      const parent1HighAvailable = Math.max(0, remainingHighDays.parent1);
+      const parent2HighAvailable = Math.max(0, remainingHighDays.parent2);
+      const maxSharedHighDays = Math.min(perParentMaxDays, parent1HighAvailable, parent2HighAvailable);
+
+      const parent1LowAvailable = Math.max(0, remainingLowDays.parent1);
+      const parent2LowAvailable = Math.max(0, remainingLowDays.parent2);
+
+      const parent1HighDaily = resolveDailyBenefit('parent1');
+      const parent2HighDaily = resolveDailyBenefit('parent2');
+      const combinedHighDaily = Math.max(0, parent1HighDaily) + Math.max(0, parent2HighDaily);
+
+      const parent1BonusPerDay =
+        context.parent1.hasCollectiveAgreement && parent1HighDaily > 0
+          ? computeCollectiveAgreementBonusPerBenefitDay(context.parent1, parent1HighDaily)
+          : 0;
+      const parent2BonusPerDay =
+        context.parent2.hasCollectiveAgreement && parent2HighDaily > 0
+          ? computeCollectiveAgreementBonusPerBenefitDay(context.parent2, parent2HighDaily)
+          : 0;
+
+      const parent1EligibleCADays = parent1BonusPerDay > 0
+        ? Math.min(caRemainingCalendarDays.parent1, calendarDays)
+        : 0;
+      const parent2EligibleCADays = parent2BonusPerDay > 0
+        ? Math.min(caRemainingCalendarDays.parent2, calendarDays)
+        : 0;
+
+      const parent1CAFraction = calendarDays > 0 ? Math.min(1, parent1EligibleCADays / calendarDays) : 0;
+      const parent2CAFraction = calendarDays > 0 ? Math.min(1, parent2EligibleCADays / calendarDays) : 0;
+
+      const combinedHighWithCA =
+        combinedHighDaily + parent1BonusPerDay * parent1CAFraction + parent2BonusPerDay * parent2CAFraction;
+
+      let highDaysUsedPerParent = 0;
+      if (maxSharedHighDays > 0) {
+        if (minIncomeThreshold > 0 && combinedHighWithCA > 0) {
+          const neededHigh = Math.ceil(minIncomeThreshold / combinedHighWithCA);
+          highDaysUsedPerParent = Math.min(maxSharedHighDays, neededHigh);
+        } else if (minIncomeThreshold <= 0 && combinedHighWithCA > 0) {
+          highDaysUsedPerParent = maxSharedHighDays;
+        }
+      }
+
+      // If no high days were assigned but available, allow using available days
+      if (highDaysUsedPerParent <= 0 && maxSharedHighDays > 0 && combinedHighWithCA > 0) {
+        highDaysUsedPerParent = Math.min(maxSharedHighDays, perParentMaxDays);
+      }
+
+      const parent1HighIncome = parent1HighDaily * highDaysUsedPerParent;
+      const parent2HighIncome = parent2HighDaily * highDaysUsedPerParent;
+      const caBenefitDaysParent1 =
+        highDaysUsedPerParent > 0 && parent1BonusPerDay > 0 ? highDaysUsedPerParent * parent1CAFraction : 0;
+      const caBenefitDaysParent2 =
+        highDaysUsedPerParent > 0 && parent2BonusPerDay > 0 ? highDaysUsedPerParent * parent2CAFraction : 0;
+      const parent1ParentalSalary = parent1BonusPerDay * caBenefitDaysParent1;
+      const parent2ParentalSalary = parent2BonusPerDay * caBenefitDaysParent2;
+
+      let parent1BenefitIncome = parent1HighIncome;
+      let parent2BenefitIncome = parent2HighIncome;
+
+      let monthlyBenefitIncome = parent1BenefitIncome + parent2BenefitIncome;
+      let monthlyParentalSalaryIncome = parent1ParentalSalary + parent2ParentalSalary;
+
+      let monthlyTotalIncome = monthlyBenefitIncome + monthlyParentalSalaryIncome;
+
+      const combinedLowDaily = context.parent1MinDailyNet + context.parent2MinDailyNet;
+      let lowDaysUsedPerParent = 0;
+
+      if (minIncomeThreshold > monthlyTotalIncome && combinedLowDaily > 0) {
+        const remainingCapacity = Math.max(0, perParentMaxDays - highDaysUsedPerParent);
+        if (remainingCapacity > 0) {
+          const maxSharedLowDays = Math.min(remainingCapacity, parent1LowAvailable, parent2LowAvailable);
+          if (maxSharedLowDays > 0) {
+            const neededLow = Math.ceil((minIncomeThreshold - monthlyTotalIncome) / combinedLowDaily);
+            lowDaysUsedPerParent = Math.min(maxSharedLowDays, neededLow);
+          }
+        }
+      } else if (minIncomeThreshold <= 0 && combinedLowDaily > 0) {
+        const remainingCapacity = Math.max(0, perParentMaxDays - highDaysUsedPerParent);
+        if (remainingCapacity > 0) {
+          lowDaysUsedPerParent = Math.min(remainingCapacity, parent1LowAvailable, parent2LowAvailable);
+        }
+      }
+
+      if (lowDaysUsedPerParent > 0) {
+        parent1BenefitIncome += context.parent1MinDailyNet * lowDaysUsedPerParent;
+        parent2BenefitIncome += context.parent2MinDailyNet * lowDaysUsedPerParent;
+      }
+
+      monthlyBenefitIncome = parent1BenefitIncome + parent2BenefitIncome;
+      monthlyParentalSalaryIncome = parent1ParentalSalary + parent2ParentalSalary;
+      monthlyTotalIncome = monthlyBenefitIncome + monthlyParentalSalaryIncome;
+
+      if (minIncomeThreshold > 0 && monthlyTotalIncome < minIncomeThreshold) {
+        const deficit = minIncomeThreshold - monthlyTotalIncome;
+        if (!worstMonth || deficit > worstMonth.deficit) {
+          worstMonth = { date: monthStart, income: monthlyTotalIncome, deficit };
+        }
+      }
+
+      if (highDaysUsedPerParent > 0) {
+        remainingHighDays.parent1 = Math.max(0, remainingHighDays.parent1 - highDaysUsedPerParent);
+        remainingHighDays.parent2 = Math.max(0, remainingHighDays.parent2 - highDaysUsedPerParent);
+        usedHighDays.parent1 += highDaysUsedPerParent;
+        usedHighDays.parent2 += highDaysUsedPerParent;
+        quotaHighDaysUsed.parent1 += highDaysUsedPerParent;
+        quotaHighDaysUsed.parent2 += highDaysUsedPerParent;
+      }
+
+      if (lowDaysUsedPerParent > 0) {
+        remainingLowDays.parent1 = Math.max(0, remainingLowDays.parent1 - lowDaysUsedPerParent);
+        remainingLowDays.parent2 = Math.max(0, remainingLowDays.parent2 - lowDaysUsedPerParent);
+        usedLowDays.parent1 += lowDaysUsedPerParent;
+        usedLowDays.parent2 += lowDaysUsedPerParent;
+        quotaLowDaysUsed.parent1 += lowDaysUsedPerParent;
+        quotaLowDaysUsed.parent2 += lowDaysUsedPerParent;
+      }
+
+      if (parent1ParentalSalary > 0 && parent1EligibleCADays > 0) {
+        caRemainingCalendarDays.parent1 = Math.max(0, caRemainingCalendarDays.parent1 - parent1EligibleCADays);
+      }
+
+      if (parent2ParentalSalary > 0 && parent2EligibleCADays > 0) {
+        caRemainingCalendarDays.parent2 = Math.max(0, caRemainingCalendarDays.parent2 - parent2EligibleCADays);
+      }
+
+      const perParentBenefitDays = highDaysUsedPerParent + lowDaysUsedPerParent;
+      const combinedBenefitDays = perParentBenefitDays * 2;
+      const combinedHighDaysUsed = highDaysUsedPerParent * 2;
+      const combinedLowDaysUsed = lowDaysUsedPerParent * 2;
+
+      const averageBenefitPerDay = combinedBenefitDays > 0 ? monthlyBenefitIncome / combinedBenefitDays : 0;
+      const dailyIncome = calendarDays > 0 ? monthlyTotalIncome / calendarDays : 0;
+      const daysPerWeek = perParentBenefitDays > 0
+        ? Math.min(7, Math.max(1, Math.round(perParentBenefitDays / WEEKS_PER_MONTH)))
+        : 0;
+
+      periods.push({
+        parent: 'both',
+        startDate: monthStart,
+        endDate: monthEnd,
+        daysCount: combinedBenefitDays,
+        benefitDaysUsed: combinedBenefitDays,
+        highBenefitDaysUsed: combinedHighDaysUsed || undefined,
+        lowBenefitDaysUsed: combinedLowDaysUsed || undefined,
+        calendarDays,
+        dailyBenefit: averageBenefitPerDay,
+        dailyIncome,
+        benefitLevel: combinedHighDaysUsed > 0 ? 'high' : combinedLowDaysUsed > 0 ? 'low' : 'none',
+        daysPerWeek: daysPerWeek || undefined,
+        otherParentDailyIncome: 0,
+        otherParentMonthlyIncome: 0,
+        monthlyIncome: monthlyTotalIncome,
+        collectiveAgreementEligibleCalendarDays:
+          parent1EligibleCADays + parent2EligibleCADays > 0
+            ? parent1EligibleCADays + parent2EligibleCADays
+            : 0,
+        collectiveAgreementEligibleBenefitDays:
+          caBenefitDaysParent1 + caBenefitDaysParent2 > 0
+            ? caBenefitDaysParent1 + caBenefitDaysParent2
+            : 0,
+        collectiveAgreementTotalBonus:
+          monthlyParentalSalaryIncome > 0 ? monthlyParentalSalaryIncome : 0,
+        isSimultaneous: true,
+        parent1BenefitDays: perParentBenefitDays > 0 ? perParentBenefitDays : undefined,
+        parent2BenefitDays: perParentBenefitDays > 0 ? perParentBenefitDays : undefined,
+        parent1Income: parent1BenefitIncome + parent1ParentalSalary,
+        parent2Income: parent2BenefitIncome + parent2ParentalSalary,
+        parent1BenefitIncome: parent1BenefitIncome,
+        parent2BenefitIncome: parent2BenefitIncome,
+        parent1ParentalSalary: parent1ParentalSalary > 0 ? parent1ParentalSalary : undefined,
+        parent2ParentalSalary: parent2ParentalSalary > 0 ? parent2ParentalSalary : undefined,
+      });
+
+      totalIncome += monthlyTotalIncome;
+      totalBenefitDays += combinedBenefitDays;
+      monthIndex += 1;
+      continue;
     }
 
     // === EXISTING SINGLE-PARENT LOGIC ===
