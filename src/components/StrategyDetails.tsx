@@ -186,6 +186,15 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                 const isExpanded = expandedMonths[month.monthKey] ?? false;
                 const isFullMonth = month.calendarDays >= month.monthLength;
                 const lowLevelDays = Math.round(month.benefitDaysByLevel["low"] ?? 0);
+                const hasSimultaneousLeave =
+                  month.parentDayTotals.both > 0 &&
+                  month.parentLeaveIncomeByParent.parent1 > 0 &&
+                  month.parentLeaveIncomeByParent.parent2 > 0;
+                const describeParentIncome = (parentKey: 'parent1' | 'parent2') => {
+                  return month.parentParentalSalaryIncomeByParent[parentKey] > 0
+                    ? 'Föräldrapenning + Föräldralön'
+                    : 'Föräldrapenning';
+                };
 
                 return (
                   <Card
@@ -239,15 +248,37 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
                       {isExpanded && (
                         <div className="mt-4 pt-4 border-t space-y-2">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                              <div className="text-sm text-muted-foreground">Föräldrapenning</div>
-                              <div className="font-semibold">{formatCurrency(month.benefitIncome)}</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-muted-foreground">Föräldralön</div>
-                              <div
-                                className={
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <div className="text-sm text-muted-foreground">Föräldrapenning</div>
+                              <div className="font-semibold">{formatCurrency(month.leaveParentIncome)}</div>
+                              {hasSimultaneousLeave && (
+                                <div className="mt-2 space-y-1.5">
+                                  {(['parent1', 'parent2'] as const).map((parentKey) => {
+                                    const total = month.parentLeaveIncomeByParent[parentKey];
+                                    if (total <= 0) {
+                                      return null;
+                                    }
+
+                                    return (
+                                      <div key={parentKey} className="flex flex-col text-[10px] md:text-xs text-muted-foreground">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span>{parentKey === 'parent1' ? 'Förälder 1' : 'Förälder 2'}</span>
+                                          <span className="font-semibold text-foreground">{formatCurrency(total)}</span>
+                                        </div>
+                                        <span className="pl-3">
+                                          ({describeParentIncome(parentKey)})
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              </div>
+                              <div>
+                                <div className="text-sm text-muted-foreground">Föräldralön</div>
+                                <div
+                                  className={
                                   month.parentalSalaryIncome > 0
                                     ? 'font-semibold'
                                     : 'text-muted-foreground font-medium'
