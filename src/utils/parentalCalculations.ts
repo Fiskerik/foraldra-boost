@@ -81,6 +81,10 @@ export interface LeavePeriod {
   parent2BenefitDays?: number;
   parent1Income?: number;
   parent2Income?: number;
+  parent1BenefitIncome?: number;
+  parent2BenefitIncome?: number;
+  parent1ParentalSalary?: number;
+  parent2ParentalSalary?: number;
 }
 
 const PARENTAL_BENEFIT_CEILING = 49000;
@@ -2035,6 +2039,12 @@ interface SegmentConfig {
   forceRecomputeWeeks?: boolean;
   baseDailyBenefit?: number;
   monthlyExtraIncome?: number;
+  parent1LeaveIncome?: number;
+  parent2LeaveIncome?: number;
+  parent1BenefitIncome?: number;
+  parent2BenefitIncome?: number;
+  parent1ParentalSalaryIncome?: number;
+  parent2ParentalSalaryIncome?: number;
 }
 
 interface SegmentContext {
@@ -2253,7 +2263,7 @@ function addSegment(
   const dailyIncome = totalPeriodIncome / Math.max(1, effectiveCalendarDays);
   const dailyBenefit = benefitLevel === 'none' ? 0 : baseBenefitPerDay;
 
-  periods.push({
+  const leavePeriodEntry: LeavePeriod = {
     parent,
     startDate,
     endDate,
@@ -2270,7 +2280,45 @@ function addSegment(
     collectiveAgreementEligibleCalendarDays: hasCollectiveAgreementBonus ? calendarDaysUsed : 0,
     collectiveAgreementEligibleBenefitDays: hasCollectiveAgreementBonus ? benefitDaysUsed : 0,
     collectiveAgreementTotalBonus: hasCollectiveAgreementBonus ? totalExtraIncome : 0,
-  });
+  };
+
+  if (parent === 'parent1') {
+    leavePeriodEntry.parent1Income = totalLeaveIncome;
+    leavePeriodEntry.parent1BenefitIncome = totalBenefitIncome;
+    leavePeriodEntry.parent1ParentalSalary = totalExtraIncome;
+  } else if (parent === 'parent2') {
+    leavePeriodEntry.parent2Income = totalLeaveIncome;
+    leavePeriodEntry.parent2BenefitIncome = totalBenefitIncome;
+    leavePeriodEntry.parent2ParentalSalary = totalExtraIncome;
+  } else {
+    const parent1Leave = Number.isFinite(config.parent1LeaveIncome)
+      ? Math.max(0, config.parent1LeaveIncome as number)
+      : Math.max(0, totalLeaveIncome / 2);
+    const parent2Leave = Number.isFinite(config.parent2LeaveIncome)
+      ? Math.max(0, config.parent2LeaveIncome as number)
+      : Math.max(0, totalLeaveIncome - parent1Leave);
+    const parent1Benefit = Number.isFinite(config.parent1BenefitIncome)
+      ? Math.max(0, config.parent1BenefitIncome as number)
+      : Math.max(0, Math.min(parent1Leave, totalBenefitIncome / 2));
+    const parent2Benefit = Number.isFinite(config.parent2BenefitIncome)
+      ? Math.max(0, config.parent2BenefitIncome as number)
+      : Math.max(0, Math.min(parent2Leave, totalBenefitIncome - parent1Benefit));
+    const parent1ParentalSalary = Number.isFinite(config.parent1ParentalSalaryIncome)
+      ? Math.max(0, config.parent1ParentalSalaryIncome as number)
+      : Math.max(0, parent1Leave - parent1Benefit);
+    const parent2ParentalSalary = Number.isFinite(config.parent2ParentalSalaryIncome)
+      ? Math.max(0, config.parent2ParentalSalaryIncome as number)
+      : Math.max(0, parent2Leave - parent2Benefit);
+
+    leavePeriodEntry.parent1Income = parent1Leave;
+    leavePeriodEntry.parent2Income = parent2Leave;
+    leavePeriodEntry.parent1BenefitIncome = parent1Benefit;
+    leavePeriodEntry.parent2BenefitIncome = parent2Benefit;
+    leavePeriodEntry.parent1ParentalSalary = parent1ParentalSalary;
+    leavePeriodEntry.parent2ParentalSalary = parent2ParentalSalary;
+  }
+
+  periods.push(leavePeriodEntry);
 
   // Track qualifying high days usage
   if (parent !== 'both' && benefitLevel === 'high') {
@@ -2343,6 +2391,8 @@ function convertLegacyResult(
   const estimatedDaysPerWeek = initialCalendarDays > 0
     ? Math.min(7, Math.max(1, Math.round((initialWorkingDays / initialCalendarDays) * 7)))
     : 0;
+  const parent1InitialIncome = Math.max(0, Math.round(context.parent1LeaveDailyIncome * initialWorkingDays));
+  const parent2InitialIncome = Math.max(0, Math.round(context.parent2LeaveDailyIncome * initialWorkingDays));
 
   periods.push({
     parent: 'both',
@@ -2360,6 +2410,12 @@ function convertLegacyResult(
     otherParentDailyIncome: 0,
     otherParentMonthlyIncome: 0,
     isInitialTenDayPeriod: true,
+    parent1Income: parent1InitialIncome,
+    parent2Income: parent2InitialIncome,
+    parent1BenefitIncome: parent1InitialIncome,
+    parent2BenefitIncome: parent2InitialIncome,
+    parent1ParentalSalary: 0,
+    parent2ParentalSalary: 0,
   });
   parentLastEndDates.both = new Date(initialEndDate);
 
@@ -2477,9 +2533,21 @@ function convertLegacyResult(
       0,
       0
     );
-    const overlapBenefitMonthly =
-      beräknaMånadsinkomst(toNumber(legacyResult.dag1), toNumber(legacyResult.plan1Overlap?.dagarPerVecka), 0, 0, 0) +
-      beräknaMånadsinkomst(toNumber(legacyResult.dag2), toNumber(legacyResult.plan1Overlap?.dagarPerVecka), 0, 0, 0);
+    const overlapParent1BenefitMonthly = beräknaMånadsinkomst(
+      toNumber(legacyResult.dag1),
+      toNumber(legacyResult.plan1Overlap?.dagarPerVecka),
+      0,
+      0,
+      0
+    );
+    const overlapParent2BenefitMonthly = beräknaMånadsinkomst(
+      toNumber(legacyResult.dag2),
+      toNumber(legacyResult.plan1Overlap?.dagarPerVecka),
+      0,
+      0,
+      0
+    );
+    const overlapBenefitMonthly = overlapParent1BenefitMonthly + overlapParent2BenefitMonthly;
 
     addSegment(periods, {
       plan: legacyResult.plan1Overlap,
@@ -2492,6 +2560,12 @@ function convertLegacyResult(
       leaveMonthlyIncome: overlapParent1Monthly + overlapParent2Monthly,
       preferredDaysPerWeek: undefined,
       forceRecomputeWeeks: false,
+      parent1LeaveIncome: overlapParent1Monthly,
+      parent2LeaveIncome: overlapParent2Monthly,
+      parent1BenefitIncome: overlapParent1BenefitMonthly,
+      parent2BenefitIncome: overlapParent2BenefitMonthly,
+      parent1ParentalSalaryIncome: Math.max(0, overlapParent1Monthly - overlapParent1BenefitMonthly),
+      parent2ParentalSalaryIncome: Math.max(0, overlapParent2Monthly - overlapParent2BenefitMonthly),
     }, segmentContext, parentData);
   }
 
