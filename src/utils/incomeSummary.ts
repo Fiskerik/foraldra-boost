@@ -317,8 +317,55 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
 
   const bonusPerBenefitDay = totalCABenefitDays > 0 ? totalCABonus / totalCABenefitDays : 0;
 
+  const sanitize = (value: unknown, fallback: number = 0): number => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    return fallback;
+  };
+
+  const benefitDaily = period.dailyBenefit;
+
+  const baseMonthlyIncome = sanitize(period.monthlyIncome);
+  const totalParent1Income = sanitize(
+    period.parent1Income,
+    baseMonthlyIncome > 0 ? baseMonthlyIncome / 2 : 0
+  );
+  const totalParent2Income = sanitize(
+    period.parent2Income,
+    Math.max(0, baseMonthlyIncome - totalParent1Income)
+  );
+
+  const totalParent1ParentalSalary = sanitize(
+    period.parent1ParentalSalary,
+    Math.max(0, totalParent1Income - sanitize(period.parent1BenefitIncome, totalParent1Income))
+  );
+  const totalParent2ParentalSalary = sanitize(
+    period.parent2ParentalSalary,
+    Math.max(0, totalParent2Income - sanitize(period.parent2BenefitIncome, totalParent2Income))
+  );
+
+  const totalParent1BenefitIncome = sanitize(
+    period.parent1BenefitIncome,
+    Math.max(0, totalParent1Income - totalParent1ParentalSalary)
+  );
+  const totalParent2BenefitIncome = sanitize(
+    period.parent2BenefitIncome,
+    Math.max(0, totalParent2Income - totalParent2ParentalSalary)
+  );
+
+  const totalParent1BenefitDays = sanitize(
+    period.parent1BenefitDays,
+    Math.max(0, sanitize(period.benefitDaysUsed, period.daysCount) / 2)
+  );
+  const totalParent2BenefitDays = sanitize(
+    period.parent2BenefitDays,
+    Math.max(0, sanitize(period.benefitDaysUsed, period.daysCount) / 2)
+  );
+
+  const totalCombinedBenefitDays = segments.reduce((sum, s) => sum + s.benefitDays, 0);
+
   segments.forEach(segment => {
-    const benefitDaily = period.dailyBenefit;
     const monthStart = startOfMonth(segment.startDate);
     const monthEndDate = endOfMonth(monthStart);
     const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
@@ -329,13 +376,35 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       segment.endDate.getDate() === monthEndDate.getDate();
 
     if (period.parent === "both") {
-      const baseDaily = period.baseDailyIncome ?? period.dailyIncome ?? 0;
-      const totalIncome = Math.max(0, Math.round(baseDaily * segment.calendarDays));
-      segment.benefitIncome = totalIncome;
-      segment.leaveParentIncome = totalIncome;
+      const effectiveTotalBenefitDays = totalCombinedBenefitDays > 0 ? totalCombinedBenefitDays : segments.length;
+      const benefitShare = effectiveTotalBenefitDays > 0
+        ? segment.benefitDays / effectiveTotalBenefitDays
+        : 1 / Math.max(1, segments.length);
+
+      const parent1BenefitIncome = totalParent1BenefitIncome * benefitShare;
+      const parent2BenefitIncome = totalParent2BenefitIncome * benefitShare;
+      const parent1ParentalSalary = totalParent1ParentalSalary * benefitShare;
+      const parent2ParentalSalary = totalParent2ParentalSalary * benefitShare;
+      const parent1TotalIncome = parent1BenefitIncome + parent1ParentalSalary;
+      const parent2TotalIncome = parent2BenefitIncome + parent2ParentalSalary;
+
+      const parent1BenefitDays = totalParent1BenefitDays * benefitShare;
+      const parent2BenefitDays = totalParent2BenefitDays * benefitShare;
+
+      segment.benefitIncome = parent1BenefitIncome + parent2BenefitIncome;
+      segment.parentalSalaryIncome = parent1ParentalSalary + parent2ParentalSalary;
+      segment.leaveParentIncome = parent1TotalIncome + parent2TotalIncome;
       segment.otherParentIncome = 0;
-      segment.parentalSalaryIncome = 0;
-      segment.monthlyIncome = totalIncome;
+      segment.monthlyIncome = segment.leaveParentIncome;
+
+      segment.parentLeaveIncomeByParent.parent1 = parent1TotalIncome;
+      segment.parentLeaveIncomeByParent.parent2 = parent2TotalIncome;
+      segment.parentBenefitIncomeByParent.parent1 = parent1BenefitIncome;
+      segment.parentBenefitIncomeByParent.parent2 = parent2BenefitIncome;
+      segment.parentParentalSalaryIncomeByParent.parent1 = parent1ParentalSalary;
+      segment.parentParentalSalaryIncomeByParent.parent2 = parent2ParentalSalary;
+      segment.parentBenefitDaysByParent.parent1 = parent1BenefitDays;
+      segment.parentBenefitDaysByParent.parent2 = parent2BenefitDays;
       return;
     }
 
@@ -350,26 +419,26 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       otherParentIncome = Math.max(0, Math.round(otherParentIncome));
     }
 
-    let benefitIncome = 0;
+    let segmentBenefitIncome = 0;
     if (benefitDaily > 0 && segment.benefitDays > 0) {
       const benefitDaysForMonth = isFullMonthSegment
         ? Math.min(segment.benefitDays, 30)
         : segment.benefitDays;
-      benefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
+      segmentBenefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
     }
-    benefitIncome = Math.max(0, Math.round(benefitIncome));
+    segmentBenefitIncome = Math.max(0, Math.round(segmentBenefitIncome));
 
-    let parentalSalaryIncome = 0;
+    let segmentParentalSalaryIncome = 0;
     if (bonusPerBenefitDay > 0 && segment.caEligibleBenefitDays > 0) {
-      parentalSalaryIncome = segment.caEligibleBenefitDays * bonusPerBenefitDay;
+      segmentParentalSalaryIncome = segment.caEligibleBenefitDays * bonusPerBenefitDay;
     }
 
-    const leaveParentIncome = benefitIncome + parentalSalaryIncome;
+    const leaveParentIncome = segmentBenefitIncome + segmentParentalSalaryIncome;
     const monthlyIncome = leaveParentIncome + otherParentIncome;
 
-    segment.benefitIncome = benefitIncome;
+    segment.benefitIncome = segmentBenefitIncome;
     segment.otherParentIncome = otherParentIncome;
-    segment.parentalSalaryIncome = Math.max(0, Math.round(parentalSalaryIncome));
+    segment.parentalSalaryIncome = Math.max(0, Math.round(segmentParentalSalaryIncome));
     segment.leaveParentIncome = Math.max(0, Math.round(leaveParentIncome));
     segment.monthlyIncome = Math.max(0, Math.round(monthlyIncome));
   });
@@ -481,34 +550,8 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     segment.parentBenefitIncomeByParent.parent2 = parent2BenefitTotal * benefitShare;
     segment.parentParentalSalaryIncomeByParent.parent1 = parent1ParentalSalaryTotal * benefitShare;
     segment.parentParentalSalaryIncomeByParent.parent2 = parent2ParentalSalaryTotal * benefitShare;
-
-    const totalBenefitDaysForSegment = segment.benefitDays;
-    if (totalBenefitDaysForSegment > 0) {
-      const benefitIncomeParent1 = segment.parentBenefitIncomeByParent.parent1;
-      const benefitIncomeParent2 = segment.parentBenefitIncomeByParent.parent2;
-      const totalBenefitIncomeForSegment = benefitIncomeParent1 + benefitIncomeParent2;
-
-      if (totalBenefitIncomeForSegment > 0) {
-        segment.parentBenefitDaysByParent.parent1 = totalBenefitDaysForSegment * (benefitIncomeParent1 / totalBenefitIncomeForSegment);
-        segment.parentBenefitDaysByParent.parent2 = totalBenefitDaysForSegment * (benefitIncomeParent2 / totalBenefitIncomeForSegment);
-      } else {
-        const leaveIncomeParent1 = segment.parentLeaveIncomeByParent.parent1;
-        const leaveIncomeParent2 = segment.parentLeaveIncomeByParent.parent2;
-        const totalLeaveIncomeForSegment = leaveIncomeParent1 + leaveIncomeParent2;
-
-        if (totalLeaveIncomeForSegment > 0) {
-          segment.parentBenefitDaysByParent.parent1 = totalBenefitDaysForSegment * (leaveIncomeParent1 / totalLeaveIncomeForSegment);
-          segment.parentBenefitDaysByParent.parent2 = totalBenefitDaysForSegment * (leaveIncomeParent2 / totalLeaveIncomeForSegment);
-        } else {
-          const half = totalBenefitDaysForSegment / 2;
-          segment.parentBenefitDaysByParent.parent1 = half;
-          segment.parentBenefitDaysByParent.parent2 = totalBenefitDaysForSegment - half;
-        }
-      }
-    } else {
-      segment.parentBenefitDaysByParent.parent1 = 0;
-      segment.parentBenefitDaysByParent.parent2 = 0;
-    }
+    segment.parentBenefitDaysByParent.parent1 = totalParent1BenefitDays * benefitShare;
+    segment.parentBenefitDaysByParent.parent2 = totalParent2BenefitDays * benefitShare;
   });
 
   return segments;
