@@ -186,15 +186,20 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                 const isExpanded = expandedMonths[month.monthKey] ?? false;
                 const isFullMonth = month.calendarDays >= month.monthLength;
                 const lowLevelDays = Math.round(month.benefitDaysByLevel["low"] ?? 0);
-                const hasSimultaneousLeave =
-                  month.parentDayTotals.both > 0 &&
-                  month.parentLeaveIncomeByParent.parent1 > 0 &&
-                  month.parentLeaveIncomeByParent.parent2 > 0;
-                const describeParentIncome = (parentKey: 'parent1' | 'parent2') => {
-                  return month.parentParentalSalaryIncomeByParent[parentKey] > 0
-                    ? 'Föräldrapenning + Föräldralön'
-                    : 'Föräldrapenning';
-                };
+                const parentLeaveEntries = (['parent1', 'parent2'] as const)
+                  .map((parentKey) => {
+                    const total = month.parentLeaveIncomeByParent[parentKey];
+                    const benefitPart = month.parentBenefitIncomeByParent[parentKey];
+                    const parentalSalaryPart = month.parentParentalSalaryIncomeByParent[parentKey];
+
+                    return {
+                      parentKey,
+                      total,
+                      benefitPart,
+                      parentalSalaryPart,
+                    };
+                  })
+                  .filter(({ total }) => total > 0);
 
                 return (
                   <Card
@@ -248,37 +253,42 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
 
                       {isExpanded && (
                         <div className="mt-4 pt-4 border-t space-y-2">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div>
-                                <div className="text-sm text-muted-foreground">Föräldrapenning</div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <div className="text-sm text-muted-foreground">Föräldrapenning</div>
                               <div className="font-semibold">{formatCurrency(month.leaveParentIncome)}</div>
-                              {hasSimultaneousLeave && (
+                              {parentLeaveEntries.length > 0 && (
                                 <div className="mt-2 space-y-1.5">
-                                  {(['parent1', 'parent2'] as const).map((parentKey) => {
-                                    const total = month.parentLeaveIncomeByParent[parentKey];
-                                    if (total <= 0) {
-                                      return null;
-                                    }
-
-                                    return (
-                                      <div key={parentKey} className="flex flex-col text-[10px] md:text-xs text-muted-foreground">
-                                        <div className="flex items-center justify-between gap-2">
-                                          <span>{parentKey === 'parent1' ? 'Förälder 1' : 'Förälder 2'}</span>
-                                          <span className="font-semibold text-foreground">{formatCurrency(total)}</span>
-                                        </div>
-                                        <span className="pl-3">
-                                          ({describeParentIncome(parentKey)})
+                                  {parentLeaveEntries.map(({ parentKey, total, benefitPart, parentalSalaryPart }) => (
+                                    <div
+                                      key={parentKey}
+                                      className="rounded-md border border-border/60 bg-muted/40 p-2 text-[10px] md:text-xs text-muted-foreground"
+                                    >
+                                      <div className="flex items-center justify-between gap-2 text-foreground">
+                                        <span className="font-medium">
+                                          {parentKey === 'parent1' ? 'Förälder 1' : 'Förälder 2'}
                                         </span>
+                                        <span className="font-semibold">{formatCurrency(total)}</span>
                                       </div>
-                                    );
-                                  })}
+                                      <div className="mt-1 flex items-center justify-between gap-2 pl-3">
+                                        <span>Föräldrapenning</span>
+                                        <span className="font-medium text-foreground/80">{formatCurrency(benefitPart)}</span>
+                                      </div>
+                                      {parentalSalaryPart > 0 && (
+                                        <div className="flex items-center justify-between gap-2 pl-3">
+                                          <span>Föräldralön</span>
+                                          <span className="font-medium text-foreground/80">{formatCurrency(parentalSalaryPart)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
                               )}
-                              </div>
-                              <div>
-                                <div className="text-sm text-muted-foreground">Föräldralön</div>
-                                <div
-                                  className={
+                            </div>
+                            <div>
+                              <div className="text-sm text-muted-foreground">Föräldralön</div>
+                              <div
+                                className={
                                   month.parentalSalaryIncome > 0
                                     ? 'font-semibold'
                                     : 'text-muted-foreground font-medium'
@@ -305,8 +315,8 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                             </div>
                           </div>
 
-                        <div className="mt-3">
-                          <div className="text-sm text-muted-foreground mb-1">Typ av dagar:</div>
+                          <div className="mt-3">
+                            <div className="text-sm text-muted-foreground mb-1">Typ av dagar:</div>
                             <div className="flex flex-wrap gap-2">
                               {Object.entries(month.benefitDaysByLevel).map(([level, days]) => {
                                 const roundedDays = Math.round(days);
