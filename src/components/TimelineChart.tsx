@@ -9,6 +9,7 @@ const capitalizeFirstLetter = (str: string) => {
 };
 type ChartPoint = TimelinePoint & {
   month: string;
+  period?: LeavePeriod;
 };
 const formatTimelineLabel = (point: TimelinePoint & {
   month?: string;
@@ -133,6 +134,11 @@ export function TimelineChart({
   const getYPercent = (value: number) => 100 - clampToUnitInterval(value) * 100;
   const minIncomePosition = getYPercent(minHouseholdIncome);
   const getColorForData = (d: ChartPoint) => {
+    // Check if this point is from a simultaneous period
+    if (d.period?.isSimultaneous) {
+      return '#6B21A8'; // Dark purple for simultaneous leave
+    }
+    
     const maxDays = Math.max(d.parent1Days, d.parent2Days, d.bothDays);
     if (maxDays <= 0) return "hsl(var(--muted-foreground))";
     if (d.bothDays === maxDays) return "hsl(var(--accent))";
@@ -304,6 +310,10 @@ export function TimelineChart({
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-parent2 rounded"></div>
           <span>Förälder 2 hemma</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: '#6B21A8' }}></div>
+          <span>Båda samtidigt</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-accent rounded"></div>

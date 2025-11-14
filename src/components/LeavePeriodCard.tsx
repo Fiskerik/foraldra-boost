@@ -226,7 +226,10 @@ export function LeavePeriodCard({
                     onChange={(e) => onSimultaneousMonthsChange(Number(e.target.value))}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Utöver de 10 obligatoriska dagarna
+                    När ni är hemma samtidigt använder båda föräldrar dagar från sina egna pooler samtidigt. 
+                    Ingen lön utbetalas, men båda får föräldrapenning. Om en förälder planerar att vara hemma 
+                    totalt minst 6 månader i följd (samtidig + egen ledighet) tas föräldralön automatiskt under 
+                    den samtidiga perioden.
                   </p>
                 </div>
               )}
