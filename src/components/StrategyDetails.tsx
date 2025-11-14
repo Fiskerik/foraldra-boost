@@ -13,6 +13,50 @@ const capitalizeFirstLetter = (str: string) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
+const formatCurrencyWithDecimals = (value: number): string => {
+  return new Intl.NumberFormat("sv-SE", {
+    style: "currency",
+    currency: "SEK",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+};
+
+const formatDayCountLabel = (days: number): string | null => {
+  if (!Number.isFinite(days) || days <= 0) {
+    return null;
+  }
+
+  const rounded = Math.round(days * 10) / 10;
+  const isInteger = Math.abs(rounded - Math.round(rounded)) < 1e-6;
+
+  const formatted = new Intl.NumberFormat("sv-SE", {
+    maximumFractionDigits: isInteger ? 0 : 1,
+    minimumFractionDigits: isInteger ? 0 : 1,
+  }).format(rounded);
+
+  return `${formatted} dagar`;
+};
+
+const renderDailyCalculation = (total: number, days: number) => {
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(days) || days <= 0) {
+    return null;
+  }
+
+  const daily = total / days;
+  const dayLabel = formatDayCountLabel(days);
+
+  if (!dayLabel) {
+    return null;
+  }
+
+  return (
+    <div className="mt-1 text-[10px] md:text-xs text-muted-foreground">
+      {`${formatCurrencyWithDecimals(daily)}/dag × ${dayLabel} = ${formatCurrency(total)}`}
+    </div>
+  );
+};
+
 interface StrategyDetailsProps {
   strategy: OptimizationResult;
   minHouseholdIncome: number;
@@ -186,20 +230,25 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                 const isExpanded = expandedMonths[month.monthKey] ?? false;
                 const isFullMonth = month.calendarDays >= month.monthLength;
                 const lowLevelDays = Math.round(month.benefitDaysByLevel["low"] ?? 0);
-                const parentLeaveEntries = (['parent1', 'parent2'] as const)
-                  .map((parentKey) => {
-                    const total = month.parentLeaveIncomeByParent[parentKey];
-                    const benefitPart = month.parentBenefitIncomeByParent[parentKey];
-                    const parentalSalaryPart = month.parentParentalSalaryIncomeByParent[parentKey];
+                const showParentBreakdown = month.parents.includes("Båda");
+                const parentLeaveEntries = showParentBreakdown
+                  ? (['parent1', 'parent2'] as const)
+                      .map((parentKey) => {
+                        const total = month.parentLeaveIncomeByParent[parentKey];
+                        const benefitPart = month.parentBenefitIncomeByParent[parentKey];
+                        const parentalSalaryPart = month.parentParentalSalaryIncomeByParent[parentKey];
+                        const benefitDays = month.parentBenefitDaysByParent[parentKey];
 
-                    return {
-                      parentKey,
-                      total,
-                      benefitPart,
-                      parentalSalaryPart,
-                    };
-                  })
-                  .filter(({ total }) => total > 0);
+                        return {
+                          parentKey,
+                          total,
+                          benefitPart,
+                          parentalSalaryPart,
+                          benefitDays,
+                        };
+                      })
+                      .filter(({ total }) => total > 0)
+                  : [];
 
                 return (
                   <Card
@@ -254,12 +303,13 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                       {isExpanded && (
                         <div className="mt-4 pt-4 border-t space-y-2">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                              <div className="text-sm text-muted-foreground">Föräldrapenning</div>
-                              <div className="font-semibold">{formatCurrency(month.leaveParentIncome)}</div>
-                              {parentLeaveEntries.length > 0 && (
-                                <div className="mt-2 space-y-1.5">
-                                  {parentLeaveEntries.map(({ parentKey, total, benefitPart, parentalSalaryPart }) => (
+                          <div>
+                            <div className="text-sm text-muted-foreground">Föräldrapenning</div>
+                            <div className="font-semibold">{formatCurrency(month.leaveParentIncome)}</div>
+                            {renderDailyCalculation(month.leaveParentIncome, month.benefitDays)}
+                            {showParentBreakdown && parentLeaveEntries.length > 0 && (
+                              <div className="mt-2 space-y-1.5">
+                                  {parentLeaveEntries.map(({ parentKey, total, benefitPart, parentalSalaryPart, benefitDays }) => (
                                     <div
                                       key={parentKey}
                                       className="rounded-md border border-border/60 bg-muted/40 p-2 text-[10px] md:text-xs text-muted-foreground"
@@ -280,11 +330,12 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
                                           <span className="font-medium text-foreground/80">{formatCurrency(parentalSalaryPart)}</span>
                                         </div>
                                       )}
+                                      {renderDailyCalculation(total, benefitDays)}
                                     </div>
                                   ))}
                                 </div>
                               )}
-                            </div>
+                          </div>
                             <div>
                               <div className="text-sm text-muted-foreground">Föräldralön</div>
                               <div

@@ -35,6 +35,7 @@ export interface MonthlyBreakdownEntry {
   parentLeaveIncomeByParent: Record<"parent1" | "parent2", number>;
   parentBenefitIncomeByParent: Record<"parent1" | "parent2", number>;
   parentParentalSalaryIncomeByParent: Record<"parent1" | "parent2", number>;
+  parentBenefitDaysByParent: Record<"parent1" | "parent2", number>;
   daysPerWeekValues: number[];
   benefitLevels: Array<"parental-salary" | "high" | "low" | "none">;
   benefitDaysByLevel: Record<string, number>;
@@ -56,6 +57,7 @@ interface MonthlySegment {
   parentLeaveIncomeByParent: Record<"parent1" | "parent2", number>;
   parentBenefitIncomeByParent: Record<"parent1" | "parent2", number>;
   parentParentalSalaryIncomeByParent: Record<"parent1" | "parent2", number>;
+  parentBenefitDaysByParent: Record<"parent1" | "parent2", number>;
   caEligibleCalendarDays: number;
   caEligibleBenefitDays: number;
   daysPerWeekValue: number;
@@ -145,6 +147,7 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       parentLeaveIncomeByParent: { parent1: 0, parent2: 0 },
       parentBenefitIncomeByParent: { parent1: 0, parent2: 0 },
       parentParentalSalaryIncomeByParent: { parent1: 0, parent2: 0 },
+      parentBenefitDaysByParent: { parent1: 0, parent2: 0 },
       caEligibleCalendarDays: 0,
       caEligibleBenefitDays: 0,
       daysPerWeekValue: normalizedDaysPerWeek,
@@ -457,6 +460,8 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       segment.parentLeaveIncomeByParent.parent1 = segment.leaveParentIncome;
       segment.parentBenefitIncomeByParent.parent1 = segment.benefitIncome;
       segment.parentParentalSalaryIncomeByParent.parent1 = segment.parentalSalaryIncome;
+      segment.parentBenefitDaysByParent.parent1 = segment.benefitDays;
+      segment.parentBenefitDaysByParent.parent2 = 0;
       return;
     }
 
@@ -464,6 +469,8 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       segment.parentLeaveIncomeByParent.parent2 = segment.leaveParentIncome;
       segment.parentBenefitIncomeByParent.parent2 = segment.benefitIncome;
       segment.parentParentalSalaryIncomeByParent.parent2 = segment.parentalSalaryIncome;
+      segment.parentBenefitDaysByParent.parent1 = 0;
+      segment.parentBenefitDaysByParent.parent2 = segment.benefitDays;
       return;
     }
 
@@ -474,6 +481,34 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     segment.parentBenefitIncomeByParent.parent2 = parent2BenefitTotal * benefitShare;
     segment.parentParentalSalaryIncomeByParent.parent1 = parent1ParentalSalaryTotal * benefitShare;
     segment.parentParentalSalaryIncomeByParent.parent2 = parent2ParentalSalaryTotal * benefitShare;
+
+    const totalBenefitDaysForSegment = segment.benefitDays;
+    if (totalBenefitDaysForSegment > 0) {
+      const benefitIncomeParent1 = segment.parentBenefitIncomeByParent.parent1;
+      const benefitIncomeParent2 = segment.parentBenefitIncomeByParent.parent2;
+      const totalBenefitIncomeForSegment = benefitIncomeParent1 + benefitIncomeParent2;
+
+      if (totalBenefitIncomeForSegment > 0) {
+        segment.parentBenefitDaysByParent.parent1 = totalBenefitDaysForSegment * (benefitIncomeParent1 / totalBenefitIncomeForSegment);
+        segment.parentBenefitDaysByParent.parent2 = totalBenefitDaysForSegment * (benefitIncomeParent2 / totalBenefitIncomeForSegment);
+      } else {
+        const leaveIncomeParent1 = segment.parentLeaveIncomeByParent.parent1;
+        const leaveIncomeParent2 = segment.parentLeaveIncomeByParent.parent2;
+        const totalLeaveIncomeForSegment = leaveIncomeParent1 + leaveIncomeParent2;
+
+        if (totalLeaveIncomeForSegment > 0) {
+          segment.parentBenefitDaysByParent.parent1 = totalBenefitDaysForSegment * (leaveIncomeParent1 / totalLeaveIncomeForSegment);
+          segment.parentBenefitDaysByParent.parent2 = totalBenefitDaysForSegment * (leaveIncomeParent2 / totalLeaveIncomeForSegment);
+        } else {
+          const half = totalBenefitDaysForSegment / 2;
+          segment.parentBenefitDaysByParent.parent1 = half;
+          segment.parentBenefitDaysByParent.parent2 = totalBenefitDaysForSegment - half;
+        }
+      }
+    } else {
+      segment.parentBenefitDaysByParent.parent1 = 0;
+      segment.parentBenefitDaysByParent.parent2 = 0;
+    }
   });
 
   return segments;
@@ -546,6 +581,7 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
           parentLeaveIncomeByParent: { ...segment.parentLeaveIncomeByParent },
           parentBenefitIncomeByParent: { ...segment.parentBenefitIncomeByParent },
           parentParentalSalaryIncomeByParent: { ...segment.parentParentalSalaryIncomeByParent },
+          parentBenefitDaysByParent: { ...segment.parentBenefitDaysByParent },
           daysPerWeekValues: [segment.daysPerWeekValue],
           benefitLevels: initialBenefitLevels,
           benefitDaysByLevel: initialBenefitDaysByLevel,
@@ -584,6 +620,8 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
       existing.parentBenefitIncomeByParent.parent2 += segment.parentBenefitIncomeByParent.parent2;
       existing.parentParentalSalaryIncomeByParent.parent1 += segment.parentParentalSalaryIncomeByParent.parent1;
       existing.parentParentalSalaryIncomeByParent.parent2 += segment.parentParentalSalaryIncomeByParent.parent2;
+      existing.parentBenefitDaysByParent.parent1 += segment.parentBenefitDaysByParent.parent1;
+      existing.parentBenefitDaysByParent.parent2 += segment.parentBenefitDaysByParent.parent2;
       existing.monthLength = monthLength;
 
       if (!existing.daysPerWeekValues.includes(segment.daysPerWeekValue)) {
