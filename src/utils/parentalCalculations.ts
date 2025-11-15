@@ -107,6 +107,176 @@ const SGI_RATE = 0.97;
 const PRISBASBELOPP_2025 = 58800;
 const PARENTAL_SALARY_THRESHOLD = (10 * PRISBASBELOPP_2025) / 12;
 
+interface MonthlyUsageStats {
+  monthLength: number;
+  parent1Days: number;
+  parent2Days: number;
+  simultaneousCalendarDays: number;
+}
+
+interface CandidateEvaluation {
+  simultaneousCoverage: number;
+  hasOverflow: boolean;
+  parent1ParentalSalaryTotal: number;
+  parent2ParentalSalaryTotal: number;
+}
+
+function computeMonthlyUsageStats(periods: LeavePeriod[]): Map<string, MonthlyUsageStats> {
+  const stats = new Map<string, MonthlyUsageStats>();
+
+  periods.forEach(period => {
+    const periodStart = startOfDay(new Date(period.startDate));
+    const periodEnd = startOfDay(new Date(period.endDate));
+
+    if (periodEnd.getTime() < periodStart.getTime()) {
+      return;
+    }
+
+    const segments: Array<{
+      monthKey: string;
+      monthLength: number;
+      calendarDays: number;
+      benefitDays: number;
+    }> = [];
+
+    let cursor = new Date(periodStart);
+    while (cursor.getTime() <= periodEnd.getTime()) {
+      const monthStart = startOfMonth(cursor);
+      const monthEndCandidate = endOfMonth(monthStart);
+      const segmentEnd = monthEndCandidate.getTime() < periodEnd.getTime() ? monthEndCandidate : periodEnd;
+      const calendarDays = Math.max(1, differenceInCalendarDays(segmentEnd, cursor) + 1);
+      const monthLength = differenceInCalendarDays(monthEndCandidate, monthStart) + 1;
+
+      segments.push({
+        monthKey: `${monthStart.getFullYear()}-${monthStart.getMonth()}`,
+        monthLength,
+        calendarDays,
+        benefitDays: 0,
+      });
+
+      cursor = startOfDay(addDays(segmentEnd, 1));
+    }
+
+    if (segments.length === 0) {
+      return;
+    }
+
+    const totalCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
+    const totalBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount ?? 0));
+    const maxMultiplier = period.parent === 'both' ? 2 : 1;
+
+    if (segments.length === 1) {
+      segments[0].benefitDays = Math.min(totalBenefitDays, segments[0].calendarDays * maxMultiplier);
+    } else if (totalBenefitDays > 0) {
+      const allocations = segments.map(segment => {
+        const proportion = segment.calendarDays / totalCalendarDays;
+        const raw = totalBenefitDays * proportion;
+        const base = Math.floor(raw);
+        return {
+          segment,
+          base,
+          remainder: raw - base,
+        };
+      });
+
+      let allocated = 0;
+      allocations.forEach(({ segment, base }) => {
+        const cap = segment.calendarDays * maxMultiplier;
+        const cappedBase = Math.min(cap, base);
+        segment.benefitDays = cappedBase;
+        allocated += cappedBase;
+      });
+
+      let remaining = Math.max(0, totalBenefitDays - allocated);
+
+      if (remaining > 0) {
+        const sorted = allocations.slice().sort((a, b) => b.remainder - a.remainder);
+        for (const { segment } of sorted) {
+          if (remaining <= 0) break;
+          const cap = segment.calendarDays * maxMultiplier;
+          if (segment.benefitDays >= cap) continue;
+          segment.benefitDays += 1;
+          allocated += 1;
+          remaining -= 1;
+        }
+      }
+
+      if (allocated < totalBenefitDays) {
+        const last = allocations[allocations.length - 1]?.segment;
+        if (last) {
+          const cap = last.calendarDays * maxMultiplier;
+          const additional = Math.min(cap - last.benefitDays, totalBenefitDays - allocated);
+          if (additional > 0) {
+            last.benefitDays += additional;
+            allocated += additional;
+          }
+        }
+      }
+
+      if (allocated < totalBenefitDays) {
+        const first = allocations[0]?.segment;
+        if (first) {
+          const cap = first.calendarDays * maxMultiplier;
+          const additional = Math.min(cap - first.benefitDays, totalBenefitDays - allocated);
+          if (additional > 0) {
+            first.benefitDays += additional;
+            allocated += additional;
+          }
+        }
+      }
+    }
+
+    segments.forEach(segment => {
+      const existing = stats.get(segment.monthKey) ?? {
+        monthLength: segment.monthLength,
+        parent1Days: 0,
+        parent2Days: 0,
+        simultaneousCalendarDays: 0,
+      };
+
+      existing.monthLength = segment.monthLength;
+
+      if (period.parent === 'parent1') {
+        existing.parent1Days += segment.benefitDays;
+      } else if (period.parent === 'parent2') {
+        existing.parent2Days += segment.benefitDays;
+      } else {
+        const parentShare = segment.benefitDays / 2;
+        existing.parent1Days += parentShare;
+        existing.parent2Days += parentShare;
+        if (!period.isInitialTenDayPeriod) {
+          existing.simultaneousCalendarDays += segment.calendarDays;
+        }
+      }
+
+      stats.set(segment.monthKey, existing);
+    });
+  });
+
+  return stats;
+}
+
+function countFullSimultaneousMonths(stats: Map<string, MonthlyUsageStats>): number {
+  let count = 0;
+  stats.forEach(entry => {
+    if (entry.simultaneousCalendarDays >= entry.monthLength - 0.5 && entry.simultaneousCalendarDays > 0) {
+      count += 1;
+    }
+  });
+  return count;
+}
+
+function hasMonthlyOverflow(stats: Map<string, MonthlyUsageStats>): boolean {
+  let overflow = false;
+  stats.forEach(entry => {
+    const threshold = entry.monthLength + 0.5;
+    if (entry.parent1Days > threshold || entry.parent2Days > threshold) {
+      overflow = true;
+    }
+  });
+  return overflow;
+}
+
 export function calculateMaxLeaveMonths(
   daysPerWeek: number,
   totalBenefitDays: number = TOTAL_BENEFIT_DAYS
@@ -4116,6 +4286,49 @@ function convertLegacyResult(
     }
   });
 
+  const parentIncomeBreakdown = mergedPeriods.reduce(
+    (acc, period) => {
+      const parent1Benefit = Math.max(0, period.parent1BenefitIncome ?? 0);
+      const parent2Benefit = Math.max(0, period.parent2BenefitIncome ?? 0);
+      const parent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
+      const parent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
+      const otherParentIncome = Math.max(0, period.otherParentMonthlyIncome ?? 0);
+
+      acc.parent1.benefit += parent1Benefit;
+      acc.parent2.benefit += parent2Benefit;
+      acc.parent1.parentalSalary += parent1ParentalSalary;
+      acc.parent2.parentalSalary += parent2ParentalSalary;
+
+      if (period.parent === 'parent1') {
+        acc.parent2.working += otherParentIncome;
+      } else if (period.parent === 'parent2') {
+        acc.parent1.working += otherParentIncome;
+      } else if (period.parent === 'both') {
+        const parent1Income = Math.max(0, period.parent1Income ?? 0);
+        const parent2Income = Math.max(0, period.parent2Income ?? 0);
+        const parent1Working = Math.max(0, parent1Income - parent1Benefit - parent1ParentalSalary);
+        const parent2Working = Math.max(0, parent2Income - parent2Benefit - parent2ParentalSalary);
+        acc.parent1.working += parent1Working;
+        acc.parent2.working += parent2Working;
+      }
+
+      return acc;
+    },
+    {
+      parent1: { benefit: 0, parentalSalary: 0, working: 0 },
+      parent2: { benefit: 0, parentalSalary: 0, working: 0 },
+    }
+  );
+
+  const parent1TotalIncome =
+    parentIncomeBreakdown.parent1.benefit +
+    parentIncomeBreakdown.parent1.parentalSalary +
+    parentIncomeBreakdown.parent1.working;
+  const parent2TotalIncome =
+    parentIncomeBreakdown.parent2.benefit +
+    parentIncomeBreakdown.parent2.parentalSalary +
+    parentIncomeBreakdown.parent2.working;
+
   return {
     strategy: meta.key,
     title: meta.title,
@@ -4138,12 +4351,14 @@ function convertLegacyResult(
     parent1LowDaysSaved: Math.max(0, context.parent1LowTotalDays - Math.round(usage.parent1Low)),
     parent2HighDaysSaved: Math.max(0, context.parent2HighTotalDays - Math.round(usage.parent2High)),
     parent2LowDaysSaved: Math.max(0, context.parent2LowTotalDays - Math.round(usage.parent2Low)),
-    parent1TotalIncome: mergedPeriods
-      .filter(p => p.parent === 'parent1')
-      .reduce((sum, p) => sum + (p.monthlyIncome || 0) - (p.otherParentMonthlyIncome || 0), 0),
-    parent2TotalIncome: mergedPeriods
-      .filter(p => p.parent === 'parent2')
-      .reduce((sum, p) => sum + (p.monthlyIncome || 0) - (p.otherParentMonthlyIncome || 0), 0),
+    parent1TotalIncome,
+    parent2TotalIncome,
+    parent1BenefitIncomeTotal: parentIncomeBreakdown.parent1.benefit,
+    parent2BenefitIncomeTotal: parentIncomeBreakdown.parent2.benefit,
+    parent1ParentalSalaryTotal: parentIncomeBreakdown.parent1.parentalSalary,
+    parent2ParentalSalaryTotal: parentIncomeBreakdown.parent2.parentalSalary,
+    parent1WorkingIncomeTotal: parentIncomeBreakdown.parent1.working,
+    parent2WorkingIncomeTotal: parentIncomeBreakdown.parent2.working,
   };
 }
 
@@ -4265,7 +4480,7 @@ export function optimizeLeave(
   };
 
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
-  const saveResult = buildSimpleSaveDaysResult(saveDaysMeta, conversionContext, {
+  const saveResult = buildSimplePlanResult(saveDaysMeta, conversionContext, {
     parent1Months: preferredParent1Months,
     parent2Months: preferredParent2Months,
     simultaneousMonths,
@@ -4279,6 +4494,34 @@ export function optimizeLeave(
 
   const candidateStrategyKeys: LegacyStrategyKey[] = ['maximize_parental_salary', 'maximize'];
   const maximizeCandidates: OptimizationResult[] = [];
+  const requiredSimultaneousMonths = Math.max(0, Math.round(simultaneousMonths));
+  const evaluationCache = new WeakMap<OptimizationResult, CandidateEvaluation>();
+
+  const evaluateCandidate = (result: OptimizationResult): CandidateEvaluation => {
+    const cached = evaluationCache.get(result);
+    if (cached) {
+      return cached;
+    }
+
+    const usageStats = computeMonthlyUsageStats(result.periods);
+    const evaluation: CandidateEvaluation = {
+      simultaneousCoverage: countFullSimultaneousMonths(usageStats),
+      hasOverflow: hasMonthlyOverflow(usageStats),
+      parent1ParentalSalaryTotal: Math.max(0, result.parent1ParentalSalaryTotal ?? 0),
+      parent2ParentalSalaryTotal: Math.max(0, result.parent2ParentalSalaryTotal ?? 0),
+    };
+
+    evaluationCache.set(result, evaluation);
+    return evaluation;
+  };
+
+  maximizeCandidates.push(
+    buildSimplePlanResult(maximizeMeta, conversionContext, {
+      parent1Months: preferredParent1Months,
+      parent2Months: preferredParent2Months,
+      simultaneousMonths,
+    })
+  );
 
   if (maximizeTargets.length === 0) {
     maximizeTargets.push(Math.max(minHouseholdIncome, 1));
@@ -4300,6 +4543,32 @@ export function optimizeLeave(
   }
 
   const pickBetter = (best: OptimizationResult, current: OptimizationResult) => {
+    const bestEval = evaluateCandidate(best);
+    const currentEval = evaluateCandidate(current);
+
+    const bestMeetsSim = bestEval.simultaneousCoverage >= requiredSimultaneousMonths;
+    const currentMeetsSim = currentEval.simultaneousCoverage >= requiredSimultaneousMonths;
+
+    if (currentMeetsSim !== bestMeetsSim) {
+      return currentMeetsSim ? current : best;
+    }
+
+    if (bestEval.hasOverflow !== currentEval.hasOverflow) {
+      return bestEval.hasOverflow ? current : best;
+    }
+
+    if (parent1.hasCollectiveAgreement && currentEval.parent1ParentalSalaryTotal !== bestEval.parent1ParentalSalaryTotal) {
+      return currentEval.parent1ParentalSalaryTotal > bestEval.parent1ParentalSalaryTotal ? current : best;
+    }
+
+    if (parent2.hasCollectiveAgreement && currentEval.parent2ParentalSalaryTotal !== bestEval.parent2ParentalSalaryTotal) {
+      return currentEval.parent2ParentalSalaryTotal > bestEval.parent2ParentalSalaryTotal ? current : best;
+    }
+
+    if (currentEval.simultaneousCoverage !== bestEval.simultaneousCoverage) {
+      return currentEval.simultaneousCoverage > bestEval.simultaneousCoverage ? current : best;
+    }
+
     if (current.totalIncome !== best.totalIncome) {
       return current.totalIncome > best.totalIncome ? current : best;
     }
@@ -4320,7 +4589,7 @@ interface SimpleSavePlanOptions {
   simultaneousMonths: number;
 }
 
-function buildSimpleSaveDaysResult(
+function buildSimplePlanResult(
   meta: StrategyMeta,
   context: ConversionContext,
   options: SimpleSavePlanOptions,
@@ -4361,6 +4630,9 @@ function buildSimpleSaveDaysResult(
     parent1: context.parent1.hasCollectiveAgreement ? COLLECTIVE_MAX_CALENDAR_DAYS : 0,
     parent2: context.parent2.hasCollectiveAgreement ? COLLECTIVE_MAX_CALENDAR_DAYS : 0,
   };
+
+  const isSaveDaysStrategy = meta.key === 'save-days';
+  const isMaximizeStrategy = meta.key === 'maximize-income';
 
   const minIncomeThreshold = Math.max(0, context.minHouseholdIncome || 0);
 
@@ -4443,17 +4715,14 @@ function buildSimpleSaveDaysResult(
 
       let highDaysUsedPerParent = 0;
       if (maxSharedHighDays > 0) {
-        if (minIncomeThreshold > 0 && combinedHighWithCA > 0) {
+        if (isMaximizeStrategy && combinedHighWithCA > 0) {
+          highDaysUsedPerParent = Math.min(maxSharedHighDays, perParentMaxDays);
+        } else if (minIncomeThreshold > 0 && combinedHighWithCA > 0) {
           const neededHigh = Math.ceil(minIncomeThreshold / combinedHighWithCA);
           highDaysUsedPerParent = Math.min(maxSharedHighDays, neededHigh);
-        } else if (minIncomeThreshold <= 0 && combinedHighWithCA > 0) {
-          highDaysUsedPerParent = maxSharedHighDays;
+        } else if (combinedHighWithCA > 0) {
+          highDaysUsedPerParent = Math.min(maxSharedHighDays, perParentMaxDays);
         }
-      }
-
-      // If no high days were assigned but available, allow using available days
-      if (highDaysUsedPerParent <= 0 && maxSharedHighDays > 0 && combinedHighWithCA > 0) {
-        highDaysUsedPerParent = Math.min(maxSharedHighDays, perParentMaxDays);
       }
 
       const parent1HighIncome = parent1HighDaily * highDaysUsedPerParent;
@@ -4476,19 +4745,21 @@ function buildSimpleSaveDaysResult(
       const combinedLowDaily = context.parent1MinDailyNet + context.parent2MinDailyNet;
       let lowDaysUsedPerParent = 0;
 
-      if (minIncomeThreshold > monthlyTotalIncome && combinedLowDaily > 0) {
-        const remainingCapacity = Math.max(0, perParentMaxDays - highDaysUsedPerParent);
-        if (remainingCapacity > 0) {
-          const maxSharedLowDays = Math.min(remainingCapacity, parent1LowAvailable, parent2LowAvailable);
-          if (maxSharedLowDays > 0) {
+      const remainingCapacity = Math.max(0, perParentMaxDays - highDaysUsedPerParent);
+      if (remainingCapacity > 0 && combinedLowDaily > 0) {
+        const maxSharedLowDays = Math.min(remainingCapacity, parent1LowAvailable, parent2LowAvailable);
+        if (maxSharedLowDays > 0) {
+          if (minIncomeThreshold > monthlyTotalIncome) {
             const neededLow = Math.ceil((minIncomeThreshold - monthlyTotalIncome) / combinedLowDaily);
             lowDaysUsedPerParent = Math.min(maxSharedLowDays, neededLow);
+          } else if (isSaveDaysStrategy) {
+            lowDaysUsedPerParent = maxSharedLowDays;
           }
-        }
-      } else if (minIncomeThreshold <= 0 && combinedLowDaily > 0) {
-        const remainingCapacity = Math.max(0, perParentMaxDays - highDaysUsedPerParent);
-        if (remainingCapacity > 0) {
-          lowDaysUsedPerParent = Math.min(remainingCapacity, parent1LowAvailable, parent2LowAvailable);
+
+          if (isMaximizeStrategy) {
+            const extraCapacity = Math.max(0, maxSharedLowDays - lowDaysUsedPerParent);
+            lowDaysUsedPerParent += extraCapacity;
+          }
         }
       }
 
@@ -4970,7 +5241,9 @@ function buildSimpleSaveDaysResult(
     });
   };
 
-  topUpSingleParentPeriods();
+  if (isMaximizeStrategy) {
+    topUpSingleParentPeriods();
+  }
 
   totalIncome = 0;
   totalBenefitDays = 0;

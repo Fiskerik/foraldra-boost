@@ -598,9 +598,13 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
             initialBenefitLevels.push(period.benefitLevel);
             initialBenefitDaysByLevel[period.benefitLevel] = segment.benefitDays;
           }
-          if (segment.parentalSalaryIncome > 0 && segment.caEligibleBenefitDays > 0) {
+          const parentalSalaryDisplayDays = segment.parentalSalaryIncome > 0
+            ? Math.max(0, Math.round(segment.benefitDays))
+            : 0;
+
+          if (segment.parentalSalaryIncome > 0 && parentalSalaryDisplayDays > 0) {
             initialBenefitLevels.push("parental-salary");
-            initialBenefitDaysByLevel["parental-salary"] = Math.max(0, Math.round(segment.caEligibleBenefitDays));
+            initialBenefitDaysByLevel["parental-salary"] = parentalSalaryDisplayDays;
           }
         } else {
           initialBenefitLevels.push("none");
@@ -733,12 +737,16 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
           addLevelDays(period.benefitLevel === "high" ? "high" : "low", segment.benefitDays);
         }
 
-        if (segment.parentalSalaryIncome > 0 && segment.caEligibleBenefitDays > 0) {
+        const parentalSalaryDisplayDays = segment.parentalSalaryIncome > 0
+          ? Math.max(0, Math.round(segment.benefitDays))
+          : 0;
+
+        if (segment.parentalSalaryIncome > 0 && parentalSalaryDisplayDays > 0) {
           ensureLevel("parental-salary");
           if (!existing.benefitDaysByLevel["parental-salary"]) {
             existing.benefitDaysByLevel["parental-salary"] = 0;
           }
-          existing.benefitDaysByLevel["parental-salary"] += Math.max(0, Math.round(segment.caEligibleBenefitDays));
+          existing.benefitDaysByLevel["parental-salary"] += parentalSalaryDisplayDays;
         }
       }
 
