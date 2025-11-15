@@ -61,9 +61,10 @@ interface StrategyDetailsProps {
   strategy: OptimizationResult;
   minHouseholdIncome: number;
   timelineMonths: number;
+  showSummaryBreakdown?: boolean;
 }
 
-export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }: StrategyDetailsProps) {
+export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths, showSummaryBreakdown = false }: StrategyDetailsProps) {
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
   const filteredPeriods = strategy.periods;
   const monthlyBreakdown = buildMonthlyBreakdownEntries(strategy.periods);
@@ -169,14 +170,70 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Total inkomst</div>
               <div className="text-xs md:text-xl font-bold break-words">{formatCurrency(strategy.totalIncome)}</div>
+              {showSummaryBreakdown && (
+                <div className="text-[10px] md:text-xs text-muted-foreground leading-snug space-y-1.5">
+                  <div>
+                    <div className="font-medium text-foreground">Förälder 1</div>
+                    <div className="ml-2 space-y-0.5">
+                      <div>Föräldrapenning: {formatCurrency(strategy.parent1BenefitIncomeTotal ?? 0)}</div>
+                      <div>Föräldralön: {formatCurrency(strategy.parent1ParentalSalaryTotal ?? 0)}</div>
+                      <div>Lön: {formatCurrency(strategy.parent1WorkingIncomeTotal ?? 0)}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Förälder 2</div>
+                    <div className="ml-2 space-y-0.5">
+                      <div>Föräldrapenning: {formatCurrency(strategy.parent2BenefitIncomeTotal ?? 0)}</div>
+                      <div>Föräldralön: {formatCurrency(strategy.parent2ParentalSalaryTotal ?? 0)}</div>
+                      <div>Lön: {formatCurrency(strategy.parent2WorkingIncomeTotal ?? 0)}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar använda</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysUsed}</div>
+              {showSummaryBreakdown && (
+                <div className="text-[10px] md:text-xs text-muted-foreground leading-snug space-y-1.5">
+                  <div>
+                    <div className="font-medium text-foreground">Förälder 1</div>
+                    <div className="ml-2 space-y-0.5">
+                      <div>Föräldradagar: {Math.round(strategy.parent1HighDaysUsed ?? 0).toLocaleString('sv-SE')}</div>
+                      <div>Lägstanivå: {Math.round(strategy.parent1LowDaysUsed ?? 0).toLocaleString('sv-SE')}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Förälder 2</div>
+                    <div className="ml-2 space-y-0.5">
+                      <div>Föräldradagar: {Math.round(strategy.parent2HighDaysUsed ?? 0).toLocaleString('sv-SE')}</div>
+                      <div>Lägstanivå: {Math.round(strategy.parent2LowDaysUsed ?? 0).toLocaleString('sv-SE')}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar sparade</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysSaved}</div>
+              {showSummaryBreakdown && (
+                <div className="text-[10px] md:text-xs text-muted-foreground leading-snug space-y-1.5">
+                  <div>
+                    <div className="font-medium text-foreground">Förälder 1</div>
+                    <div className="ml-2 space-y-0.5">
+                      <div>Föräldradagar: {Math.round(strategy.parent1HighDaysSaved ?? 0).toLocaleString('sv-SE')}</div>
+                      <div>Lägstanivå: {Math.round(strategy.parent1LowDaysSaved ?? 0).toLocaleString('sv-SE')}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="font-medium text-foreground">Förälder 2</div>
+                    <div className="ml-2 space-y-0.5">
+                      <div>Föräldradagar: {Math.round(strategy.parent2HighDaysSaved ?? 0).toLocaleString('sv-SE')}</div>
+                      <div>Lägstanivå: {Math.round(strategy.parent2LowDaysSaved ?? 0).toLocaleString('sv-SE')}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </CardHeader>

@@ -450,10 +450,11 @@ export default function PlanEditor() {
 
         <div className="mt-6">
           {selectedStrategy && (
-            <StrategyDetails 
+            <StrategyDetails
               strategy={selectedStrategy}
               minHouseholdIncome={householdIncome}
               timelineMonths={totalMonths}
+              showSummaryBreakdown
             />
           )}
         </div>
