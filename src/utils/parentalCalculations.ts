@@ -175,6 +175,65 @@ function splitIntoMonthlySegments(start: Date, end: Date): MonthlySegment[] {
   return segments;
 }
 
+function calculateOwnerMonthlyBenefitUsage(
+  periods: LeavePeriod[],
+  owner: 'parent1' | 'parent2',
+  monthStart: Date,
+  monthEnd: Date
+): number {
+  const safeStart = startOfDay(monthStart);
+  const safeEnd = startOfDay(monthEnd);
+
+  if (safeEnd.getTime() < safeStart.getTime()) {
+    return 0;
+  }
+
+  let total = 0;
+
+  periods.forEach(period => {
+    if (!period || !period.startDate || !period.endDate) {
+      return;
+    }
+
+    if (period.benefitLevel === 'none') {
+      return;
+    }
+
+    const periodStart = startOfDay(new Date(period.startDate));
+    const periodEnd = startOfDay(new Date(period.endDate));
+
+    if (periodEnd.getTime() < safeStart.getTime() || periodStart.getTime() > safeEnd.getTime()) {
+      return;
+    }
+
+    const overlapStart = periodStart.getTime() > safeStart.getTime() ? periodStart : safeStart;
+    const overlapEnd = periodEnd.getTime() < safeEnd.getTime() ? periodEnd : safeEnd;
+    const overlapDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+
+    if (overlapDays <= 0) {
+      return;
+    }
+
+    const rawBenefitDays = toNumber(period.benefitDaysUsed ?? period.daysCount);
+    const totalBenefitDays = Math.max(0, Number.isFinite(rawBenefitDays) ? rawBenefitDays : 0);
+
+    if (totalBenefitDays <= 0) {
+      return;
+    }
+
+    const periodCalendarDays = Math.max(1, differenceInCalendarDays(periodEnd, periodStart) + 1);
+    const proportionalBenefit = Math.min(totalBenefitDays, (totalBenefitDays * overlapDays) / periodCalendarDays);
+
+    if (period.parent === owner) {
+      total += proportionalBenefit;
+    } else if (period.parent === 'both') {
+      total += proportionalBenefit / 2;
+    }
+  });
+
+  return total;
+}
+
 type RemainingBenefitDays = Record<'parent1' | 'parent2', number>;
 
 interface TopUpOptions {
@@ -563,43 +622,34 @@ function enforceMonthlyMinimumIncome(
     }
 
     const segmentDays = Math.max(1, differenceInCalendarDays(targetMonth.end, targetMonth.start) + 1);
-    const maxMonthlyBenefitDays = Math.max(7, Math.round(7 * WEEKS_PER_MONTH));
+    const monthStart = startOfMonth(targetMonth.start);
+    const monthEndCandidate = endOfMonth(monthStart);
+    const monthLength = Math.max(1, differenceInCalendarDays(monthEndCandidate, monthStart) + 1);
+    const existingOwnerUsage = calculateOwnerMonthlyBenefitUsage(periods, owner, monthStart, monthEndCandidate);
+    const monthlyCap = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, monthLength);
+    const remainingMonthlyCapacity = Math.max(0, monthlyCap - existingOwnerUsage);
+
     const availableBenefitDays = effectiveLevel === 'high' ? availableHigh : availableLow;
     const neededDays = Math.ceil(worstDeficit / effectiveDaily);
-    const takeDays = Math.min(neededDays, availableBenefitDays, maxMonthlyBenefitDays);
+    const takeDays = Math.min(neededDays, availableBenefitDays, remainingMonthlyCapacity);
 
     if (takeDays <= 0) {
       break;
     }
 
-    const calendarDays = Math.min(segmentDays, Math.max(1, takeDays));
+    const calendarDays = Math.min(segmentDays, Math.max(1, Math.round(takeDays)));
     const periodStart = new Date(targetMonth.start);
     let periodEnd = startOfDay(addDays(periodStart, calendarDays - 1));
     if (periodEnd.getTime() > targetMonth.end.getTime()) {
       periodEnd = new Date(targetMonth.end);
     }
 
-    const monthStart = startOfMonth(periodStart);
-    const monthEndCandidate = endOfMonth(monthStart);
-    const monthLength = Math.max(1, differenceInCalendarDays(monthEndCandidate, monthStart) + 1);
-    const isFullMonth =
-      periodStart.getDate() === 1 &&
-      periodEnd.getDate() === monthEndCandidate.getDate() &&
-      calendarDays >= monthLength;
-
     const benefitIncome = benefitDailyBase * takeDays;
     const bonusIncome = bonusPerBenefitDay > 0 ? bonusPerBenefitDay * takeDays : 0;
 
-    let otherParentIncomeForPeriod = 0;
-    if (workingParentNetMonthly > 0) {
-      otherParentIncomeForPeriod = isFullMonth
-        ? workingParentNetMonthly
-        : workingParentNetMonthly * (calendarDays / monthLength);
-    }
-
-    const totalPeriodIncome = benefitIncome + bonusIncome + otherParentIncomeForPeriod;
+    const totalPeriodIncome = benefitIncome + bonusIncome;
     const normalizedCalendarDays = Math.max(1, calendarDays);
-    const otherParentDailyIncome = otherParentIncomeForPeriod / normalizedCalendarDays;
+    const otherParentDailyIncome = 0;
     const totalDailyIncome = totalPeriodIncome / normalizedCalendarDays;
 
     const topUpPeriod: LeavePeriod = {
