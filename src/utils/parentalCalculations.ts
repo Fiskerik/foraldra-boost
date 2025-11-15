@@ -4523,14 +4523,6 @@ export function optimizeLeave(
     })
   );
 
-  maximizeCandidates.push(
-    buildSimplePlanResult(maximizeMeta, conversionContext, {
-      parent1Months: preferredParent1Months,
-      parent2Months: preferredParent2Months,
-      simultaneousMonths,
-    })
-  );
-
   if (maximizeTargets.length === 0) {
     maximizeTargets.push(Math.max(minHouseholdIncome, 1));
   }
@@ -4901,7 +4893,7 @@ function buildSimplePlanResult(
 
     if (remainingDeficit > 0 && effectiveDailyIncome > 0) {
       const maxHighNeeded = Math.min(
-        MAX_BENEFIT_DAYS_PER_MONTH,
+        monthlyCapacity,
         Math.ceil(remainingDeficit / effectiveDailyIncome)
       );
 
@@ -4916,7 +4908,7 @@ function buildSimplePlanResult(
           remainingDeficit = Math.max(0, remainingDeficit - ownHighDays * effectiveDailyIncome);
         }
 
-        const highCapacityLeft = MAX_BENEFIT_DAYS_PER_MONTH - totalHighDaysUsed;
+        const highCapacityLeft = Math.max(0, monthlyCapacity - totalHighDaysUsed);
         if (remainingDeficit > 0 && highCapacityLeft > 0) {
           const reservedBaseline = otherParent === 'parent1'
             ? Math.max(0, context.parent1ReservedHighDays)
@@ -5310,9 +5302,28 @@ function buildSimplePlanResult(
     (acc, period) => {
       const parent1Benefit = Math.max(0, period.parent1BenefitIncome ?? 0);
       const parent2Benefit = Math.max(0, period.parent2BenefitIncome ?? 0);
-      const parent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
-      const parent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
+      const periodTotalBonus = Math.max(0, period.collectiveAgreementTotalBonus ?? 0);
+      let parent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
+      let parent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
       const otherParentIncome = Math.max(0, period.otherParentMonthlyIncome ?? 0);
+
+      if (periodTotalBonus > 0) {
+        if (period.parent === 'parent1' && parent1ParentalSalary <= 0) {
+          parent1ParentalSalary = periodTotalBonus;
+        } else if (period.parent === 'parent2' && parent2ParentalSalary <= 0) {
+          parent2ParentalSalary = periodTotalBonus;
+        } else if (period.parent === 'both' && (parent1ParentalSalary <= 0 || parent2ParentalSalary <= 0)) {
+          const combinedBenefit = parent1Benefit + parent2Benefit;
+          const parent1Share = combinedBenefit > 0 ? parent1Benefit / combinedBenefit : 0.5;
+          const parent2Share = combinedBenefit > 0 ? parent2Benefit / combinedBenefit : 0.5;
+          if (parent1ParentalSalary <= 0) {
+            parent1ParentalSalary = periodTotalBonus * parent1Share;
+          }
+          if (parent2ParentalSalary <= 0) {
+            parent2ParentalSalary = periodTotalBonus * parent2Share;
+          }
+        }
+      }
 
       acc.parent1.benefit += parent1Benefit;
       acc.parent2.benefit += parent2Benefit;
