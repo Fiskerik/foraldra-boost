@@ -203,7 +203,7 @@ export function LeavePeriodCard({
               </div>
             </div>
 
-            <div className="space-y-2 md:space-y-4">
+            <div className="space-y-2 md:space-y-4 mt-6 md:mt-4">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-1 text-[10px] md:text-base">
                   <Users className="h-2.5 md:h-4 w-2.5 md:w-4" />

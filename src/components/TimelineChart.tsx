@@ -168,17 +168,17 @@ export function TimelineChart({
       <h3 className="sr-only" id="income-timeline-heading">Inkomsttidslinje</h3>
 
       <div className="flex w-full justify-end">
-        <div className="bg-white dark:bg-card rounded-lg shadow-lg p-3 min-w-[200px] border border-border">
+        <div className="bg-white dark:bg-card rounded-lg shadow-lg p-2 md:p-3 min-w-[140px] md:min-w-[200px] border border-border">
           {hoveredPoint ? <>
-              <div className="text-xs text-muted-foreground mb-1">{hoveredPoint.month}</div>
-              <div className="text-lg font-semibold text-foreground">{formatCurrency(hoveredPoint.income)}</div>
-              <div className="text-xs text-muted-foreground mt-2">
+              <div className="text-[10px] md:text-xs text-muted-foreground mb-1">{hoveredPoint.month}</div>
+              <div className="text-sm md:text-lg font-semibold text-foreground">{formatCurrency(hoveredPoint.income)}</div>
+              <div className="text-[9px] md:text-xs text-muted-foreground mt-1 md:mt-2">
                 {hoveredPoint.parent1Days > 0 && "Förälder 1"}
                 {hoveredPoint.parent1Days > 0 && hoveredPoint.parent2Days > 0 && " & "}
                 {hoveredPoint.parent2Days > 0 && "Förälder 2"}
                 {hoveredPoint.bothDays > 0 && hoveredPoint.parent1Days === 0 && hoveredPoint.parent2Days === 0 && "Båda föräldrar"}
               </div>
-            </> : <div className="text-sm text-muted-foreground">Hovra över grafen för att se detaljer</div>}
+            </> : <div className="text-xs md:text-sm text-muted-foreground">Hovra över grafen för att se detaljer</div>}
         </div>
       </div>
 
@@ -302,25 +302,25 @@ export function TimelineChart({
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-4 justify-center text-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-parent1 rounded"></div>
+      <div className="flex flex-wrap gap-2 md:gap-4 justify-center text-xs md:text-sm">
+        <div className="flex items-center gap-1 md:gap-2">
+          <div className="w-3 h-3 md:w-4 md:h-4 bg-parent1 rounded"></div>
           <span>Förälder 1 hemma</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-parent2 rounded"></div>
+        <div className="flex items-center gap-1 md:gap-2">
+          <div className="w-3 h-3 md:w-4 md:h-4 bg-parent2 rounded"></div>
           <span>Förälder 2 hemma</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded" style={{ backgroundColor: '#6B21A8' }}></div>
+        <div className="flex items-center gap-1 md:gap-2">
+          <div className="w-3 h-3 md:w-4 md:h-4 rounded" style={{ backgroundColor: '#6B21A8' }}></div>
           <span>Båda samtidigt</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-accent rounded"></div>
+        <div className="flex items-center gap-1 md:gap-2">
+          <div className="w-3 h-3 md:w-4 md:h-4 bg-accent rounded"></div>
           <span>Båda hemma (endast 10 första dagar)</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-0.5 border-t-2 border-destructive border-dashed"></div>
+        <div className="flex items-center gap-1 md:gap-2">
+          <div className="w-6 md:w-8 h-0.5 border-t-2 border-destructive border-dashed"></div>
           <span>Min. hushållsinkomst ({formatCurrency(minHouseholdIncome)})</span>
         </div>
       </div>
