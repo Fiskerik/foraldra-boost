@@ -188,17 +188,19 @@ export function LeavePeriodCard({
                   </span>
                 </div>
                 {showGraph && parent1Data && parent2Data && (
-                  <IncomeDistributionGraph
-                    totalMonths={totalMonths}
-                    currentParent1Months={parent1Months}
-                    minHouseholdIncome={minHouseholdIncome}
-                    parent1Data={parent1Data}
-                    parent2Data={parent2Data}
-                    simultaneousLeave={simultaneousLeave}
-                    simultaneousMonths={simultaneousMonths}
-                    selectedStrategy={selectedStrategy}
-                    onDistributionClick={(months) => onDistributionChange(months)}
-                  />
+                  <div className="pb-10 md:pb-0">
+                    <IncomeDistributionGraph
+                      totalMonths={totalMonths}
+                      currentParent1Months={parent1Months}
+                      minHouseholdIncome={minHouseholdIncome}
+                      parent1Data={parent1Data}
+                      parent2Data={parent2Data}
+                      simultaneousLeave={simultaneousLeave}
+                      simultaneousMonths={simultaneousMonths}
+                      selectedStrategy={selectedStrategy}
+                      onDistributionClick={(months) => onDistributionChange(months)}
+                    />
+                  </div>
                 )}
               </div>
             </div>

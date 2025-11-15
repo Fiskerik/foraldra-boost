@@ -4339,7 +4339,7 @@ function buildSimpleSaveDaysResult(
       const exclusiveStartIndex = simultaneousMonths + 1;
       const adjustedIndex = monthIndex - simultaneousMonths;
 
-      if (adjustedIndex <= safeParent1Months) {
+      if (adjustedIndex < safeParent1Months) {
         activeParent = 'parent1';
       } else {
         activeParent = 'parent2';
