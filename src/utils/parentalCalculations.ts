@@ -4265,7 +4265,7 @@ export function optimizeLeave(
   };
 
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
-  const saveResult = buildSimpleSaveDaysResult(saveDaysMeta, conversionContext, {
+  const saveResult = buildSimplePlanResult(saveDaysMeta, conversionContext, {
     parent1Months: preferredParent1Months,
     parent2Months: preferredParent2Months,
     simultaneousMonths,
@@ -4279,6 +4279,14 @@ export function optimizeLeave(
 
   const candidateStrategyKeys: LegacyStrategyKey[] = ['maximize_parental_salary', 'maximize'];
   const maximizeCandidates: OptimizationResult[] = [];
+
+  maximizeCandidates.push(
+    buildSimplePlanResult(maximizeMeta, conversionContext, {
+      parent1Months: preferredParent1Months,
+      parent2Months: preferredParent2Months,
+      simultaneousMonths,
+    })
+  );
 
   if (maximizeTargets.length === 0) {
     maximizeTargets.push(Math.max(minHouseholdIncome, 1));
@@ -4320,7 +4328,7 @@ interface SimpleSavePlanOptions {
   simultaneousMonths: number;
 }
 
-function buildSimpleSaveDaysResult(
+function buildSimplePlanResult(
   meta: StrategyMeta,
   context: ConversionContext,
   options: SimpleSavePlanOptions,
@@ -4361,6 +4369,9 @@ function buildSimpleSaveDaysResult(
     parent1: context.parent1.hasCollectiveAgreement ? COLLECTIVE_MAX_CALENDAR_DAYS : 0,
     parent2: context.parent2.hasCollectiveAgreement ? COLLECTIVE_MAX_CALENDAR_DAYS : 0,
   };
+
+  const isSaveDaysStrategy = meta.key === 'save-days';
+  const isMaximizeStrategy = meta.key === 'maximize-income';
 
   const minIncomeThreshold = Math.max(0, context.minHouseholdIncome || 0);
 
@@ -4443,17 +4454,14 @@ function buildSimpleSaveDaysResult(
 
       let highDaysUsedPerParent = 0;
       if (maxSharedHighDays > 0) {
-        if (minIncomeThreshold > 0 && combinedHighWithCA > 0) {
+        if (isMaximizeStrategy && combinedHighWithCA > 0) {
+          highDaysUsedPerParent = Math.min(maxSharedHighDays, perParentMaxDays);
+        } else if (minIncomeThreshold > 0 && combinedHighWithCA > 0) {
           const neededHigh = Math.ceil(minIncomeThreshold / combinedHighWithCA);
           highDaysUsedPerParent = Math.min(maxSharedHighDays, neededHigh);
-        } else if (minIncomeThreshold <= 0 && combinedHighWithCA > 0) {
-          highDaysUsedPerParent = maxSharedHighDays;
+        } else if (combinedHighWithCA > 0) {
+          highDaysUsedPerParent = Math.min(maxSharedHighDays, perParentMaxDays);
         }
-      }
-
-      // If no high days were assigned but available, allow using available days
-      if (highDaysUsedPerParent <= 0 && maxSharedHighDays > 0 && combinedHighWithCA > 0) {
-        highDaysUsedPerParent = Math.min(maxSharedHighDays, perParentMaxDays);
       }
 
       const parent1HighIncome = parent1HighDaily * highDaysUsedPerParent;
@@ -4476,19 +4484,21 @@ function buildSimpleSaveDaysResult(
       const combinedLowDaily = context.parent1MinDailyNet + context.parent2MinDailyNet;
       let lowDaysUsedPerParent = 0;
 
-      if (minIncomeThreshold > monthlyTotalIncome && combinedLowDaily > 0) {
-        const remainingCapacity = Math.max(0, perParentMaxDays - highDaysUsedPerParent);
-        if (remainingCapacity > 0) {
-          const maxSharedLowDays = Math.min(remainingCapacity, parent1LowAvailable, parent2LowAvailable);
-          if (maxSharedLowDays > 0) {
+      const remainingCapacity = Math.max(0, perParentMaxDays - highDaysUsedPerParent);
+      if (remainingCapacity > 0 && combinedLowDaily > 0) {
+        const maxSharedLowDays = Math.min(remainingCapacity, parent1LowAvailable, parent2LowAvailable);
+        if (maxSharedLowDays > 0) {
+          if (minIncomeThreshold > monthlyTotalIncome) {
             const neededLow = Math.ceil((minIncomeThreshold - monthlyTotalIncome) / combinedLowDaily);
             lowDaysUsedPerParent = Math.min(maxSharedLowDays, neededLow);
+          } else if (isSaveDaysStrategy) {
+            lowDaysUsedPerParent = maxSharedLowDays;
           }
-        }
-      } else if (minIncomeThreshold <= 0 && combinedLowDaily > 0) {
-        const remainingCapacity = Math.max(0, perParentMaxDays - highDaysUsedPerParent);
-        if (remainingCapacity > 0) {
-          lowDaysUsedPerParent = Math.min(remainingCapacity, parent1LowAvailable, parent2LowAvailable);
+
+          if (isMaximizeStrategy) {
+            const extraCapacity = Math.max(0, maxSharedLowDays - lowDaysUsedPerParent);
+            lowDaysUsedPerParent += extraCapacity;
+          }
         }
       }
 
@@ -4970,7 +4980,9 @@ function buildSimpleSaveDaysResult(
     });
   };
 
-  topUpSingleParentPeriods();
+  if (isMaximizeStrategy) {
+    topUpSingleParentPeriods();
+  }
 
   totalIncome = 0;
   totalBenefitDays = 0;
