@@ -1267,6 +1267,85 @@ function applyCollectiveAgreementBonuses(
   }
 }
 
+function backfillCollectiveAgreementIncome(periods: LeavePeriod[]): void {
+  periods.forEach(period => {
+    const totalBonus = Math.max(0, period.collectiveAgreementTotalBonus ?? 0);
+    if (totalBonus <= 0) {
+      return;
+    }
+
+    const parent1Existing = Math.max(0, period.parent1ParentalSalary ?? 0);
+    const parent2Existing = Math.max(0, period.parent2ParentalSalary ?? 0);
+
+    let targetParent1 = parent1Existing;
+    let targetParent2 = parent2Existing;
+
+    if (period.parent === 'parent1') {
+      targetParent1 = Math.max(parent1Existing, totalBonus);
+      targetParent2 = 0;
+    } else if (period.parent === 'parent2') {
+      targetParent2 = Math.max(parent2Existing, totalBonus);
+      targetParent1 = 0;
+    } else {
+      const combinedExisting = parent1Existing + parent2Existing;
+      if (combinedExisting < totalBonus - 1e-6) {
+        const parent1Benefit = Math.max(0, period.parent1BenefitIncome ?? 0);
+        const parent2Benefit = Math.max(0, period.parent2BenefitIncome ?? 0);
+        const combinedBenefit = parent1Benefit + parent2Benefit;
+        const parent1Share = combinedBenefit > 0 ? parent1Benefit / combinedBenefit : 0.5;
+        targetParent1 = totalBonus * parent1Share;
+        targetParent2 = totalBonus - targetParent1;
+      }
+    }
+
+    const applyShare = (
+      parentKey: 'parent1' | 'parent2',
+      targetAmount: number,
+      existingAmount: number
+    ) => {
+      const normalizedTarget = Math.max(0, targetAmount);
+      const previousAmount = Math.max(0, existingAmount);
+
+      if (normalizedTarget <= previousAmount + 1e-6) {
+        if (previousAmount > 0) {
+          if (parentKey === 'parent1') {
+            period.parent1ParentalSalary = previousAmount;
+          } else {
+            period.parent2ParentalSalary = previousAmount;
+          }
+        }
+        return;
+      }
+
+      const delta = normalizedTarget - previousAmount;
+      if (parentKey === 'parent1') {
+        period.parent1ParentalSalary = normalizedTarget;
+      } else {
+        period.parent2ParentalSalary = normalizedTarget;
+      }
+
+      const parentOnLeave = parentKey === 'parent1'
+        ? period.parent === 'parent1' || period.parent === 'both'
+        : period.parent === 'parent2' || period.parent === 'both';
+
+      if (!parentOnLeave || delta <= 0) {
+        return;
+      }
+
+      if (parentKey === 'parent1') {
+        const currentIncome = Math.max(0, period.parent1Income ?? 0);
+        period.parent1Income = currentIncome + delta;
+      } else {
+        const currentIncome = Math.max(0, period.parent2Income ?? 0);
+        period.parent2Income = currentIncome + delta;
+      }
+    };
+
+    applyShare('parent1', targetParent1, parent1Existing);
+    applyShare('parent2', targetParent2, parent2Existing);
+  });
+}
+
 function createTopUpPeriods({
   parent,
   start,
@@ -4179,6 +4258,8 @@ function convertLegacyResult(
     )
   );
 
+  backfillCollectiveAgreementIncome(mergedPeriods);
+
   const totalIncome = mergedPeriods.reduce((sum, period) => {
     const calendarDays = period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
     const monthlyIncome = Number.isFinite(period.monthlyIncome)
@@ -4725,6 +4806,11 @@ function buildSimplePlanResult(
         }
       }
 
+      highDaysUsedPerParent = Math.min(
+        perParentMaxDays,
+        Math.max(0, Math.round(highDaysUsedPerParent))
+      );
+
       const parent1HighIncome = parent1HighDaily * highDaysUsedPerParent;
       const parent2HighIncome = parent2HighDaily * highDaysUsedPerParent;
       const caBenefitDaysParent1 =
@@ -4762,6 +4848,12 @@ function buildSimplePlanResult(
           }
         }
       }
+
+      const maxLowCapacity = Math.max(0, perParentMaxDays - highDaysUsedPerParent);
+      lowDaysUsedPerParent = Math.min(
+        maxLowCapacity,
+        Math.max(0, Math.round(lowDaysUsedPerParent))
+      );
 
       if (lowDaysUsedPerParent > 0) {
         parent1BenefitIncome += context.parent1MinDailyNet * lowDaysUsedPerParent;
