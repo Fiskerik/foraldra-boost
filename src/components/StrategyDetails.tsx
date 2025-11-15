@@ -61,9 +61,10 @@ interface StrategyDetailsProps {
   strategy: OptimizationResult;
   minHouseholdIncome: number;
   timelineMonths: number;
+  showSummaryBreakdown?: boolean;
 }
 
-export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }: StrategyDetailsProps) {
+export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths, showSummaryBreakdown = false }: StrategyDetailsProps) {
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
   const filteredPeriods = strategy.periods;
   const monthlyBreakdown = buildMonthlyBreakdownEntries(strategy.periods);
@@ -169,14 +170,32 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths }
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Total inkomst</div>
               <div className="text-xs md:text-xl font-bold break-words">{formatCurrency(strategy.totalIncome)}</div>
+              {showSummaryBreakdown && (
+                <div className="text-[10px] md:text-xs text-muted-foreground leading-snug space-y-0.5">
+                  <div>Förälder 1: {formatCurrency(strategy.parent1TotalIncome ?? 0)}</div>
+                  <div>Förälder 2: {formatCurrency(strategy.parent2TotalIncome ?? 0)}</div>
+                </div>
+              )}
             </div>
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar använda</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysUsed}</div>
+              {showSummaryBreakdown && (
+                <div className="text-[10px] md:text-xs text-muted-foreground leading-snug space-y-0.5">
+                  <div>Hög: {Math.round(strategy.highBenefitDaysUsed ?? 0).toLocaleString('sv-SE')}</div>
+                  <div>Låg: {Math.round(strategy.lowBenefitDaysUsed ?? 0).toLocaleString('sv-SE')}</div>
+                </div>
+              )}
             </div>
             <div className="p-2 md:p-4 bg-background rounded-lg flex flex-col gap-2 min-h-[80px] md:min-h-[100px]">
               <div className="text-xs md:text-sm text-muted-foreground mb-1">Dagar sparade</div>
               <div className="text-xs md:text-xl font-bold break-words">{strategy.daysSaved}</div>
+              {showSummaryBreakdown && (
+                <div className="text-[10px] md:text-xs text-muted-foreground leading-snug space-y-0.5">
+                  <div>Hög: {Math.round(strategy.highBenefitDaysSaved ?? 0).toLocaleString('sv-SE')}</div>
+                  <div>Låg: {Math.round(strategy.lowBenefitDaysSaved ?? 0).toLocaleString('sv-SE')}</div>
+                </div>
+              )}
             </div>
           </div>
         </CardHeader>

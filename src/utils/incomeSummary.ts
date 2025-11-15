@@ -79,6 +79,7 @@ interface AggregatedMonthInfo {
 
 type InternalMonthlyBreakdownEntry = MonthlyBreakdownEntry & {
   uniqueCalendarDays: Set<number>;
+  parentDaySets: Record<'parent1' | 'parent2' | 'both', Set<number>>;
 };
 
 function addCalendarRangeToSet(target: Set<number>, start: Date, end: Date): void {
@@ -608,6 +609,22 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
         const uniqueCalendarDays = new Set<number>();
         addCalendarRangeToSet(uniqueCalendarDays, segment.startDate, segment.endDate);
 
+        const parentDaySets: Record<'parent1' | 'parent2' | 'both', Set<number>> = {
+          parent1: new Set<number>(),
+          parent2: new Set<number>(),
+          both: new Set<number>(),
+        };
+
+        if (period.parent === 'parent1' || period.parent === 'both') {
+          addCalendarRangeToSet(parentDaySets.parent1, segment.startDate, segment.endDate);
+        }
+        if (period.parent === 'parent2' || period.parent === 'both') {
+          addCalendarRangeToSet(parentDaySets.parent2, segment.startDate, segment.endDate);
+        }
+        if (period.parent === 'both') {
+          addCalendarRangeToSet(parentDaySets.both, segment.startDate, segment.endDate);
+        }
+
         monthMap.set(key, {
           monthKey: key,
           monthStart,
@@ -630,17 +647,27 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
           benefitDaysByLevel: initialBenefitDaysByLevel,
           parents: [parentLabel],
           parentDayTotals: {
-            parent1: period.parent === "parent1" ? segment.calendarDays : 0,
-            parent2: period.parent === "parent2" ? segment.calendarDays : 0,
-            both: period.parent === "both" ? segment.calendarDays : 0,
+            parent1: parentDaySets.parent1.size,
+            parent2: parentDaySets.parent2.size,
+            both: parentDaySets.both.size,
           },
           otherParentMonthlyBase: segment.otherParentMonthlyBase,
           uniqueCalendarDays,
+          parentDaySets,
         });
         return;
       }
 
       addCalendarRangeToSet(existing.uniqueCalendarDays, segment.startDate, segment.endDate);
+      if (period.parent === "parent1" || period.parent === "both") {
+        addCalendarRangeToSet(existing.parentDaySets.parent1, segment.startDate, segment.endDate);
+      }
+      if (period.parent === "parent2" || period.parent === "both") {
+        addCalendarRangeToSet(existing.parentDaySets.parent2, segment.startDate, segment.endDate);
+      }
+      if (period.parent === "both") {
+        addCalendarRangeToSet(existing.parentDaySets.both, segment.startDate, segment.endDate);
+      }
 
       existing.startDate =
         existing.startDate.getTime() <= segment.startDate.getTime()
@@ -716,7 +743,13 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
       }
 
       const parentKey = getParentKey(period.parent);
-      existing.parentDayTotals[parentKey] += segment.calendarDays;
+      existing.parentDayTotals[parentKey] = existing.parentDaySets[parentKey].size;
+
+      if (period.parent === "both") {
+        existing.parentDayTotals.parent1 = existing.parentDaySets.parent1.size;
+        existing.parentDayTotals.parent2 = existing.parentDaySets.parent2.size;
+        existing.parentDayTotals.both = existing.parentDaySets.both.size;
+      }
 
       if (!existing.parents.includes(parentLabel)) {
         existing.parents.push(parentLabel);
@@ -725,15 +758,20 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
   });
 
   return Array.from(monthMap.values())
-    .map(({ uniqueCalendarDays, ...entry }) => {
+    .map(({ uniqueCalendarDays, parentDaySets, ...entry }) => {
+      const cappedOtherIncome = Math.max(
+        0,
+        Math.min(entry.otherParentMonthlyBase, entry.otherParentIncome)
+      );
       const recalculatedMonthlyIncome = Math.max(
         0,
-        Math.round(entry.leaveParentIncome + entry.parentalSalaryIncome + entry.otherParentIncome)
+        Math.round(entry.leaveParentIncome + entry.parentalSalaryIncome + cappedOtherIncome)
       );
 
       return {
         ...entry,
         calendarDays: uniqueCalendarDays.size,
+        otherParentIncome: cappedOtherIncome,
         monthlyIncome: recalculatedMonthlyIncome,
       };
     })
