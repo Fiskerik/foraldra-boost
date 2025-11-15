@@ -433,6 +433,12 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     if (bonusPerBenefitDay > 0 && segment.caEligibleBenefitDays > 0) {
       segmentParentalSalaryIncome = segment.caEligibleBenefitDays * bonusPerBenefitDay;
     }
+    if (segmentParentalSalaryIncome <= 0 && totalCABonus > 0) {
+      const calendarShare = totalSegmentCalendarDays > 0 ? segment.calendarDays / totalSegmentCalendarDays : 0;
+      if (calendarShare > 0) {
+        segmentParentalSalaryIncome = totalCABonus * calendarShare;
+      }
+    }
 
     const leaveParentIncome = segmentBenefitIncome + segmentParentalSalaryIncome;
     const monthlyIncome = leaveParentIncome + otherParentIncome;
@@ -443,6 +449,17 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     segment.leaveParentIncome = Math.max(0, Math.round(leaveParentIncome));
     segment.monthlyIncome = Math.max(0, Math.round(monthlyIncome));
   });
+
+  if (totalCABonus > 0) {
+    const distributedParentalSalary = segments.reduce((sum, segment) => sum + segment.parentalSalaryIncome, 0);
+    const bonusGap = Math.round(totalCABonus) - distributedParentalSalary;
+    if (bonusGap !== 0) {
+      const target = segments.find(segment => segment.parentalSalaryIncome > 0) ?? segments[0];
+      if (target) {
+        target.parentalSalaryIncome = Math.max(0, target.parentalSalaryIncome + bonusGap);
+      }
+    }
+  }
 
   const totalSegmentCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
   const totalSegmentBenefitDays = segments.reduce((sum, segment) => sum + segment.benefitDays, 0);
@@ -497,12 +514,19 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
   const parent2BenefitTotal = resolveParentBenefitTotals('parent2', parent2LeaveTotal);
   const parent1ParentalSalaryTotal = (() => {
     if (period.parent === 'parent1') {
-      return totalSegmentParentalSalaryIncome;
+      return totalSegmentParentalSalaryIncome > 0
+        ? totalSegmentParentalSalaryIncome
+        : totalCABonus;
     }
     if (period.parent === 'both') {
       const declared = period.parent1ParentalSalary;
-      if (Number.isFinite(declared) && declared !== undefined) {
+      if (Number.isFinite(declared) && declared !== undefined && declared > 0) {
         return Math.max(0, declared);
+      }
+      if (totalCABonus > 0) {
+        const combinedBenefit = parent1BenefitTotal + parent2BenefitTotal;
+        const share = combinedBenefit > 0 ? parent1BenefitTotal / combinedBenefit : 0.5;
+        return totalCABonus * share;
       }
       return Math.max(0, parent1LeaveTotal - parent1BenefitTotal);
     }
@@ -510,12 +534,19 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
   })();
   const parent2ParentalSalaryTotal = (() => {
     if (period.parent === 'parent2') {
-      return totalSegmentParentalSalaryIncome;
+      return totalSegmentParentalSalaryIncome > 0
+        ? totalSegmentParentalSalaryIncome
+        : totalCABonus;
     }
     if (period.parent === 'both') {
       const declared = period.parent2ParentalSalary;
-      if (Number.isFinite(declared) && declared !== undefined) {
+      if (Number.isFinite(declared) && declared !== undefined && declared > 0) {
         return Math.max(0, declared);
+      }
+      if (totalCABonus > 0) {
+        const combinedBenefit = parent1BenefitTotal + parent2BenefitTotal;
+        const share = combinedBenefit > 0 ? parent2BenefitTotal / combinedBenefit : 0.5;
+        return totalCABonus * share;
       }
       return Math.max(0, parent2LeaveTotal - parent2BenefitTotal);
     }
@@ -598,9 +629,13 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
             initialBenefitLevels.push(period.benefitLevel);
             initialBenefitDaysByLevel[period.benefitLevel] = segment.benefitDays;
           }
-          if (segment.parentalSalaryIncome > 0 && segment.caEligibleBenefitDays > 0) {
+          const parentalSalaryDisplayDays = segment.parentalSalaryIncome > 0
+            ? Math.max(0, Math.round(segment.benefitDays))
+            : 0;
+
+          if (segment.parentalSalaryIncome > 0 && parentalSalaryDisplayDays > 0) {
             initialBenefitLevels.push("parental-salary");
-            initialBenefitDaysByLevel["parental-salary"] = Math.max(0, Math.round(segment.caEligibleBenefitDays));
+            initialBenefitDaysByLevel["parental-salary"] = parentalSalaryDisplayDays;
           }
         } else {
           initialBenefitLevels.push("none");
@@ -733,12 +768,16 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
           addLevelDays(period.benefitLevel === "high" ? "high" : "low", segment.benefitDays);
         }
 
-        if (segment.parentalSalaryIncome > 0 && segment.caEligibleBenefitDays > 0) {
+        const parentalSalaryDisplayDays = segment.parentalSalaryIncome > 0
+          ? Math.max(0, Math.round(segment.benefitDays))
+          : 0;
+
+        if (segment.parentalSalaryIncome > 0 && parentalSalaryDisplayDays > 0) {
           ensureLevel("parental-salary");
           if (!existing.benefitDaysByLevel["parental-salary"]) {
             existing.benefitDaysByLevel["parental-salary"] = 0;
           }
-          existing.benefitDaysByLevel["parental-salary"] += Math.max(0, Math.round(segment.caEligibleBenefitDays));
+          existing.benefitDaysByLevel["parental-salary"] += parentalSalaryDisplayDays;
         }
       }
 
