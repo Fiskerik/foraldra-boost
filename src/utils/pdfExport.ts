@@ -50,53 +50,40 @@ export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
     pdf.text(plan.name, pageWidth / 2, yPosition, { align: 'center' });
     yPosition += 15;
 
-    // Birth date
+    // Birth date - FIRST
     pdf.setFontSize(12);
     pdf.setFont('helvetica', 'normal');
     const birthDate = new Date(plan.expected_birth_date).toLocaleDateString('sv-SE');
     pdf.text(`Förväntat födelsedatum: ${birthDate}`, pageWidth / 2, yPosition, { align: 'center' });
     yPosition += 15;
 
-    // Parent info section
+    // Parameters section - salary and benefits
     pdf.setFontSize(16);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Föräldrarnas information', 20, yPosition);
+    pdf.text('Inkomster och ersättningar', 20, yPosition);
     yPosition += 10;
 
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(`Förälder 1 - Inkomst: ${plan.parent1_income.toLocaleString('sv-SE')} kr/mån`, 20, yPosition);
+    pdf.text(`Förälder 1 - Månadslön: ${plan.parent1_income.toLocaleString('sv-SE')} kr/mån`, 20, yPosition);
     yPosition += 6;
     pdf.text(`Förälder 1 - Kollektivavtal: ${plan.parent1_has_agreement ? 'Ja' : 'Nej'}`, 20, yPosition);
     yPosition += 8;
-    pdf.text(`Förälder 2 - Inkomst: ${plan.parent2_income.toLocaleString('sv-SE')} kr/mån`, 20, yPosition);
+    pdf.text(`Förälder 2 - Månadslön: ${plan.parent2_income.toLocaleString('sv-SE')} kr/mån`, 20, yPosition);
     yPosition += 6;
     pdf.text(`Förälder 2 - Kollektivavtal: ${plan.parent2_has_agreement ? 'Ja' : 'Nej'}`, 20, yPosition);
-    yPosition += 12;
-
-    // Settings section
-    pdf.setFontSize(16);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Inställningar', 20, yPosition);
-    yPosition += 10;
-
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'normal');
+    yPosition += 8;
+    pdf.text(`Hushållsinkomst: ${plan.household_income.toLocaleString('sv-SE')} kr/mån`, 20, yPosition);
+    yPosition += 8;
     pdf.text(`Kommun: ${plan.municipality}`, 20, yPosition);
     yPosition += 6;
-    pdf.text(`Total ledighet: ${plan.total_months} månader`, 20, yPosition);
-    yPosition += 6;
-    pdf.text(`Förälder 1: ${plan.parent1_months} månader, Förälder 2: ${plan.total_months - plan.parent1_months} månader`, 20, yPosition);
-    yPosition += 6;
-    pdf.text(`Hushållsinkomst: ${plan.household_income.toLocaleString('sv-SE')} kr/mån`, 20, yPosition);
-    yPosition += 6;
     pdf.text(`Uttag per vecka: ${plan.days_per_week} dagar`, 20, yPosition);
-    yPosition += 12;
+    yPosition += 15;
 
-    // Selected strategy - Enhanced with highlighting
+    // Selected strategy
     const selectedStrategy = plan.optimization_results[plan.selected_strategy_index];
     pdf.setFillColor(240, 240, 255);
-    pdf.roundedRect(15, yPosition - 5, pageWidth - 30, 50, 3, 3, 'F');
+    pdf.roundedRect(15, yPosition - 5, pageWidth - 30, 40, 3, 3, 'F');
     
     pdf.setFontSize(16);
     pdf.setFont('helvetica', 'bold');
@@ -114,46 +101,25 @@ export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
     const strategyDesc = selectedStrategy?.meta?.description || selectedStrategy?.description || '';
     const descLines = pdf.splitTextToSize(strategyDesc, pageWidth - 40);
     pdf.text(descLines, 20, yPosition);
-    yPosition += descLines.length * 6 + 6;
+    yPosition += descLines.length * 6 + 10;
 
-    // Summary boxes
     pdf.setFont('helvetica', 'bold');
     pdf.text(`Total inkomst: ${Math.round(selectedStrategy.totalIncome || 0).toLocaleString('sv-SE')} kr`, 20, yPosition);
     yPosition += 6;
     pdf.text(`Dagar använda: ${selectedStrategy.daysUsed || 0} dagar`, 20, yPosition);
     yPosition += 6;
     pdf.text(`Dagar sparade: ${480 - (selectedStrategy.daysUsed || 0)} dagar`, 20, yPosition);
-    yPosition += 15;
+    yPosition += 20;
 
-    // Try to capture distribution graph
-    const distributionGraph = await captureElement('income-distribution-graph');
-    if (distributionGraph) {
-      if (yPosition > pageHeight - 80) {
-        pdf.addPage();
-        yPosition = 20;
-      }
-      
-      pdf.setFontSize(16);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Fördelningsanalys', 20, yPosition);
-      yPosition += 10;
-      
-      const graphWidth = pageWidth - 40;
-      const graphHeight = 60;
-      pdf.addImage(distributionGraph, 'PNG', 20, yPosition, graphWidth, graphHeight);
-      yPosition += graphHeight + 15;
-    }
-
-    // Check if we need a new page
+    // Monthly breakdown - BEFORE timeline
     if (yPosition > pageHeight - 40) {
       pdf.addPage();
       yPosition = 20;
     }
 
-    // Monthly breakdown with formatted table
     pdf.setFontSize(16);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Månadsvis uppdelning', 20, yPosition);
+    pdf.text('Månadsvis fördelning', 20, yPosition);
     yPosition += 10;
 
     const periods = selectedStrategy.periods || [];
@@ -179,7 +145,8 @@ export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
         yPosition = 20;
       }
 
-      const parentLabel = period.parent === 'parent1' ? 'Förälder 1' : 'Förälder 2';
+      const parentLabel = period.parent === 'parent1' ? 'Förälder 1' : 
+                          period.parent === 'parent2' ? 'Förälder 2' : 'Båda';
       const periodDays = period.calendarDays || Math.round(period.months * 30);
       const income = Math.round(period.monthlyIncome || 0).toLocaleString('sv-SE');
       const days = period.benefitDaysUsed || 0;
@@ -191,9 +158,9 @@ export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
       yPosition += 6;
     });
     
-    yPosition += 10;
+    yPosition += 15;
 
-    // Try to capture timeline chart
+    // Timeline chart - LAST
     const timelineChart = await captureElement('timeline-chart');
     if (timelineChart) {
       if (yPosition > pageHeight - 100) {
