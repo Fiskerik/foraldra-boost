@@ -74,8 +74,8 @@ export function TimelineChart({
       locale: sv
     }))
   }));
-  const desktopBasePoints: TimelinePoint[] = condenseTimelinePoints(rawMonthlyPoints, 19);
   const chartData = React.useMemo<ChartPoint[]>(() => {
+    const desktopBasePoints: TimelinePoint[] = condenseTimelinePoints(rawMonthlyPoints, 19);
     const formattedDesktopPoints: ChartPoint[] = desktopBasePoints.map(point => ({
       ...point,
       month: formatTimelineLabel(point)
@@ -88,7 +88,7 @@ export function TimelineChart({
       month: formatTimelineLabel(point)
     }));
     return mobileAggregated;
-  }, [desktopBasePoints, isMobile]);
+  }, [rawMonthlyPoints, isMobile]);
   const chartBottomPadding = isMobile ? 110 : 80;
   const axisWidth = isMobile ? 68 : 80;
   const allIncomeValues = rawMonthlyPoints.map(d => d.income);
