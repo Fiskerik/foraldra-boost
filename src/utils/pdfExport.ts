@@ -81,7 +81,12 @@ export async function exportPlanToPDF(plan: SavedPlan): Promise<void> {
     yPosition += 15;
 
     // Selected strategy
-    const selectedStrategy = plan.optimization_results[plan.selected_strategy_index];
+    const selectedStrategy = plan.optimization_results?.[plan.selected_strategy_index];
+    if (!selectedStrategy) {
+      console.error('No optimization strategy found');
+      return;
+    }
+    
     pdf.setFillColor(240, 240, 255);
     pdf.roundedRect(15, yPosition - 5, pageWidth - 30, 40, 3, 3, 'F');
     
