@@ -237,8 +237,9 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     });
 
     if (remainingHigh > 0) {
-      for (const segment of segments) {
+      for (let i = 0; i < segments.length; i++) {
         if (remainingHigh <= 0) break;
+        const segment = segments[i];
         const capacity = segment.benefitDays - segment.highBenefitDays;
         if (capacity <= 0) continue;
         const add = Math.min(capacity, remainingHigh);
@@ -267,8 +268,9 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     });
 
     if (remainingLow > 0) {
-      for (const segment of segments) {
+      for (let i = 0; i < segments.length; i++) {
         if (remainingLow <= 0) break;
+        const segment = segments[i];
         const capacity = Math.max(0, segment.benefitDays - segment.highBenefitDays - segment.lowBenefitDays);
         if (capacity <= 0) continue;
         const add = Math.min(capacity, remainingLow);
