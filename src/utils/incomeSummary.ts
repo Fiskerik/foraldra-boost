@@ -212,15 +212,17 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
   }
 
   if (totalBenefitDays > 0) {
-    const totalAllocated = segments.reduce((sum, segment) => sum + segment.benefitDays, 0) || 1;
+    const totalAllocated = segments.reduce((sum, seg) => sum + seg.benefitDays, 0) || 1;
     let remainingHigh = highBenefitDays;
     let remainingLow = lowBenefitDays;
 
-    segments.forEach((segment, index) => {
+    // Allocate high benefit days proportionally
+    for (let idx = 0; idx < segments.length; idx++) {
+      const segment = segments[idx];
       if (segment.benefitDays <= 0) {
         segment.highBenefitDays = 0;
         segment.lowBenefitDays = 0;
-        return;
+        continue;
       }
 
       const proportion = segment.benefitDays / totalAllocated;
@@ -229,17 +231,18 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
         Math.round(highBenefitDays * proportion),
         segment.benefitDays
       );
-      if (index === segments.length - 1) {
+      if (idx === segments.length - 1) {
         highAlloc = Math.min(segment.benefitDays, remainingHigh);
       }
       segment.highBenefitDays = highAlloc;
       remainingHigh -= highAlloc;
-    });
+    }
 
+    // Distribute any remaining high benefit days
     if (remainingHigh > 0) {
-      for (let i = 0; i < segments.length; i++) {
+      for (let idx = 0; idx < segments.length; idx++) {
         if (remainingHigh <= 0) break;
-        const segment = segments[i];
+        const segment = segments[idx];
         const capacity = segment.benefitDays - segment.highBenefitDays;
         if (capacity <= 0) continue;
         const add = Math.min(capacity, remainingHigh);
@@ -248,11 +251,13 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       }
     }
 
-    segments.forEach((segment, index) => {
+    // Allocate low benefit days proportionally
+    for (let idx = 0; idx < segments.length; idx++) {
+      const segment = segments[idx];
       const capacity = Math.max(0, segment.benefitDays - segment.highBenefitDays);
       if (capacity <= 0 || remainingLow <= 0) {
         segment.lowBenefitDays = 0;
-        return;
+        continue;
       }
       const proportion = segment.benefitDays / totalAllocated;
       let lowAlloc = Math.min(
@@ -260,17 +265,18 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
         Math.round(lowBenefitDays * proportion),
         capacity
       );
-      if (index === segments.length - 1) {
+      if (idx === segments.length - 1) {
         lowAlloc = Math.min(capacity, remainingLow);
       }
       segment.lowBenefitDays = lowAlloc;
       remainingLow -= lowAlloc;
-    });
+    }
 
+    // Distribute any remaining low benefit days
     if (remainingLow > 0) {
-      for (let i = 0; i < segments.length; i++) {
+      for (let idx = 0; idx < segments.length; idx++) {
         if (remainingLow <= 0) break;
-        const segment = segments[i];
+        const segment = segments[idx];
         const capacity = Math.max(0, segment.benefitDays - segment.highBenefitDays - segment.lowBenefitDays);
         if (capacity <= 0) continue;
         const add = Math.min(capacity, remainingLow);
