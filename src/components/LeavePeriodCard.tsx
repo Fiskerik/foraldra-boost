@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, DollarSign, LineChart } from "lucide-react";
+import { Calendar, Users, DollarSign, LineChart, Target } from "lucide-react";
 import { TOTAL_BENEFIT_DAYS, ParentData, optimizeLeave } from "@/utils/parentalCalculations";
 import { IncomeDistributionGraph } from "./IncomeDistributionGraph";
 
@@ -192,9 +192,12 @@ export function LeavePeriodCard({
 
         {totalMonths > 0 && (
           <>
-            <div className="space-y-3 md:space-y-4">
+            <div className="space-y-3 md:space-y-4 pt-4 md:pt-6 border-t border-border">
               <div className="space-y-1.5 md:space-y-2">
-                <Label className="text-[10px] md:text-base font-medium">Klicka på det som passar er bäst</Label>
+                <Label className="text-[10px] md:text-base font-medium flex items-center gap-1">
+                  <Target className="h-2.5 md:h-4 w-2.5 md:w-4" />
+                  Klicka på det som passar er bäst
+                </Label>
                 <p className="text-[10px] md:text-sm text-muted-foreground">
                   Föredrar ni att spara dagar, eller att få ut så mycket ersättning som möjligt under föräldraledigheten?
                 </p>
@@ -216,7 +219,7 @@ export function LeavePeriodCard({
                 </div>
               </div>
 
-              <div className="space-y-2 md:space-y-4">
+              <div className="space-y-2 md:space-y-4 pt-4 md:pt-6 border-t border-border">
                 <div className="flex items-center justify-between">
                   <Label className="flex items-center gap-1 text-[10px] md:text-base">
                     <Users className="h-2.5 md:h-4 w-2.5 md:w-4" />
@@ -250,7 +253,7 @@ export function LeavePeriodCard({
               </div>
             </div>
 
-            <div className="space-y-2 md:space-y-4">
+            <div className="space-y-2 md:space-y-4 pt-4 md:pt-6 border-t border-border">
               <Label className="text-[10px] md:text-base font-medium flex items-center gap-1">
                 <Users className="h-2.5 md:h-4 w-2.5 md:w-4" />
                 Hur vill ni dela upp ledigheten?
@@ -316,7 +319,7 @@ export function LeavePeriodCard({
               </div>
             </div>
 
-            <div className="space-y-1.5 md:space-y-3">
+            <div className="space-y-1.5 md:space-y-3 pt-4 md:pt-6 border-t border-border">
               <Label htmlFor="min-income" className="text-[10px] md:text-base font-medium flex items-center gap-1">
                 <DollarSign className="h-2.5 md:h-4 w-2.5 md:w-4" />
                 Hushållets minimum inkomst per månad (netto)
