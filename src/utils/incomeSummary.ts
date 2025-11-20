@@ -373,6 +373,10 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
   );
 
   const totalSegmentCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
+  const totalOtherParentIncome = Math.max(
+    0,
+    sanitize(period.otherParentIncomeForPeriod, period.otherParentMonthlyIncome)
+  );
   const totalSegmentBenefitDays = segments.reduce((sum, segment) => sum + segment.benefitDays, 0);
 
   const totalCombinedBenefitDays = segments.reduce((sum, s) => sum + s.benefitDays, 0);
@@ -420,16 +424,8 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       return;
     }
 
-    let otherParentIncome = 0;
-    if (period.otherParentMonthlyIncome) {
-      if (isFullMonthSegment) {
-        otherParentIncome = period.otherParentMonthlyIncome;
-      } else {
-        const proportion = segment.calendarDays / monthLength;
-        otherParentIncome = period.otherParentMonthlyIncome * proportion;
-      }
-      otherParentIncome = Math.max(0, Math.round(otherParentIncome));
-    }
+    const calendarShare = totalSegmentCalendarDays > 0 ? segment.calendarDays / totalSegmentCalendarDays : 0;
+    const otherParentIncome = Math.max(0, Math.round(totalOtherParentIncome * calendarShare));
 
     let segmentBenefitIncome = 0;
     if (benefitDaily > 0 && segment.benefitDays > 0) {
@@ -659,10 +655,10 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
           both: new Set<number>(),
         };
 
-        if (period.parent === 'parent1' || period.parent === 'both') {
+        if (period.parent === 'parent1') {
           addCalendarRangeToSet(parentDaySets.parent1, segment.startDate, segment.endDate);
         }
-        if (period.parent === 'parent2' || period.parent === 'both') {
+        if (period.parent === 'parent2') {
           addCalendarRangeToSet(parentDaySets.parent2, segment.startDate, segment.endDate);
         }
         if (period.parent === 'both') {
@@ -703,10 +699,10 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
       }
 
       addCalendarRangeToSet(existing.uniqueCalendarDays, segment.startDate, segment.endDate);
-      if (period.parent === "parent1" || period.parent === "both") {
+      if (period.parent === "parent1") {
         addCalendarRangeToSet(existing.parentDaySets.parent1, segment.startDate, segment.endDate);
       }
-      if (period.parent === "parent2" || period.parent === "both") {
+      if (period.parent === "parent2") {
         addCalendarRangeToSet(existing.parentDaySets.parent2, segment.startDate, segment.endDate);
       }
       if (period.parent === "both") {

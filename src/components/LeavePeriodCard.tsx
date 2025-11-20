@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Calendar, Users, DollarSign, LineChart } from "lucide-react";
-import { TOTAL_BENEFIT_DAYS, ParentData } from "@/utils/parentalCalculations";
+import { TOTAL_BENEFIT_DAYS, ParentData, optimizeLeave } from "@/utils/parentalCalculations";
 import { IncomeDistributionGraph } from "./IncomeDistributionGraph";
 
 interface LeavePeriodCardProps {
@@ -27,6 +27,7 @@ interface LeavePeriodCardProps {
   parent1Data?: ParentData;
   parent2Data?: ParentData;
   selectedStrategy?: 'maximize-income' | 'save-days';
+  onStrategyPreferenceSelect?: (strategy: 'maximize-income' | 'save-days') => void;
 }
 
 export function LeavePeriodCard({
@@ -46,6 +47,7 @@ export function LeavePeriodCard({
   parent1Data,
   parent2Data,
   selectedStrategy = 'maximize-income',
+  onStrategyPreferenceSelect,
 }: LeavePeriodCardProps) {
   const [monthsInputValue, setMonthsInputValue] = useState(() =>
     Number.isInteger(totalMonths) ? totalMonths.toString() : totalMonths.toFixed(1)
@@ -111,6 +113,57 @@ export function LeavePeriodCard({
     ? maxLeaveMonths.toString()
     : maxLeaveMonths.toFixed(1);
 
+  const findOptimalDistribution = (
+    strategy: 'maximize-income' | 'save-days'
+  ): number | null => {
+    if (!parent1Data || !parent2Data || totalMonths <= 0) {
+      return null;
+    }
+
+    const step = totalMonths > 12 ? 1 : 0.5;
+    let bestValue = -Infinity;
+    let bestParent1Months: number | null = null;
+
+    for (let parent1M = 0; parent1M <= totalMonths; parent1M += step) {
+      const parent2M = totalMonths - parent1M;
+      const results = optimizeLeave(
+        parent1Data,
+        parent2Data,
+        totalMonths,
+        parent1M,
+        parent2M,
+        minHouseholdIncome,
+        7,
+        simultaneousLeave ? simultaneousMonths : 0,
+        false
+      );
+
+      const target = results.find(result => result.strategy === strategy);
+      if (!target) {
+        continue;
+      }
+
+      const value = strategy === 'maximize-income' ? target.totalIncome : target.daysSaved;
+      if (value > bestValue) {
+        bestValue = value;
+        bestParent1Months = parent1M;
+      }
+    }
+
+    return bestParent1Months;
+  };
+
+  const handleStrategyButtonClick = (strategy: 'maximize-income' | 'save-days') => {
+    const optimalParent1Months = findOptimalDistribution(strategy);
+    if (optimalParent1Months !== null) {
+      onDistributionChange(optimalParent1Months);
+    }
+
+    if (onStrategyPreferenceSelect) {
+      onStrategyPreferenceSelect(strategy);
+    }
+  };
+
   return (
     <Card className="shadow-card">
       <CardHeader className="p-2 md:p-6">
@@ -139,6 +192,64 @@ export function LeavePeriodCard({
 
         {totalMonths > 0 && (
           <>
+            <div className="space-y-3 md:space-y-4">
+              <div className="space-y-1.5 md:space-y-2">
+                <Label className="text-[10px] md:text-base font-medium">Klicka på det som passar er bäst</Label>
+                <p className="text-[10px] md:text-sm text-muted-foreground">
+                  Föredrar ni att spara dagar, eller att få ut så mycket ersättning som möjligt under föräldraledigheten?
+                </p>
+                <div className="flex flex-col md:flex-row gap-2 md:gap-3">
+                  <Button
+                    type="button"
+                    className={`flex-1 bg-green-600 hover:bg-green-700 text-white ${selectedStrategy === 'save-days' ? 'ring-2 ring-green-300' : ''}`}
+                    onClick={() => handleStrategyButtonClick('save-days')}
+                  >
+                    Spara dagar
+                  </Button>
+                  <Button
+                    type="button"
+                    className={`flex-1 bg-blue-600 hover:bg-blue-700 text-white ${selectedStrategy === 'maximize-income' ? 'ring-2 ring-blue-300' : ''}`}
+                    onClick={() => handleStrategyButtonClick('maximize-income')}
+                  >
+                    Maximera inkomst
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2 md:space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-1 text-[10px] md:text-base">
+                    <Users className="h-2.5 md:h-4 w-2.5 md:w-4" />
+                    Vill ni vara hemma samtidigt?
+                  </Label>
+                  <Switch
+                    checked={simultaneousLeave}
+                    onCheckedChange={onSimultaneousLeaveChange}
+                  />
+                </div>
+
+                {simultaneousLeave && (
+                  <div className="space-y-2 pl-3 md:pl-6 animate-fade-in">
+                    <Label className="text-[10px] md:text-sm">Antal månader samtidigt</Label>
+                    <Input
+                      type="number"
+                      step={1}
+                      min={0}
+                      max={Math.floor(totalMonths / 2)}
+                      value={simultaneousMonths}
+                      onChange={(e) => {
+                        const parsed = Math.max(0, Math.round(Number(e.target.value)));
+                        onSimultaneousMonthsChange(Number.isFinite(parsed) ? parsed : 0);
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      När ni är hemma samtidigt använder båda föräldrar dagar från sina egna pooler samtidigt. Ingen lön utbetalas, men båda får föräldrapenning. Om en förälder planerar att vara hemma totalt minst 6 månader i följd (samtidig + egen ledighet) tas föräldralön automatiskt under den samtidiga perioden.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="space-y-2 md:space-y-4">
               <Label className="text-[10px] md:text-base font-medium flex items-center gap-1">
                 <Users className="h-2.5 md:h-4 w-2.5 md:w-4" />
@@ -203,38 +314,6 @@ export function LeavePeriodCard({
                   </div>
                 )}
               </div>
-            </div>
-
-            <div className="space-y-2 md:space-y-4 mt-6 md:mt-4">
-              <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-1 text-[10px] md:text-base">
-                  <Users className="h-2.5 md:h-4 w-2.5 md:w-4" />
-                  Vill ni vara hemma samtidigt?
-                </Label>
-                <Switch
-                  checked={simultaneousLeave}
-                  onCheckedChange={onSimultaneousLeaveChange}
-                />
-              </div>
-              
-              {simultaneousLeave && (
-                <div className="space-y-2 pl-3 md:pl-6 animate-fade-in">
-                  <Label className="text-[10px] md:text-sm">Antal månader samtidigt</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={Math.floor(totalMonths / 2)}
-                    value={simultaneousMonths}
-                    onChange={(e) => onSimultaneousMonthsChange(Number(e.target.value))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    När ni är hemma samtidigt använder båda föräldrar dagar från sina egna pooler samtidigt. 
-                    Ingen lön utbetalas, men båda får föräldrapenning. Om en förälder planerar att vara hemma 
-                    totalt minst 6 månader i följd (samtidig + egen ledighet) tas föräldralön automatiskt under 
-                    den samtidiga perioden.
-                  </p>
-                </div>
-              )}
             </div>
 
             <div className="space-y-1.5 md:space-y-3">
