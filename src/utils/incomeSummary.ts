@@ -372,6 +372,9 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     Math.max(0, sanitize(period.benefitDaysUsed, period.daysCount) / 2)
   );
 
+  const totalSegmentCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
+  const totalSegmentBenefitDays = segments.reduce((sum, segment) => sum + segment.benefitDays, 0);
+
   const totalCombinedBenefitDays = segments.reduce((sum, s) => sum + s.benefitDays, 0);
 
   segments.forEach(segment => {
@@ -469,8 +472,6 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     }
   }
 
-  const totalSegmentCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
-  const totalSegmentBenefitDays = segments.reduce((sum, segment) => sum + segment.benefitDays, 0);
   const totalSegmentBenefitIncome = segments.reduce((sum, segment) => sum + segment.benefitIncome, 0);
   const totalSegmentParentalSalaryIncome = segments.reduce((sum, segment) => sum + segment.parentalSalaryIncome, 0);
   const totalSegmentLeaveIncome = segments.reduce((sum, segment) => sum + segment.leaveParentIncome, 0);

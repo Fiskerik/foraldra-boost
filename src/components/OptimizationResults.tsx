@@ -30,6 +30,9 @@ interface OptimizationResultsProps {
 }
 
 export function OptimizationResults({ results, minHouseholdIncome, selectedIndex, onSelectStrategy, timelineMonths }: OptimizationResultsProps) {
+  if (!Array.isArray(results) || results.length === 0) {
+    return null;
+  }
   const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [overlayIndex, setOverlayIndex] = useState<number | null>(null);
@@ -447,7 +450,12 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
   };
 
   // Render strategy card function
-  const renderStrategyCard = (result: OptimizationResult, index: number, isInOverlay: boolean = false) => {
+  const renderStrategyCard = (result: OptimizationResult | undefined, index: number, isInOverlay: boolean = false) => {
+    if (!result) {
+      console.log("renderStrategyCard: missing result at index", index, results);
+      return null;
+    }
+
     const filteredPeriods = result.periods.filter(period => period.benefitLevel !== 'none');
     const periodGroups = groupConsecutivePeriods(filteredPeriods);
 
