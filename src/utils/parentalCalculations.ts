@@ -69,6 +69,7 @@ export interface LeavePeriod {
   daysPerWeek?: number;
   otherParentDailyIncome?: number;
   otherParentMonthlyIncome?: number;
+  otherParentIncomeForPeriod?: number;
   isInitialTenDayPeriod?: boolean;
   isPreferenceFiller?: boolean;
   transferredDays?: number;
@@ -2656,6 +2657,7 @@ function addSegment(
     daysPerWeek: Math.round(dagarPerVecka),
     otherParentDailyIncome: parent === 'both' ? 0 : otherDailyIncome,
     otherParentMonthlyIncome: parent === 'both' ? 0 : otherParentMonthlyIncome,
+    otherParentIncomeForPeriod: parent === 'both' ? 0 : otherParentIncomeForPeriod,
     monthlyIncome: totalPeriodIncome,
     collectiveAgreementEligibleCalendarDays: hasCollectiveAgreementBonus ? calendarDaysUsed : 0,
     collectiveAgreementEligibleBenefitDays: hasCollectiveAgreementBonus ? benefitDaysUsed : 0,
@@ -4373,7 +4375,10 @@ function convertLegacyResult(
       const parent2Benefit = Math.max(0, period.parent2BenefitIncome ?? 0);
       const parent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
       const parent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
-      const otherParentIncome = Math.max(0, period.otherParentMonthlyIncome ?? 0);
+      const otherParentIncome = Math.max(
+        0,
+        period.otherParentIncomeForPeriod ?? period.otherParentMonthlyIncome ?? 0
+      );
 
       acc.parent1.benefit += parent1Benefit;
       acc.parent2.benefit += parent2Benefit;
@@ -5397,7 +5402,10 @@ function buildSimplePlanResult(
       const periodTotalBonus = Math.max(0, period.collectiveAgreementTotalBonus ?? 0);
       let parent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
       let parent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
-      const otherParentIncome = Math.max(0, period.otherParentMonthlyIncome ?? 0);
+      const otherParentIncome = Math.max(
+        0,
+        period.otherParentIncomeForPeriod ?? period.otherParentMonthlyIncome ?? 0
+      );
 
       if (periodTotalBonus > 0) {
         if (period.parent === 'parent1' && parent1ParentalSalary <= 0) {

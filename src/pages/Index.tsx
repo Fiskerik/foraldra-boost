@@ -141,6 +141,17 @@ const Index = () => {
     toast.success('Strategi vald!');
   };
 
+  const handleStrategyPreferenceSelect = (strategy: 'maximize-income' | 'save-days') => {
+    if (!optimizationResults) {
+      return;
+    }
+
+    const targetIndex = optimizationResults.findIndex(result => result.strategy === strategy);
+    if (targetIndex >= 0) {
+      handleSelectStrategy(targetIndex);
+    }
+  };
+
   const handleHouseholdIncomeChange = (value: number) => {
     setHouseholdIncome(value);
 
@@ -466,6 +477,7 @@ const Index = () => {
           parent1Data={parent1Data}
           parent2Data={parent2Data}
           selectedStrategy={optimizationResults?.[selectedStrategyIndex]?.strategy || 'maximize-income'}
+          onStrategyPreferenceSelect={handleStrategyPreferenceSelect}
         />
 
         <div className="flex justify-center pt-2 md:pt-6">
