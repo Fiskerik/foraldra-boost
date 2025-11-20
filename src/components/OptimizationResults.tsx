@@ -1,10 +1,24 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { OptimizationResult, formatPeriod, formatCurrency, LeavePeriod } from "@/utils/parentalCalculations";
 import { TimelineChart } from "./TimelineChart";
-import { Calendar, TrendingUp, PiggyBank, Users, Clock, ChevronDown, ChevronUp, Check, X, Save, AlertTriangle } from "lucide-react";
+import {
+  Calendar,
+  TrendingUp,
+  PiggyBank,
+  Users,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  X,
+  Save,
+  AlertTriangle,
+  Columns3,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfMonth } from "date-fns";
 
 interface OptimizationResultsProps {
@@ -16,9 +30,14 @@ interface OptimizationResultsProps {
 }
 
 export function OptimizationResults({ results, minHouseholdIncome, selectedIndex, onSelectStrategy, timelineMonths }: OptimizationResultsProps) {
+  if (!Array.isArray(results) || results.length === 0) {
+    return null;
+  }
   const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [overlayIndex, setOverlayIndex] = useState<number | null>(null);
+  const [compareSelection, setCompareSelection] = useState<number[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   const togglePeriod = (resultIndex: number, periodIndex: number) => {
     const key = `${resultIndex}-${periodIndex}`;
@@ -40,6 +59,102 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     setOverlayOpen(false);
     setOverlayIndex(null);
   };
+
+  const toggleCompareSelection = (index: number, forceChecked?: boolean) => {
+    setCompareSelection(prev => {
+      const shouldCheck = forceChecked ?? !prev.includes(index);
+      let nextSelection = prev;
+
+      if (shouldCheck) {
+        if (prev.includes(index) || prev.length >= 3) {
+          nextSelection = prev;
+        } else {
+          nextSelection = [...prev, index];
+        }
+
+        if (!prev.includes(index) && nextSelection.length >= 2) {
+          setCompareOpen(true);
+        }
+      } else {
+        nextSelection = prev.filter(i => i !== index);
+
+        if (prev.includes(index) && nextSelection.length < 2) {
+          setCompareOpen(false);
+        }
+      }
+
+      return nextSelection;
+    });
+  };
+
+  const selectedComparisons = useMemo(() => compareSelection.map(i => results[i]).filter(Boolean), [compareSelection, results]);
+  const comparisonGridClass = useMemo(() => {
+    if (selectedComparisons.length <= 2) return "md:grid-cols-2";
+    return "md:grid-cols-3";
+  }, [selectedComparisons.length]);
+
+  const comparisonMetrics = useMemo(
+    () => [
+      {
+        key: "totalIncome",
+        label: "Total inkomst",
+        formatValue: (value: number) => formatCurrency(value),
+        preferLower: false,
+        extract: (result: OptimizationResult) => result.totalIncome,
+      },
+      {
+        key: "averageMonthlyIncome",
+        label: "Genomsnitt/månad",
+        formatValue: (value: number) => formatCurrency(value),
+        preferLower: false,
+        extract: (result: OptimizationResult) => result.averageMonthlyIncome,
+      },
+      {
+        key: "daysUsed",
+        label: "Använda dagar",
+        formatValue: (value: number) => `${Math.round(value)} dagar`,
+        preferLower: true,
+        extract: (result: OptimizationResult) => result.daysUsed,
+      },
+      {
+        key: "daysSaved",
+        label: "Sparade dagar",
+        formatValue: (value: number) => `${Math.round(value)} dagar`,
+        preferLower: false,
+        extract: (result: OptimizationResult) => result.daysSaved,
+      },
+      {
+        key: "homeDays",
+        label: "Hemmamånader (kalenderdagar)",
+        formatValue: (value: number) => `${Math.round(value)} dagar`,
+        preferLower: false,
+        extract: (result: OptimizationResult) =>
+          result.periods.reduce((sum, period) => sum + Math.max(0, Math.round(period.calendarDays ?? period.daysCount ?? 0)), 0),
+      },
+      {
+        key: "highDays",
+        label: "Högdagar (utnyttjade)",
+        formatValue: (value: number) => `${Math.round(value)} dagar`,
+        preferLower: false,
+        extract: (result: OptimizationResult) => result.highBenefitDaysUsed ?? 0,
+      },
+      {
+        key: "lowDays",
+        label: "Lågdagar (utnyttjade)",
+        formatValue: (value: number) => `${Math.round(value)} dagar`,
+        preferLower: false,
+        extract: (result: OptimizationResult) => result.lowBenefitDaysUsed ?? 0,
+      },
+    ],
+    []
+  );
+
+  const openComparison = () => {
+    if (selectedComparisons.length >= 2) {
+      setCompareOpen(true);
+    }
+  };
+  const closeComparison = () => setCompareOpen(false);
 
   interface MonthlyBreakdown {
     startDate: Date;
@@ -335,7 +450,12 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
   };
 
   // Render strategy card function
-  const renderStrategyCard = (result: OptimizationResult, index: number, isInOverlay: boolean = false) => {
+  const renderStrategyCard = (result: OptimizationResult | undefined, index: number, isInOverlay: boolean = false) => {
+    if (!result) {
+      console.log("renderStrategyCard: missing result at index", index, results);
+      return null;
+    }
+
     const filteredPeriods = result.periods.filter(period => period.benefitLevel !== 'none');
     const periodGroups = groupConsecutivePeriods(filteredPeriods);
 
@@ -421,7 +541,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     return (
       <Card
         key={index}
-          className={`shadow-soft transition-all cursor-pointer hover:shadow-lg ${
+          className={`relative shadow-soft transition-all cursor-pointer hover:shadow-lg ${
             selectedIndex === index
               ? `ring-2 md:ring-4 ${result.strategy === 'maximize-income' ? 'ring-blue-500' : 'ring-primary'} shadow-xl`
               : ''
@@ -530,6 +650,24 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               ))}
             </div>
           ) : null}
+
+          {!isInOverlay && (
+            <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full bg-background/90 px-3 py-1 shadow-soft border">
+              <Checkbox
+                id={`compare-${index}`}
+                checked={compareSelection.includes(index)}
+                onCheckedChange={(checked) => toggleCompareSelection(index, Boolean(checked))}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <label
+                htmlFor={`compare-${index}`}
+                className="text-xs md:text-sm font-medium cursor-pointer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Jämför
+              </label>
+            </div>
+          )}
         </CardHeader>
         
         {/* Collapsible Details - Only in overlay */}
@@ -584,7 +722,22 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             * Föräldrapenning baseras på 7 dagar per vecka
           </p>
         </div>
-        
+
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4">
+          <div className="text-xs md:text-sm text-muted-foreground">
+            Markera 2–3 strategier för att jämföra sida vid sida.
+          </div>
+          <Button
+            variant="secondary"
+            disabled={compareSelection.length < 2}
+            onClick={openComparison}
+            className="flex items-center gap-2"
+          >
+            <Columns3 className="h-4 w-4" />
+            Jämför scenarier ({compareSelection.length}/3)
+          </Button>
+        </div>
+
         {/* Grid view - always visible */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
           {results.map((result, index) => renderStrategyCard(result, index, false))}
@@ -602,11 +755,76 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             }
           }}
         >
-          <div 
+          <div
             className="w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             {renderStrategyCard(results[overlayIndex], overlayIndex, true)}
+          </div>
+        </div>
+      )}
+
+      {compareOpen && selectedComparisons.length >= 2 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in"
+          onClick={closeComparison}
+        >
+          <div
+            className="w-full max-w-6xl max-h-[90vh] overflow-y-auto bg-background rounded-2xl shadow-xl border animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 md:p-6 border-b">
+              <div>
+                <h3 className="text-lg md:text-2xl font-bold">Jämför scenarier</h3>
+                <p className="text-xs md:text-sm text-muted-foreground">Sida vid sida för att hitta bästa helheten.</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={closeComparison}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className={`grid grid-cols-1 ${comparisonGridClass} gap-4 p-4 md:p-6`}>
+              {selectedComparisons.map((result, colIndex) => (
+                <div key={colIndex} className="space-y-3">
+                  <div className={`rounded-xl border p-3 md:p-4 ${result.strategy === 'maximize-income' ? 'bg-blue-50 border-blue-200' : 'bg-parent1/10 border-parent1/40'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[10px] md:text-xs uppercase tracking-wide text-muted-foreground">Strategi</p>
+                        <h4 className="text-base md:text-xl font-bold">{result.title}</h4>
+                        <p className="text-xs md:text-sm text-muted-foreground">{result.description}</p>
+                      </div>
+                      {result.strategy === 'maximize-income' ? (
+                        <TrendingUp className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
+                      ) : (
+                        <PiggyBank className="h-6 w-6 md:h-8 md:w-8 text-parent1" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {comparisonMetrics.map(metric => {
+                      const values = selectedComparisons.map(selected => metric.extract(selected));
+                      const targetValue = metric.preferLower ? Math.min(...values) : Math.max(...values);
+                      const currentValue = metric.extract(result);
+                      const isBest = (!Number.isNaN(targetValue) && Number.isFinite(targetValue)) &&
+                        ((metric.preferLower && currentValue <= targetValue) || (!metric.preferLower && currentValue >= targetValue));
+
+                      return (
+                        <div
+                          key={`${result.title}-${metric.key}`}
+                          className={`flex items-center justify-between rounded-lg border p-2 md:p-3 ${isBest ? 'border-green-500/60 bg-green-50' : 'border-border'}`}
+                        >
+                          <div className="text-xs md:text-sm text-muted-foreground">{metric.label}</div>
+                          <div className={`text-sm md:text-lg font-semibold ${isBest ? 'text-green-700' : ''}`}>
+                            {metric.formatValue(currentValue)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
