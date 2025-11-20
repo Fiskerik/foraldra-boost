@@ -3357,12 +3357,33 @@ function convertLegacyResult(
     }
 
     const endDate = startOfDay(addDays(startDate, effectiveDays - 1));
-    const otherParentDailyIncome = parent === 'parent1'
-      ? context.parent2NetIncome / 30
-      : context.parent1NetIncome / 30;
+    const otherParentMonthlyIncome = parent === 'parent1'
+      ? context.parent2NetIncome
+      : context.parent1NetIncome;
+    const otherParentDailyIncome = otherParentMonthlyIncome / 30;
     const ownDailyIncome = parent === 'parent1'
       ? context.parent1NetIncome / 30
       : context.parent2NetIncome / 30;
+
+    // Calculate other parent's income for this period (similar to buildLegacyPlanPeriod logic)
+    const calendarDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
+    const periodStartDay = startDate.getDate();
+    const periodEndDay = endDate.getDate();
+    const periodStartMonth = startDate.getMonth();
+    const periodStartYear = startDate.getFullYear();
+    const periodEndMonth = endDate.getMonth();
+    const periodEndYear = endDate.getFullYear();
+    const lastDayOfEndMonth = new Date(periodEndYear, periodEndMonth + 1, 0).getDate();
+    const isFullMonthPeriod = periodStartDay === 1 && periodEndDay === lastDayOfEndMonth;
+    
+    let otherParentIncomeForPeriod: number;
+    if (isFullMonthPeriod) {
+      const monthsInPeriod = (periodEndYear - periodStartYear) * 12 + (periodEndMonth - periodStartMonth) + 1;
+      otherParentIncomeForPeriod = otherParentMonthlyIncome * monthsInPeriod;
+    } else {
+      const daysInMonth = new Date(periodStartYear, periodStartMonth + 1, 0).getDate();
+      otherParentIncomeForPeriod = otherParentMonthlyIncome * (calendarDays / daysInMonth);
+    }
 
     mergedPeriods.push({
       parent,
@@ -3370,12 +3391,14 @@ function convertLegacyResult(
       endDate,
       daysCount: effectiveDays,
       benefitDaysUsed: 0,
-      calendarDays: Math.max(1, differenceInCalendarDays(endDate, startDate) + 1),
+      calendarDays,
       dailyBenefit: 0,
       dailyIncome: ownDailyIncome + otherParentDailyIncome,
       benefitLevel: 'none',
       daysPerWeek: 0,
       otherParentDailyIncome,
+      otherParentMonthlyIncome,
+      otherParentIncomeForPeriod,
       isPreferenceFiller: true,
     });
 
