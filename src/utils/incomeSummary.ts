@@ -803,13 +803,14 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
 
   return Array.from(monthMap.values())
     .map(({ uniqueCalendarDays, parentDaySets, ...entry }) => {
-      const cappedOtherIncome = Math.max(
-        0,
-        Math.min(entry.otherParentMonthlyBase, entry.otherParentIncome)
-      );
+      const cappedOtherIncome = entry.otherParentMonthlyBase > 0
+        ? Math.max(0, Math.min(entry.otherParentMonthlyBase, entry.otherParentIncome))
+        : Math.max(0, entry.otherParentIncome);
+
+      // leaveParentIncome already includes Föräldralön when applicable, so avoid double-counting it
       const recalculatedMonthlyIncome = Math.max(
         0,
-        Math.round(entry.leaveParentIncome + entry.parentalSalaryIncome + cappedOtherIncome)
+        Math.round(entry.leaveParentIncome + cappedOtherIncome)
       );
 
       return {
