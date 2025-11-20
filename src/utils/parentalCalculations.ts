@@ -2607,8 +2607,12 @@ function addSegment(
   const isFullMonthPeriod = periodStartDay === 1 && periodEndDay === lastDayOfEndMonth;
   
   // Calculate other parent's income contribution
+  // For "none" benefit level (parent is working), other parent is on leave receiving benefits
+  // So their income should not be added here (it's tracked in their own benefit periods)
   let otherParentIncomeForPeriod: number;
-  if (isFullMonthPeriod) {
+  if (benefitLevel === 'none') {
+    otherParentIncomeForPeriod = 0;
+  } else if (isFullMonthPeriod) {
     // Full month(s): use full monthly salary regardless of days
     const monthsInPeriod = (periodEndYear - periodStartYear) * 12 + (periodEndMonth - periodStartMonth) + 1;
     otherParentIncomeForPeriod = otherParentMonthlyIncome * monthsInPeriod;
@@ -3357,33 +3361,17 @@ function convertLegacyResult(
     }
 
     const endDate = startOfDay(addDays(startDate, effectiveDays - 1));
-    const otherParentMonthlyIncome = parent === 'parent1'
-      ? context.parent2NetIncome
-      : context.parent1NetIncome;
-    const otherParentDailyIncome = otherParentMonthlyIncome / 30;
+    // For "none" periods (parent is working), the other parent is on parental leave
+    // and receives parental benefits (not salary), so otherParent income should be 0
+    // to avoid double-counting (their parental benefits are tracked in their own periods)
+    const otherParentMonthlyIncome = 0;
+    const otherParentDailyIncome = 0;
     const ownDailyIncome = parent === 'parent1'
       ? context.parent1NetIncome / 30
       : context.parent2NetIncome / 30;
 
-    // Calculate other parent's income for this period (similar to buildLegacyPlanPeriod logic)
     const calendarDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
-    const periodStartDay = startDate.getDate();
-    const periodEndDay = endDate.getDate();
-    const periodStartMonth = startDate.getMonth();
-    const periodStartYear = startDate.getFullYear();
-    const periodEndMonth = endDate.getMonth();
-    const periodEndYear = endDate.getFullYear();
-    const lastDayOfEndMonth = new Date(periodEndYear, periodEndMonth + 1, 0).getDate();
-    const isFullMonthPeriod = periodStartDay === 1 && periodEndDay === lastDayOfEndMonth;
-    
-    let otherParentIncomeForPeriod: number;
-    if (isFullMonthPeriod) {
-      const monthsInPeriod = (periodEndYear - periodStartYear) * 12 + (periodEndMonth - periodStartMonth) + 1;
-      otherParentIncomeForPeriod = otherParentMonthlyIncome * monthsInPeriod;
-    } else {
-      const daysInMonth = new Date(periodStartYear, periodStartMonth + 1, 0).getDate();
-      otherParentIncomeForPeriod = otherParentMonthlyIncome * (calendarDays / daysInMonth);
-    }
+    const otherParentIncomeForPeriod = 0;
 
     mergedPeriods.push({
       parent,
