@@ -93,7 +93,15 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     return "md:grid-cols-3";
   }, [selectedComparisons.length]);
 
-  const comparisonMetrics = useMemo(
+  type ComparisonMetric = {
+    key: string;
+    label: string;
+    formatValue: (value: number, result: OptimizationResult) => string;
+    preferLower: boolean;
+    extract: (result: OptimizationResult) => number;
+  };
+
+  const comparisonMetrics: ComparisonMetric[] = useMemo(
     () => [
       {
         key: "totalIncome",
@@ -111,39 +119,25 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
       },
       {
         key: "daysUsed",
-        label: "Använda dagar",
-        formatValue: (value: number) => `${Math.round(value)} dagar`,
+        label: "Använda dagar (Sjukpenning/Lägstanivå)",
+        formatValue: (_value: number, result: OptimizationResult) => {
+          const highDays = Math.max(0, Math.round(result.highBenefitDaysUsed ?? 0));
+          const lowDays = Math.max(0, Math.round(result.lowBenefitDaysUsed ?? 0));
+          return `(${highDays}/${lowDays}) dagar`;
+        },
         preferLower: true,
         extract: (result: OptimizationResult) => result.daysUsed,
       },
       {
         key: "daysSaved",
-        label: "Sparade dagar",
-        formatValue: (value: number) => `${Math.round(value)} dagar`,
+        label: "Sparade dagar (Sjukpenning/Lägstanivå)",
+        formatValue: (_value: number, result: OptimizationResult) => {
+          const highDays = Math.max(0, Math.round(result.highBenefitDaysSaved ?? 0));
+          const lowDays = Math.max(0, Math.round(result.lowBenefitDaysSaved ?? 0));
+          return `(${highDays}/${lowDays}) dagar`;
+        },
         preferLower: false,
         extract: (result: OptimizationResult) => result.daysSaved,
-      },
-      {
-        key: "homeDays",
-        label: "Hemmamånader (kalenderdagar)",
-        formatValue: (value: number) => `${Math.round(value)} dagar`,
-        preferLower: false,
-        extract: (result: OptimizationResult) =>
-          result.periods.reduce((sum, period) => sum + Math.max(0, Math.round(period.calendarDays ?? period.daysCount ?? 0)), 0),
-      },
-      {
-        key: "highDays",
-        label: "Högdagar (utnyttjade)",
-        formatValue: (value: number) => `${Math.round(value)} dagar`,
-        preferLower: false,
-        extract: (result: OptimizationResult) => result.highBenefitDaysUsed ?? 0,
-      },
-      {
-        key: "lowDays",
-        label: "Lågdagar (utnyttjade)",
-        formatValue: (value: number) => `${Math.round(value)} dagar`,
-        preferLower: false,
-        extract: (result: OptimizationResult) => result.lowBenefitDaysUsed ?? 0,
       },
     ],
     []
@@ -816,7 +810,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
                         >
                           <div className="text-xs md:text-sm text-muted-foreground">{metric.label}</div>
                           <div className={`text-sm md:text-lg font-semibold ${isBest ? 'text-green-700' : ''}`}>
-                            {metric.formatValue(currentValue)}
+                            {metric.formatValue(currentValue, result)}
                           </div>
                         </div>
                       );
