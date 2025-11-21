@@ -4418,6 +4418,9 @@ function convertLegacyResult(
         0,
         period.otherParentIncomeForPeriod ?? period.otherParentMonthlyIncome ?? 0
       );
+      const monthlyIncomeForPeriod = Number.isFinite(period.monthlyIncome)
+        ? (period.monthlyIncome as number)
+        : (period.dailyIncome ?? 0) * Math.max(1, period.calendarDays ?? differenceInCalendarDays(period.endDate, period.startDate) + 1);
 
       acc.parent1.benefit += parent1Benefit;
       acc.parent2.benefit += parent2Benefit;
@@ -4425,9 +4428,11 @@ function convertLegacyResult(
       acc.parent2.parentalSalary += parent2ParentalSalary;
 
       if (period.parent === 'parent1') {
-        acc.parent2.working += otherParentIncome;
+        const remaining = Math.max(0, monthlyIncomeForPeriod - parent1Benefit - parent1ParentalSalary);
+        acc.parent2.working += Math.min(otherParentIncome, remaining);
       } else if (period.parent === 'parent2') {
-        acc.parent1.working += otherParentIncome;
+        const remaining = Math.max(0, monthlyIncomeForPeriod - parent2Benefit - parent2ParentalSalary);
+        acc.parent1.working += Math.min(otherParentIncome, remaining);
       } else if (period.parent === 'both') {
         const parent1Income = Math.max(0, period.parent1Income ?? 0);
         const parent2Income = Math.max(0, period.parent2Income ?? 0);
@@ -5544,6 +5549,9 @@ function buildSimplePlanResult(
         0,
         period.otherParentIncomeForPeriod ?? period.otherParentMonthlyIncome ?? 0
       );
+      const monthlyIncomeForPeriod = Number.isFinite(period.monthlyIncome)
+        ? (period.monthlyIncome as number)
+        : (period.dailyIncome ?? 0) * Math.max(1, period.calendarDays ?? differenceInCalendarDays(period.endDate, period.startDate) + 1);
 
       if (periodTotalBonus > 0) {
         if (period.parent === 'parent1' && parent1ParentalSalary <= 0) {
@@ -5570,9 +5578,11 @@ function buildSimplePlanResult(
       acc.parent2.parentalSalary += parent2ParentalSalary;
 
       if (period.parent === 'parent1') {
-        acc.parent2.working += otherParentIncome;
+        const remaining = Math.max(0, monthlyIncomeForPeriod - parent1Benefit - parent1ParentalSalary);
+        acc.parent2.working += Math.min(otherParentIncome, remaining);
       } else if (period.parent === 'parent2') {
-        acc.parent1.working += otherParentIncome;
+        const remaining = Math.max(0, monthlyIncomeForPeriod - parent2Benefit - parent2ParentalSalary);
+        acc.parent1.working += Math.min(otherParentIncome, remaining);
       } else if (period.parent === 'both') {
         const parent1Income = Math.max(0, period.parent1Income ?? 0);
         const parent2Income = Math.max(0, period.parent2Income ?? 0);
