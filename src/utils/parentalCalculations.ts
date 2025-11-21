@@ -3191,6 +3191,34 @@ function convertLegacyResult(
       last.calendarDays += period.calendarDays;
       last.daysCount += period.daysCount;
       last.benefitDaysUsed += period.benefitDaysUsed;
+
+      const computeIncomeTotal = (p: LeavePeriod) => {
+        const calendarDays = p.calendarDays ?? Math.max(1, differenceInCalendarDays(p.endDate, p.startDate) + 1);
+        return Number.isFinite(p.monthlyIncome)
+          ? (p.monthlyIncome as number)
+          : (p.dailyIncome ?? 0) * calendarDays;
+      };
+
+      const computedPeriodIncome = computeIncomeTotal(period);
+      const computedLastIncome = computeIncomeTotal(last);
+
+      last.monthlyIncome = computedLastIncome + computedPeriodIncome;
+      last.otherParentIncomeForPeriod = (last.otherParentIncomeForPeriod ?? 0) + (period.otherParentIncomeForPeriod ?? 0);
+      last.collectiveAgreementEligibleCalendarDays =
+        (last.collectiveAgreementEligibleCalendarDays ?? 0) +
+        (period.collectiveAgreementEligibleCalendarDays ?? 0);
+      last.collectiveAgreementEligibleBenefitDays =
+        (last.collectiveAgreementEligibleBenefitDays ?? 0) +
+        (period.collectiveAgreementEligibleBenefitDays ?? 0);
+      last.collectiveAgreementTotalBonus =
+        (last.collectiveAgreementTotalBonus ?? 0) + (period.collectiveAgreementTotalBonus ?? 0);
+
+      last.parent1Income = (last.parent1Income ?? 0) + (period.parent1Income ?? 0);
+      last.parent2Income = (last.parent2Income ?? 0) + (period.parent2Income ?? 0);
+      last.parent1BenefitIncome = (last.parent1BenefitIncome ?? 0) + (period.parent1BenefitIncome ?? 0);
+      last.parent2BenefitIncome = (last.parent2BenefitIncome ?? 0) + (period.parent2BenefitIncome ?? 0);
+      last.parent1ParentalSalary = (last.parent1ParentalSalary ?? 0) + (period.parent1ParentalSalary ?? 0);
+      last.parent2ParentalSalary = (last.parent2ParentalSalary ?? 0) + (period.parent2ParentalSalary ?? 0);
     } else {
       mergedPeriods.push({ ...period });
     }
