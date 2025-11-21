@@ -5508,8 +5508,10 @@ function buildSimplePlanResult(
       const parent1Benefit = Math.max(0, period.parent1BenefitIncome ?? 0);
       const parent2Benefit = Math.max(0, period.parent2BenefitIncome ?? 0);
       const periodTotalBonus = Math.max(0, period.collectiveAgreementTotalBonus ?? 0);
-      let parent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
-      let parent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
+      const parent1RecordedParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
+      const parent2RecordedParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
+      let parent1ParentalSalary = parent1RecordedParentalSalary;
+      let parent2ParentalSalary = parent2RecordedParentalSalary;
       const otherParentIncome = Math.max(
         0,
         period.otherParentIncomeForPeriod ?? period.otherParentMonthlyIncome ?? 0
@@ -5520,14 +5522,15 @@ function buildSimplePlanResult(
           parent1ParentalSalary = periodTotalBonus;
         } else if (period.parent === 'parent2' && parent2ParentalSalary <= 0) {
           parent2ParentalSalary = periodTotalBonus;
-        } else if (period.parent === 'both' && (parent1ParentalSalary <= 0 || parent2ParentalSalary <= 0)) {
-          const combinedBenefit = parent1Benefit + parent2Benefit;
-          const parent1Share = combinedBenefit > 0 ? parent1Benefit / combinedBenefit : 0.5;
-          const parent2Share = combinedBenefit > 0 ? parent2Benefit / combinedBenefit : 0.5;
-          if (parent1ParentalSalary <= 0) {
+        } else if (period.parent === 'both') {
+          const parent1HasRecordedBonus = parent1RecordedParentalSalary > 0;
+          const parent2HasRecordedBonus = parent2RecordedParentalSalary > 0;
+
+          if (!parent1HasRecordedBonus && !parent2HasRecordedBonus) {
+            const combinedBenefit = parent1Benefit + parent2Benefit;
+            const parent1Share = combinedBenefit > 0 ? parent1Benefit / combinedBenefit : 0.5;
+            const parent2Share = combinedBenefit > 0 ? parent2Benefit / combinedBenefit : 0.5;
             parent1ParentalSalary = periodTotalBonus * parent1Share;
-          }
-          if (parent2ParentalSalary <= 0) {
             parent2ParentalSalary = periodTotalBonus * parent2Share;
           }
         }
