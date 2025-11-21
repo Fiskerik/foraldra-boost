@@ -4577,9 +4577,50 @@ export function optimizeLeave(
   };
 
   const saveDaysMeta = strategies.find((strategy) => strategy.key === 'save-days')!;
+  
+  // Auto-optimize distribution when collective agreement is involved
+  let optimizedParent1Months = preferredParent1Months;
+  let optimizedParent2Months = preferredParent2Months;
+  
+  const shouldOptimizeDistribution = 
+    (conversionContext.parent1.hasCollectiveAgreement || conversionContext.parent2.hasCollectiveAgreement) &&
+    !isFirstOptimization;
+  
+  if (shouldOptimizeDistribution) {
+    const CA_OPTIMAL_MONTHS = 6;
+    const parent1HasCA = conversionContext.parent1.hasCollectiveAgreement;
+    const parent2HasCA = conversionContext.parent2.hasCollectiveAgreement;
+    const parent1Income = conversionContext.parent1NetIncome;
+    const parent2Income = conversionContext.parent2NetIncome;
+    
+    // If both have CA, give each parent close to 6 months for optimal CA usage
+    if (parent1HasCA && parent2HasCA) {
+      const totalExclusive = preferredParent1Months + preferredParent2Months;
+      if (totalExclusive > CA_OPTIMAL_MONTHS * 2) {
+        // Split evenly if both have CA
+        optimizedParent1Months = Math.min(preferredParent1Months, CA_OPTIMAL_MONTHS);
+        optimizedParent2Months = totalExclusive - optimizedParent1Months;
+      }
+    } else if (parent1HasCA && !parent2HasCA) {
+      // Give Parent 1 (with CA) up to 6 months optimally
+      const totalExclusive = preferredParent1Months + preferredParent2Months;
+      if (preferredParent1Months > CA_OPTIMAL_MONTHS + 1) {
+        optimizedParent1Months = CA_OPTIMAL_MONTHS;
+        optimizedParent2Months = totalExclusive - optimizedParent1Months;
+      }
+    } else if (!parent1HasCA && parent2HasCA) {
+      // Give Parent 2 (with CA) up to 6 months optimally
+      const totalExclusive = preferredParent1Months + preferredParent2Months;
+      if (preferredParent2Months > CA_OPTIMAL_MONTHS + 1) {
+        optimizedParent2Months = CA_OPTIMAL_MONTHS;
+        optimizedParent1Months = totalExclusive - optimizedParent2Months;
+      }
+    }
+  }
+  
   const saveResult = buildSimplePlanResult(saveDaysMeta, conversionContext, {
-    parent1Months: preferredParent1Months,
-    parent2Months: preferredParent2Months,
+    parent1Months: optimizedParent1Months,
+    parent2Months: optimizedParent2Months,
     simultaneousMonths,
   });
 
@@ -4614,8 +4655,8 @@ export function optimizeLeave(
 
   maximizeCandidates.push(
     buildSimplePlanResult(maximizeMeta, conversionContext, {
-      parent1Months: preferredParent1Months,
-      parent2Months: preferredParent2Months,
+      parent1Months: optimizedParent1Months,
+      parent2Months: optimizedParent2Months,
       simultaneousMonths,
     })
   );
@@ -4686,6 +4727,57 @@ interface SimpleSavePlanOptions {
   simultaneousMonths: number;
 }
 
+/**
+ * Detects if distribution causes suboptimal income due to collective agreement expiration.
+ * Returns a warning message if the distribution is suboptimal, null otherwise.
+ */
+function detectSuboptimalDistribution(
+  context: ConversionContext,
+  parent1Months: number,
+  parent2Months: number
+): string | null {
+  const CA_MONTHS_LIMIT = 6;
+  
+  // Check if either parent has collective agreement
+  const parent1HasCA = context.parent1.hasCollectiveAgreement;
+  const parent2HasCA = context.parent2.hasCollectiveAgreement;
+  
+  if (!parent1HasCA && !parent2HasCA) {
+    return null; // No collective agreement, no issue
+  }
+  
+  // Check if distribution causes CA to expire mid-leave for higher earner
+  const parent1Income = context.parent1NetIncome;
+  const parent2Income = context.parent2NetIncome;
+  const higherEarner = parent1Income > parent2Income ? 'parent1' : 'parent2';
+  const higherEarnerHasCA = higherEarner === 'parent1' ? parent1HasCA : parent2HasCA;
+  const higherEarnerMonths = higherEarner === 'parent1' ? parent1Months : parent2Months;
+  
+  // If higher earner has CA and takes more than 6 months, suggest adjustment
+  if (higherEarnerHasCA && higherEarnerMonths > CA_MONTHS_LIMIT + 1) {
+    const optimalMonths = CA_MONTHS_LIMIT;
+    const parentLabel = higherEarner === 'parent1' ? 'Förälder 1' : 'Förälder 2';
+    const otherLabel = higherEarner === 'parent1' ? 'Förälder 2' : 'Förälder 1';
+    
+    return `${parentLabel} har kollektivavtal men tar ${Math.round(higherEarnerMonths)} månader ledigt. ` +
+           `Föräldralön gäller bara i 6 månader, vilket ger lägre inkomst efter månad 6. ` +
+           `För optimal inkomst, överväg att ge ${parentLabel} max ${optimalMonths} månader och ${otherLabel} resten.`;
+  }
+  
+  // Check if parent with CA takes too few months (less than 4) - might be wasting CA benefit
+  if (parent1HasCA && parent1Months > 0 && parent1Months < 4) {
+    return `Förälder 1 har kollektivavtal men tar bara ${Math.round(parent1Months)} månader. ` +
+           `Överväg att öka till minst 4-6 månader för att maximera föräldralön-fördelen.`;
+  }
+  
+  if (parent2HasCA && parent2Months > 0 && parent2Months < 4) {
+    return `Förälder 2 har kollektivavtal men tar bara ${Math.round(parent2Months)} månader. ` +
+           `Överväg att öka till minst 4-6 månader för att maximera föräldralön-fördelen.`;
+  }
+  
+  return null;
+}
+
 function buildSimplePlanResult(
   meta: StrategyMeta,
   context: ConversionContext,
@@ -4701,6 +4793,12 @@ function buildSimplePlanResult(
 
   const periods: LeavePeriod[] = [];
   const warnings: string[] = [];
+  
+  // Check for suboptimal distribution warning
+  const distributionWarning = detectSuboptimalDistribution(context, safeParent1Months, safeParent2Months);
+  if (distributionWarning) {
+    warnings.push(distributionWarning);
+  }
 
   let totalIncome = 0;
   let totalBenefitDays = 0;
@@ -4983,11 +5081,9 @@ function buildSimplePlanResult(
     if (activeParentInfo.hasCollectiveAgreement && caRemainingCalendarDays[singleParent] > 0 && leaveDailyIncome > 0) {
       eligibleCalendarDaysForCA = Math.min(caRemainingCalendarDays[singleParent], calendarDays);
       bonusPerBenefitDay = computeCollectiveAgreementBonusPerBenefitDay(activeParentInfo, leaveDailyIncome);
-      // Räkna endast med den del av Föräldralönen som faktiskt kan betalas ut denna månad
-      caEligibleFraction = calendarDays > 0
-        ? Math.min(1, eligibleCalendarDaysForCA / calendarDays)
-        : 0;
-      effectiveDailyIncome = leaveDailyIncome + bonusPerBenefitDay * caEligibleFraction;
+      // Use full bonus for benefit days while CA is active, regardless of partial month
+      caEligibleFraction = eligibleCalendarDaysForCA > 0 ? 1 : 0;
+      effectiveDailyIncome = leaveDailyIncome + (bonusPerBenefitDay * caEligibleFraction);
     }
 
     const initialDeficit = Math.max(0, minIncomeThreshold - workingNetMonthly);
@@ -5052,8 +5148,9 @@ function buildSimplePlanResult(
       usedHighDays[singleParent] += totalHighDaysUsed;
     }
 
-    const caBenefitDays = totalHighDaysUsed > 0 && caEligibleFraction > 0
-      ? totalHighDaysUsed * caEligibleFraction
+    // Calculate actual CA benefit days based on eligibility
+    const caBenefitDays = totalHighDaysUsed > 0 && eligibleCalendarDaysForCA > 0
+      ? Math.min(totalHighDaysUsed, eligibleCalendarDaysForCA * (totalHighDaysUsed / calendarDays))
       : 0;
     const monthlyParentalSalaryIncome = bonusPerBenefitDay > 0 && caBenefitDays > 0
       ? bonusPerBenefitDay * caBenefitDays
