@@ -674,7 +674,7 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
           calendarDays: uniqueCalendarDays.size,
           benefitDays: segment.benefitDays,
           monthlyIncome: segment.monthlyIncome,
-          leaveParentIncome: segment.benefitIncome,
+          leaveParentIncome: segment.leaveParentIncome,
           otherParentIncome: segment.otherParentIncome,
           benefitIncome: segment.benefitIncome,
           parentalSalaryIncome: segment.parentalSalaryIncome,
@@ -720,7 +720,7 @@ export function buildMonthlyBreakdownEntries(periods: LeavePeriod[]): MonthlyBre
       existing.calendarDays = existing.uniqueCalendarDays.size;
       existing.benefitDays += segment.benefitDays;
       existing.monthlyIncome += segment.monthlyIncome;
-      existing.leaveParentIncome += segment.benefitIncome;
+      existing.leaveParentIncome += segment.leaveParentIncome;
       existing.otherParentIncome += segment.otherParentIncome;
       existing.benefitIncome += segment.benefitIncome;
       existing.parentalSalaryIncome += segment.parentalSalaryIncome;
