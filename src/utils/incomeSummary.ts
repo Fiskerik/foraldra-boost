@@ -202,11 +202,19 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
 
     if (remaining > 0 && allocations.length > 0) {
       let index = 0;
-      while (remaining > 0) {
+      let safety = 0;
+      while (remaining > 0 && safety < remaining * 3) {
         const target = allocations[index % allocations.length].segment;
-        target.benefitDays += 1;
-        remaining -= 1;
+        const capacity = Math.max(0, target.calendarDays - target.benefitDays);
+        if (capacity > 0) {
+          target.benefitDays += 1;
+          remaining -= 1;
+        }
         index += 1;
+        safety += 1;
+        if (index >= allocations.length && remaining > 0 && !allocations.some(({ segment }) => segment.benefitDays < segment.calendarDays)) {
+          break;
+        }
       }
     }
   }
@@ -430,7 +438,7 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     let segmentBenefitIncome = 0;
     if (benefitDaily > 0 && segment.benefitDays > 0) {
       const benefitDaysForMonth = isFullMonthSegment
-        ? Math.min(segment.benefitDays, 31)
+        ? Math.min(segment.benefitDays, monthLength)
         : segment.benefitDays;
       segmentBenefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
     }
