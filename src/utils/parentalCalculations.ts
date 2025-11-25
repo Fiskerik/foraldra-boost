@@ -2257,8 +2257,9 @@ function computeCollectiveAgreementBonusPerBenefitDay(parent: ParentData, baseDa
     return 0;
   }
 
-  const baseBonus = normalizedDailyBenefit * 0.1;
   const normalizedMonthlyIncome = Number.isFinite(parent.income) ? Math.max(0, parent.income) : 0;
+  const netDailySalary = calculateNetIncome(normalizedMonthlyIncome, parent.taxRate) / AVERAGE_DAYS_PER_MONTH;
+  const baseBonus = Math.max(0, netDailySalary * 0.1);
   const excessMonthly = Math.max(0, normalizedMonthlyIncome - PARENTAL_SALARY_THRESHOLD);
   const monthlyExtraAboveGross = excessMonthly * 0.9;
   const monthlyExtraAboveNet = calculateNetIncome(monthlyExtraAboveGross, parent.taxRate);
