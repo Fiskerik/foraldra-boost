@@ -321,7 +321,12 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
 
   const totalCACalendarDays = Math.max(0, period.collectiveAgreementEligibleCalendarDays ?? 0);
   const totalCABenefitDays = Math.max(0, period.collectiveAgreementEligibleBenefitDays ?? 0);
-  const totalCABonus = Math.max(0, period.collectiveAgreementTotalBonus ?? 0);
+  const declaredParent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
+  const declaredParent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
+  const totalCABonus = Math.max(
+    0,
+    period.collectiveAgreementTotalBonus ?? declaredParent1ParentalSalary ?? declaredParent2ParentalSalary
+  );
 
   let remainingCACalendarDays = totalCACalendarDays;
   let remainingCABenefitDays = totalCABenefitDays;
