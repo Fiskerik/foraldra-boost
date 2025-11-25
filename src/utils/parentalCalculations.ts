@@ -5147,7 +5147,21 @@ function buildSimplePlanResult(
     let borrowedHighDays = 0;
     let totalHighDaysUsed = 0;
 
-    if (remainingDeficit > 0 && effectiveDailyIncome > 0) {
+    // For maximize strategy, use all available days up to capacity
+    // For save strategy, use only days needed to meet minimum threshold
+    const shouldUseMaxDays = isMaximizeStrategy;
+
+    if (shouldUseMaxDays) {
+      // Maximize income: use maximum available days
+      const availableOwnHigh = Math.max(0, remainingHighDays[singleParent]);
+      ownHighDays = Math.min(monthlyCapacity, availableOwnHigh);
+      
+      if (ownHighDays > 0) {
+        remainingHighDays[singleParent] = Math.max(0, remainingHighDays[singleParent] - ownHighDays);
+        quotaHighDaysUsed[singleParent] += ownHighDays;
+        totalHighDaysUsed += ownHighDays;
+      }
+    } else if (remainingDeficit > 0 && effectiveDailyIncome > 0) {
       const maxHighNeeded = Math.min(
         monthlyCapacity,
         Math.ceil(remainingDeficit / effectiveDailyIncome)
@@ -5206,7 +5220,17 @@ function buildSimplePlanResult(
     let totalLowDaysUsed = 0;
     const lowCapacityBase = Math.max(0, monthlyCapacity - totalHighDaysUsed);
 
-    if (remainingDeficit > 0 && lowDailyIncome > 0 && lowCapacityBase > 0) {
+    if (shouldUseMaxDays) {
+      // Maximize income: use remaining capacity for low days if available
+      const availableOwnLow = Math.max(0, remainingLowDays[singleParent]);
+      ownLowDays = Math.min(lowCapacityBase, availableOwnLow);
+      
+      if (ownLowDays > 0) {
+        remainingLowDays[singleParent] = Math.max(0, remainingLowDays[singleParent] - ownLowDays);
+        quotaLowDaysUsed[singleParent] += ownLowDays;
+        totalLowDaysUsed += ownLowDays;
+      }
+    } else if (remainingDeficit > 0 && lowDailyIncome > 0 && lowCapacityBase > 0) {
       const neededLow = Math.min(
         lowCapacityBase,
         Math.ceil(remainingDeficit / lowDailyIncome)
@@ -5599,16 +5623,24 @@ function buildSimplePlanResult(
         ? (period.monthlyIncome as number)
         : (period.dailyIncome ?? 0) * Math.max(1, period.calendarDays ?? differenceInCalendarDays(period.endDate, period.startDate) + 1);
 
+      // Always use periodTotalBonus if it exists and recorded parental salary doesn't fully account for it
       if (periodTotalBonus > 0) {
-        if (period.parent === 'parent1' && parent1ParentalSalary <= 0) {
+        const totalRecorded = parent1RecordedParentalSalary + parent2RecordedParentalSalary;
+        
+        if (period.parent === 'parent1') {
+          // All bonus goes to parent1
           parent1ParentalSalary = periodTotalBonus;
-        } else if (period.parent === 'parent2' && parent2ParentalSalary <= 0) {
+          parent2ParentalSalary = 0;
+        } else if (period.parent === 'parent2') {
+          // All bonus goes to parent2
+          parent1ParentalSalary = 0;
           parent2ParentalSalary = periodTotalBonus;
         } else if (period.parent === 'both') {
-          const parent1HasRecordedBonus = parent1RecordedParentalSalary > 0;
-          const parent2HasRecordedBonus = parent2RecordedParentalSalary > 0;
-
-          if (!parent1HasRecordedBonus && !parent2HasRecordedBonus) {
+          // Split bonus proportionally to recorded amounts, or by benefit if no recorded amounts
+          if (totalRecorded > 0) {
+            parent1ParentalSalary = parent1RecordedParentalSalary;
+            parent2ParentalSalary = parent2RecordedParentalSalary;
+          } else {
             const combinedBenefit = parent1Benefit + parent2Benefit;
             const parent1Share = combinedBenefit > 0 ? parent1Benefit / combinedBenefit : 0.5;
             const parent2Share = combinedBenefit > 0 ? parent2Benefit / combinedBenefit : 0.5;
