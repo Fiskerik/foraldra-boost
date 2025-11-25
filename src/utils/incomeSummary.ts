@@ -294,9 +294,39 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     }
   }
 
+  // Clamp allocated benefit days so they never exceed the month's calendar capacity
+  const maxBenefitMultiplier = period.parent === "both" ? 2 : 1;
+  segments.forEach(segment => {
+    const maxBenefitDays = Math.max(0, Math.round(segment.calendarDays * maxBenefitMultiplier));
+    const currentHigh = Math.max(0, segment.highBenefitDays);
+    const currentLow = Math.max(0, segment.lowBenefitDays);
+    const totalUsed = currentHigh + currentLow;
+
+    let adjustedHigh = currentHigh;
+    let adjustedLow = currentLow;
+
+    if (totalUsed > maxBenefitDays) {
+      const overflow = totalUsed - maxBenefitDays;
+      const lowAfterClamp = Math.max(0, adjustedLow - overflow);
+      const remainingOverflow = Math.max(0, overflow - adjustedLow + lowAfterClamp);
+      adjustedLow = lowAfterClamp;
+      adjustedHigh = Math.max(0, adjustedHigh - remainingOverflow);
+    }
+
+    const adjustedTotal = Math.min(maxBenefitDays, adjustedHigh + adjustedLow);
+    segment.highBenefitDays = adjustedHigh;
+    segment.lowBenefitDays = adjustedLow;
+    segment.benefitDays = adjustedTotal;
+  });
+
   const totalCACalendarDays = Math.max(0, period.collectiveAgreementEligibleCalendarDays ?? 0);
   const totalCABenefitDays = Math.max(0, period.collectiveAgreementEligibleBenefitDays ?? 0);
-  const totalCABonus = Math.max(0, period.collectiveAgreementTotalBonus ?? 0);
+  const declaredParent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
+  const declaredParent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
+  const totalCABonus = Math.max(
+    0,
+    period.collectiveAgreementTotalBonus ?? declaredParent1ParentalSalary ?? declaredParent2ParentalSalary
+  );
 
   let remainingCACalendarDays = totalCACalendarDays;
   let remainingCABenefitDays = totalCABenefitDays;
