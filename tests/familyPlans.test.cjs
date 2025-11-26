@@ -141,3 +141,72 @@ test("Familjescenarier", async (t) => {
     });
   }
 });
+
+test("Föräldralön läggs till för standardfamiljen de första månaderna", () => {
+  const scenario = scenarios.find((item) => item.name === "Standardfamilj sparar dagar");
+  assert.ok(scenario, "Standardfamilj saknas i scenariotestet");
+  if (!scenario) return;
+
+  const parent1 = {
+    income: Number(scenario.parent1.grossIncome) || 0,
+    hasCollectiveAgreement: Boolean(scenario.parent1.hasCollectiveAgreement),
+    taxRate: Number(scenario.parent1.taxRate ?? 30) || 30,
+  };
+
+  const parent2 = {
+    income: Number(scenario.parent2.grossIncome) || 0,
+    hasCollectiveAgreement: Boolean(scenario.parent2.hasCollectiveAgreement),
+    taxRate: Number(scenario.parent2.taxRate ?? 30) || 30,
+  };
+
+  const prefs = scenario.preferences;
+
+  const results = optimizeLeave(
+    parent1,
+    parent2,
+    Number(prefs.totalMonths) || 0,
+    Number(prefs.parent1Months) || 0,
+    Number(prefs.parent2Months) || 0,
+    Number(prefs.minimumNetIncome) || 0,
+    Number(prefs.daysPerWeek) || 5,
+    Number(prefs.simultaneousMonths) || 0,
+    false
+  );
+
+  const targetResult = results.find((result) => result.strategy === prefs.strategy);
+  assert.ok(targetResult, "Strategin save-days hittades inte i resultatet");
+  if (!targetResult) return;
+
+  const parent1BonusMonths = new Set();
+  const parent2BonusMonths = new Set();
+  const sortedPeriods = [...targetResult.periods].sort(
+    (a, b) => a.startDate.getTime() - b.startDate.getTime()
+  );
+
+  sortedPeriods.forEach((period) => {
+    const monthKey = `${period.startDate.getFullYear()}-${period.startDate.getMonth()}`;
+
+    if ((period.parent === "parent1" || period.parent === "both") && (period.parent1BenefitIncome ?? 0) > 0) {
+      if (!parent1BonusMonths.has(monthKey) && parent1BonusMonths.size < 6) {
+        assert.ok((period.parent1ParentalSalary ?? 0) > 0, `Förälder 1 saknar Föräldralön under ${monthKey}`);
+        parent1BonusMonths.add(monthKey);
+      }
+    }
+
+    if ((period.parent === "parent2" || period.parent === "both") && (period.parent2BenefitIncome ?? 0) > 0) {
+      if (!parent2BonusMonths.has(monthKey) && parent2BonusMonths.size < 6) {
+        assert.ok((period.parent2ParentalSalary ?? 0) > 0, `Förälder 2 saknar Föräldralön under ${monthKey}`);
+        parent2BonusMonths.add(monthKey);
+      }
+    }
+  });
+
+  assert.ok(
+    parent1BonusMonths.size >= Math.min(6, Number(prefs.parent1Months) || 0),
+    "Förälder 1 har inte Föräldralön för sina första månader"
+  );
+  assert.ok(
+    parent2BonusMonths.size >= Math.min(6, Number(prefs.parent2Months) || 0),
+    "Förälder 2 har inte Föräldralön för sina första månader"
+  );
+});
