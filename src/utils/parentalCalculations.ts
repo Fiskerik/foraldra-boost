@@ -5254,7 +5254,9 @@ function buildSimplePlanResult(
       let currentTotalBenefitDays = currentHigh + currentLow;
       let remainingCapacity = Math.max(0, monthlyCapacity - currentTotalBenefitDays);
       let currentMonthlyIncome = Math.max(0, period.monthlyIncome ?? 0);
-      const targetMonthlyIncome = Math.max(minIncomeThreshold > 0 ? minIncomeThreshold : 0, currentMonthlyIncome);
+      // For maximize-income, don't use currentMonthlyIncome as target since it already includes CA bonus
+      // This would make the system think it already met the target when it hasn't maximized yet
+      const targetMonthlyIncome = minIncomeThreshold > 0 ? minIncomeThreshold : 0;
 
       if (remainingCapacity <= 0 && currentMonthlyIncome >= targetMonthlyIncome) {
         return;
@@ -5498,19 +5500,33 @@ function buildSimplePlanResult(
       acc.parent1.parentalSalary += parent1ParentalSalary;
       acc.parent2.parentalSalary += parent2ParentalSalary;
 
+      // Calculate working income by subtracting all non-working components from monthly total
       if (period.parent === 'parent1') {
-        const remaining = Math.max(0, monthlyIncomeForPeriod - parent1Benefit - parent1ParentalSalary);
-        acc.parent2.working += Math.min(otherParentIncome, remaining);
+        const totalAccounted = parent1Benefit + parent1ParentalSalary;
+        const workingIncome = Math.max(0, monthlyIncomeForPeriod - totalAccounted);
+        acc.parent2.working += workingIncome;
       } else if (period.parent === 'parent2') {
-        const remaining = Math.max(0, monthlyIncomeForPeriod - parent2Benefit - parent2ParentalSalary);
-        acc.parent1.working += Math.min(otherParentIncome, remaining);
+        const totalAccounted = parent2Benefit + parent2ParentalSalary;
+        const workingIncome = Math.max(0, monthlyIncomeForPeriod - totalAccounted);
+        acc.parent1.working += workingIncome;
       } else if (period.parent === 'both') {
-        const parent1Income = Math.max(0, period.parent1Income ?? 0);
-        const parent2Income = Math.max(0, period.parent2Income ?? 0);
-        const parent1Working = Math.max(0, parent1Income - parent1Benefit - parent1ParentalSalary);
-        const parent2Working = Math.max(0, parent2Income - parent2Benefit - parent2ParentalSalary);
-        acc.parent1.working += parent1Working;
-        acc.parent2.working += parent2Working;
+        // For 'both' periods, calculate working income from total minus benefit and parental salary
+        const totalAccounted = parent1Benefit + parent1ParentalSalary + parent2Benefit + parent2ParentalSalary;
+        const totalWorkingIncome = Math.max(0, monthlyIncomeForPeriod - totalAccounted);
+        
+        // Distribute working income between parents based on their recorded incomes or split 50/50
+        const parent1RecordedIncome = Math.max(0, period.parent1Income ?? 0);
+        const parent2RecordedIncome = Math.max(0, period.parent2Income ?? 0);
+        const totalRecorded = parent1RecordedIncome + parent2RecordedIncome;
+        
+        if (totalRecorded > 0) {
+          const parent1Share = parent1RecordedIncome / totalRecorded;
+          acc.parent1.working += totalWorkingIncome * parent1Share;
+          acc.parent2.working += totalWorkingIncome * (1 - parent1Share);
+        } else {
+          acc.parent1.working += totalWorkingIncome / 2;
+          acc.parent2.working += totalWorkingIncome / 2;
+        }
       }
 
       return acc;
