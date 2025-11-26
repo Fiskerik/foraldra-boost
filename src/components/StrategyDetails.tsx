@@ -355,13 +355,13 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths, 
                         </div>
                       </div>
 
-                      {isExpanded && (
+                          {isExpanded && (
                         <div className="mt-4 pt-4 border-t space-y-2">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div>
                             <div className="text-sm text-muted-foreground">Föräldrapenning</div>
-                            <div className="font-semibold">{formatCurrency(month.leaveParentIncome)}</div>
-                            {renderDailyCalculation(month.leaveParentIncome, month.benefitDays)}
+                            <div className="font-semibold">{formatCurrency(month.benefitIncome)}</div>
+                            {renderDailyCalculation(month.benefitIncome, month.benefitDays)}
                             {showParentBreakdown && parentLeaveEntries.length > 0 && (
                               <div className="mt-2 space-y-1.5">
                                   {parentLeaveEntries.map(({ parentKey, benefitPart, parentalSalaryPart, benefitDays }) => (
