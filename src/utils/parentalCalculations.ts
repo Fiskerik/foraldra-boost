@@ -4613,31 +4613,56 @@ export function optimizeLeave(
 
   const maximizeResult = maximizeCandidates.reduce(pickBetter);
 
-  const needsSaveStrategyAdjustment =
-    saveResult.daysUsed >= maximizeResult.daysUsed ||
-    saveResult.totalIncome >= maximizeResult.totalIncome;
+  const baseSaveDaysPerWeek = Math.max(1, Math.min(normalizedDaysPerWeek, DEFAULT_DAYS_PER_WEEK - 1));
 
-  if (!needsSaveStrategyAdjustment) {
-    return [saveResult, maximizeResult];
-  }
-
-  const tightenedRequestedDaysPerWeek = Math.max(
-    1,
-    Math.min(normalizedDaysPerWeek, DEFAULT_DAYS_PER_WEEK - 2)
+  const saveDayCaps = Array.from(
+    new Set([
+      baseSaveDaysPerWeek,
+      Math.max(1, Math.min(normalizedDaysPerWeek, DEFAULT_DAYS_PER_WEEK - 2)),
+      Math.max(1, Math.min(normalizedDaysPerWeek, DEFAULT_DAYS_PER_WEEK - 3)),
+      Math.max(1, Math.floor(DEFAULT_DAYS_PER_WEEK / 2)),
+      1,
+    ])
   );
 
-  const adjustedSaveResult = buildSimplePlanResult(saveDaysMeta, conversionContext, {
-    parent1Months: optimizedParent1Months,
-    parent2Months: optimizedParent2Months,
-    simultaneousMonths,
-    requestedDaysPerWeekOverride: tightenedRequestedDaysPerWeek,
-  });
+  const saveCandidates = saveDayCaps.map(daysPerWeek =>
+    buildSimplePlanResult(saveDaysMeta, conversionContext, {
+      parent1Months: optimizedParent1Months,
+      parent2Months: optimizedParent2Months,
+      simultaneousMonths,
+      requestedDaysPerWeekOverride: daysPerWeek,
+    })
+  );
 
-  const finalSaveResult =
-    adjustedSaveResult.daysUsed < maximizeResult.daysUsed ||
-    adjustedSaveResult.totalIncome < maximizeResult.totalIncome
-      ? adjustedSaveResult
-      : saveResult;
+  const preferLessUsage = (best: OptimizationResult | null, current: OptimizationResult): OptimizationResult => {
+    if (!best) {
+      return current;
+    }
+
+    const bestBeatsMax = best.daysUsed < maximizeResult.daysUsed || best.totalIncome < maximizeResult.totalIncome;
+    const currentBeatsMax = current.daysUsed < maximizeResult.daysUsed || current.totalIncome < maximizeResult.totalIncome;
+
+    if (bestBeatsMax !== currentBeatsMax) {
+      return currentBeatsMax ? current : best;
+    }
+
+    if (best.daysUsed !== current.daysUsed) {
+      return best.daysUsed < current.daysUsed ? best : current;
+    }
+
+    if (best.totalIncome !== current.totalIncome) {
+      return best.totalIncome < current.totalIncome ? best : current;
+    }
+
+    return best.averageMonthlyIncome <= current.averageMonthlyIncome ? best : current;
+  };
+
+  const prioritizedSaveCandidates = saveCandidates.filter(candidate =>
+    candidate.daysUsed < maximizeResult.daysUsed || candidate.totalIncome < maximizeResult.totalIncome
+  );
+
+  const finalSaveResult = (prioritizedSaveCandidates.length ? prioritizedSaveCandidates : saveCandidates)
+    .reduce((best, current) => preferLessUsage(best, current), null as OptimizationResult | null)!;
 
   return [finalSaveResult, maximizeResult];
 }

@@ -324,9 +324,10 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
   const totalCABenefitDays = Math.max(0, period.collectiveAgreementEligibleBenefitDays ?? 0);
   const declaredParent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
   const declaredParent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
+  const declaredTotalParentalSalary = declaredParent1ParentalSalary + declaredParent2ParentalSalary;
   const totalCABonus = Math.max(
     0,
-    period.collectiveAgreementTotalBonus ?? declaredParent1ParentalSalary ?? declaredParent2ParentalSalary
+    period.collectiveAgreementTotalBonus ?? declaredTotalParentalSalary
   );
 
   let remainingCABonus = Math.max(0, Math.round(totalCABonus));
@@ -509,7 +510,30 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     if (bonusGap !== 0) {
       const target = segments.find(segment => segment.parentalSalaryIncome > 0) ?? segments[0];
       if (target) {
+        const parent1Share = target.parentParentalSalaryIncomeByParent.parent1 + target.parentParentalSalaryIncomeByParent.parent2 > 0
+          ? target.parentParentalSalaryIncomeByParent.parent1 /
+            (target.parentParentalSalaryIncomeByParent.parent1 + target.parentParentalSalaryIncomeByParent.parent2)
+          : period.parent === "parent1"
+            ? 1
+            : period.parent === "parent2"
+              ? 0
+              : 0.5;
+        const parent1Delta = bonusGap * parent1Share;
+        const parent2Delta = bonusGap - parent1Delta;
+
         target.parentalSalaryIncome = Math.max(0, target.parentalSalaryIncome + bonusGap);
+        target.parentParentalSalaryIncomeByParent.parent1 = Math.max(
+          0,
+          target.parentParentalSalaryIncomeByParent.parent1 + parent1Delta
+        );
+        target.parentParentalSalaryIncomeByParent.parent2 = Math.max(
+          0,
+          target.parentParentalSalaryIncomeByParent.parent2 + parent2Delta
+        );
+        target.parentLeaveIncomeByParent.parent1 += parent1Delta;
+        target.parentLeaveIncomeByParent.parent2 += parent2Delta;
+        target.leaveParentIncome += bonusGap;
+        target.monthlyIncome += bonusGap;
       }
     }
   }
