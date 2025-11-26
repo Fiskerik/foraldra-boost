@@ -61,9 +61,42 @@ export function computeTimelineMonthlyData(
   }
 
   const monthlyBreakdownEntries = buildMonthlyBreakdownEntries(sortedPeriods);
-  const breakdownByKey = new Map(
-    monthlyBreakdownEntries.map(entry => [entry.monthKey, entry])
-  );
+  const breakdownByMonth = new Map<number, {
+    startDate: Date;
+    endDate: Date;
+    income: number;
+    parent1Days: number;
+    parent2Days: number;
+    bothDays: number;
+  }>();
+
+  monthlyBreakdownEntries.forEach(entry => {
+    const monthKey = startOfMonth(entry.monthStart).getTime();
+    const existing = breakdownByMonth.get(monthKey);
+
+    if (!existing) {
+      breakdownByMonth.set(monthKey, {
+        startDate: new Date(entry.startDate),
+        endDate: new Date(entry.endDate),
+        income: entry.monthlyIncome,
+        parent1Days: entry.parentDayTotals.parent1,
+        parent2Days: entry.parentDayTotals.parent2,
+        bothDays: entry.parentDayTotals.both,
+      });
+      return;
+    }
+
+    existing.income += entry.monthlyIncome;
+    existing.parent1Days += entry.parentDayTotals.parent1;
+    existing.parent2Days += entry.parentDayTotals.parent2;
+    existing.bothDays += entry.parentDayTotals.both;
+    existing.startDate = existing.startDate.getTime() <= entry.startDate.getTime()
+      ? existing.startDate
+      : new Date(entry.startDate);
+    existing.endDate = existing.endDate.getTime() >= entry.endDate.getTime()
+      ? existing.endDate
+      : new Date(entry.endDate);
+  });
 
   const months = eachMonthOfInterval({ start: startDate, end: chartEndDate });
 
@@ -71,17 +104,17 @@ export function computeTimelineMonthlyData(
     const monthStart = startOfMonth(month);
     const rawMonthEnd = endOfMonth(monthStart);
     const monthEnd = rawMonthEnd.getTime() > chartEndDate.getTime() ? chartEndDate : rawMonthEnd;
-    const key = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
-    const breakdown = breakdownByKey.get(key);
+    const key = monthStart.getTime();
+    const breakdown = breakdownByMonth.get(key);
 
     return {
       monthDate: monthStart,
       labelStartDate: breakdown ? breakdown.startDate : monthStart,
       labelEndDate: breakdown ? breakdown.endDate : monthEnd,
-      income: breakdown ? breakdown.monthlyIncome : 0,
-      parent1Days: breakdown ? breakdown.parentDayTotals.parent1 : 0,
-      parent2Days: breakdown ? breakdown.parentDayTotals.parent2 : 0,
-      bothDays: breakdown ? breakdown.parentDayTotals.both : 0,
+      income: breakdown ? breakdown.income : 0,
+      parent1Days: breakdown ? breakdown.parent1Days : 0,
+      parent2Days: breakdown ? breakdown.parent2Days : 0,
+      bothDays: breakdown ? breakdown.bothDays : 0,
     } satisfies TimelinePoint;
   });
 }
