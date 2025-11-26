@@ -296,6 +296,7 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
 
   // Clamp allocated benefit days so they never exceed the month's calendar capacity
   const maxBenefitMultiplier = period.parent === "both" ? 2 : 1;
+
   segments.forEach(segment => {
     const maxBenefitDays = Math.max(0, Math.round(segment.calendarDays * maxBenefitMultiplier));
     const currentHigh = Math.max(0, segment.highBenefitDays);
@@ -323,10 +324,13 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
   const totalCABenefitDays = Math.max(0, period.collectiveAgreementEligibleBenefitDays ?? 0);
   const declaredParent1ParentalSalary = Math.max(0, period.parent1ParentalSalary ?? 0);
   const declaredParent2ParentalSalary = Math.max(0, period.parent2ParentalSalary ?? 0);
+  const declaredTotalParentalSalary = declaredParent1ParentalSalary + declaredParent2ParentalSalary;
   const totalCABonus = Math.max(
     0,
-    period.collectiveAgreementTotalBonus ?? declaredParent1ParentalSalary ?? declaredParent2ParentalSalary
+    period.collectiveAgreementTotalBonus ?? declaredTotalParentalSalary
   );
+
+  let remainingCABonus = Math.max(0, Math.round(totalCABonus));
 
   let remainingCACalendarDays = totalCACalendarDays;
   let remainingCABenefitDays = totalCABenefitDays;
@@ -361,8 +365,6 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       firstWithCA.caEligibleBenefitDays += remainingCABenefitDays;
     }
   }
-
-  const bonusPerBenefitDay = totalCABenefitDays > 0 ? totalCABonus / totalCABenefitDays : 0;
 
   const sanitize = (value: unknown, fallback: number = 0): number => {
     if (typeof value === "number" && Number.isFinite(value)) {
@@ -437,8 +439,18 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
 
       const parent1BenefitIncome = totalParent1BenefitIncome * benefitShare;
       const parent2BenefitIncome = totalParent2BenefitIncome * benefitShare;
-      const parent1ParentalSalary = totalParent1ParentalSalary * benefitShare;
-      const parent2ParentalSalary = totalParent2ParentalSalary * benefitShare;
+      const combinedBenefitIncome = parent1BenefitIncome + parent2BenefitIncome;
+
+      let segmentParentalSalaryIncome = 0;
+      if (combinedBenefitIncome > 0 && remainingCABonus > 0) {
+        const expectedBonus = Math.round(combinedBenefitIncome * 0.1);
+        segmentParentalSalaryIncome = Math.min(remainingCABonus, expectedBonus);
+        remainingCABonus -= segmentParentalSalaryIncome;
+      }
+
+      const parent1Share = combinedBenefitIncome > 0 ? parent1BenefitIncome / combinedBenefitIncome : 0.5;
+      const parent1ParentalSalary = segmentParentalSalaryIncome * parent1Share;
+      const parent2ParentalSalary = segmentParentalSalaryIncome - parent1ParentalSalary;
       const parent1TotalIncome = parent1BenefitIncome + parent1ParentalSalary;
       const parent2TotalIncome = parent2BenefitIncome + parent2ParentalSalary;
 
@@ -462,12 +474,9 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
       return;
     }
 
-    const calendarShare = totalSegmentCalendarDays > 0 ? segment.calendarDays / totalSegmentCalendarDays : 0;
     const workingParentMonthlyBase = segment.otherParentMonthlyBase || totalOtherParentIncome;
-    const otherParentIncome = Math.max(
-      0,
-      Math.round(workingParentMonthlyBase * Math.min(1, segment.calendarDays / monthLength))
-    );
+    const sgiDailyIncome = workingParentMonthlyBase / 30;
+    const otherParentIncome = Math.max(0, Math.round(sgiDailyIncome * segment.calendarDays));
 
     let segmentBenefitIncome = 0;
     if (benefitDaily > 0 && segment.benefitDays > 0) {
@@ -479,14 +488,10 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     segmentBenefitIncome = Math.max(0, Math.round(segmentBenefitIncome));
 
     let segmentParentalSalaryIncome = 0;
-    if (bonusPerBenefitDay > 0 && segment.caEligibleBenefitDays > 0) {
-      segmentParentalSalaryIncome = segment.caEligibleBenefitDays * bonusPerBenefitDay;
-    }
-    if (segmentParentalSalaryIncome <= 0 && totalCABonus > 0) {
-      const calendarShare = totalSegmentCalendarDays > 0 ? segment.calendarDays / totalSegmentCalendarDays : 0;
-      if (calendarShare > 0) {
-        segmentParentalSalaryIncome = totalCABonus * calendarShare;
-      }
+    if (segmentBenefitIncome > 0 && remainingCABonus > 0) {
+      const expectedBonus = Math.round(segmentBenefitIncome * 0.1);
+      segmentParentalSalaryIncome = Math.min(remainingCABonus, expectedBonus);
+      remainingCABonus -= segmentParentalSalaryIncome;
     }
 
     const leaveParentIncome = segmentBenefitIncome + segmentParentalSalaryIncome;
@@ -505,7 +510,30 @@ function breakDownPeriodByMonth(period: LeavePeriod): MonthlySegment[] {
     if (bonusGap !== 0) {
       const target = segments.find(segment => segment.parentalSalaryIncome > 0) ?? segments[0];
       if (target) {
+        const parent1Share = target.parentParentalSalaryIncomeByParent.parent1 + target.parentParentalSalaryIncomeByParent.parent2 > 0
+          ? target.parentParentalSalaryIncomeByParent.parent1 /
+            (target.parentParentalSalaryIncomeByParent.parent1 + target.parentParentalSalaryIncomeByParent.parent2)
+          : period.parent === "parent1"
+            ? 1
+            : period.parent === "parent2"
+              ? 0
+              : 0.5;
+        const parent1Delta = bonusGap * parent1Share;
+        const parent2Delta = bonusGap - parent1Delta;
+
         target.parentalSalaryIncome = Math.max(0, target.parentalSalaryIncome + bonusGap);
+        target.parentParentalSalaryIncomeByParent.parent1 = Math.max(
+          0,
+          target.parentParentalSalaryIncomeByParent.parent1 + parent1Delta
+        );
+        target.parentParentalSalaryIncomeByParent.parent2 = Math.max(
+          0,
+          target.parentParentalSalaryIncomeByParent.parent2 + parent2Delta
+        );
+        target.parentLeaveIncomeByParent.parent1 += parent1Delta;
+        target.parentLeaveIncomeByParent.parent2 += parent2Delta;
+        target.leaveParentIncome += bonusGap;
+        target.monthlyIncome += bonusGap;
       }
     }
   }
