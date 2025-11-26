@@ -79,6 +79,7 @@ export interface LeavePeriod {
   needsSequencing?: boolean;
   isTopUp?: boolean;
   monthlyIncome?: number;
+  baseDailyBenefit?: number;
   baseDailyIncome?: number;
   collectiveAgreementEligibleCalendarDays?: number;
   collectiveAgreementEligibleBenefitDays?: number;
@@ -843,6 +844,7 @@ function enforceMonthlyMinimumIncome(
       isTopUp: true,
       needsSequencing: true,
       monthlyIncome: totalPeriodIncome,
+      baseDailyBenefit: benefitDailyBase,
     };
 
     if (sourceParent !== owner) {
@@ -2553,6 +2555,7 @@ function addSegment(
     otherParentMonthlyIncome: parent === 'both' ? 0 : otherParentMonthlyIncome,
     otherParentIncomeForPeriod: parent === 'both' ? 0 : otherParentIncomeForPeriod,
     monthlyIncome: totalPeriodIncome,
+    baseDailyBenefit: baseBenefitPerDay,
     collectiveAgreementEligibleCalendarDays: hasCollectiveAgreementBonus ? calendarDaysUsed : 0,
     collectiveAgreementEligibleBenefitDays: hasCollectiveAgreementBonus ? benefitDaysUsed : 0,
     collectiveAgreementTotalBonus: hasCollectiveAgreementBonus ? totalExtraIncome : 0,
@@ -3859,6 +3862,7 @@ function convertLegacyResult(
           otherParentMonthlyIncome: otherParentMonthlyNet,
           isPreferenceFiller: true,
           needsSequencing: true,
+          baseDailyBenefit: option.daily,
         };
 
         if (option.source !== ownerKey) {
@@ -4163,6 +4167,9 @@ function convertLegacyResult(
   }
 
   mergedPeriods.forEach(period => {
+    if (period.baseDailyBenefit === undefined && Number.isFinite(period.dailyBenefit)) {
+      period.baseDailyBenefit = period.dailyBenefit;
+    }
     period.baseDailyIncome = period.dailyIncome;
     period.collectiveAgreementEligibleCalendarDays = 0;
     period.collectiveAgreementEligibleBenefitDays = 0;
