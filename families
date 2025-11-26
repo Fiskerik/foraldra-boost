@@ -6,13 +6,13 @@ families:
       taxRate: 30
     parent2:
       grossIncome: 55000
-      hasCollectiveAgreement: false
+      hasCollectiveAgreement: true
       taxRate: 30
     preferences:
       totalMonths: 15
       parent1Months: 10
       parent2Months: 5
-      minimumNetIncome: 38000
+      minimumNetIncome: 45000
       daysPerWeek: 5
       simultaneousMonths: 0
       strategy: "save-days"
