@@ -103,6 +103,7 @@ const RESERVED_HIGH_BENEFIT_DAYS_PER_PARENT = 90;
 const INITIAL_SHARED_WORKING_DAYS = 10;
 const INITIAL_SHARED_CALENDAR_DAYS = 14;
 const MAX_BENEFIT_DAYS_PER_MONTH = 31;
+const DEFAULT_DAYS_PER_WEEK = 5;
 const MAX_PARENTAL_BENEFIT_PER_DAY = 1250;
 const HIGH_BENEFIT_RATE = 0.8;
 const SGI_RATE = 0.97;
@@ -4515,6 +4516,7 @@ export function optimizeLeave(
     parent1Months: optimizedParent1Months,
     parent2Months: optimizedParent2Months,
     simultaneousMonths,
+    requestedDaysPerWeekOverride: normalizedDaysPerWeek,
   });
 
   const maximizeMeta = strategies.find((strategy) => strategy.key === 'maximize-income')!;
@@ -4611,13 +4613,40 @@ export function optimizeLeave(
 
   const maximizeResult = maximizeCandidates.reduce(pickBetter);
 
-  return [saveResult, maximizeResult];
+  const needsSaveStrategyAdjustment =
+    saveResult.daysUsed >= maximizeResult.daysUsed ||
+    saveResult.totalIncome >= maximizeResult.totalIncome;
+
+  if (!needsSaveStrategyAdjustment) {
+    return [saveResult, maximizeResult];
+  }
+
+  const tightenedRequestedDaysPerWeek = Math.max(
+    1,
+    Math.min(normalizedDaysPerWeek, DEFAULT_DAYS_PER_WEEK - 2)
+  );
+
+  const adjustedSaveResult = buildSimplePlanResult(saveDaysMeta, conversionContext, {
+    parent1Months: optimizedParent1Months,
+    parent2Months: optimizedParent2Months,
+    simultaneousMonths,
+    requestedDaysPerWeekOverride: tightenedRequestedDaysPerWeek,
+  });
+
+  const finalSaveResult =
+    adjustedSaveResult.daysUsed < maximizeResult.daysUsed ||
+    adjustedSaveResult.totalIncome < maximizeResult.totalIncome
+      ? adjustedSaveResult
+      : saveResult;
+
+  return [finalSaveResult, maximizeResult];
 }
 
 interface SimpleSavePlanOptions {
   parent1Months: number;
   parent2Months: number;
   simultaneousMonths: number;
+  requestedDaysPerWeekOverride?: number;
 }
 
 /**
@@ -4676,7 +4705,7 @@ function buildSimplePlanResult(
   context: ConversionContext,
   options: SimpleSavePlanOptions,
 ): OptimizationResult {
-  const { parent1Months, parent2Months, simultaneousMonths } = options;
+  const { parent1Months, parent2Months, simultaneousMonths, requestedDaysPerWeekOverride } = options;
 
   const baseStart = startOfMonth(startOfDay(context.baseStartDate));
   const safeParent1Months = Math.max(0, Math.round(parent1Months));
@@ -4721,6 +4750,10 @@ function buildSimplePlanResult(
   const isSaveDaysStrategy = meta.key === 'save-days';
   const isMaximizeStrategy = meta.key === 'maximize-income';
 
+  const requestedDaysPerWeek = requestedDaysPerWeekOverride ?? context.requestedDaysPerWeek ?? DEFAULT_DAYS_PER_WEEK;
+  const saveDaysRequestedPerWeek = Math.max(1, Math.min(requestedDaysPerWeek, DEFAULT_DAYS_PER_WEEK - 1));
+  const effectiveRequestedDaysPerWeek = isSaveDaysStrategy ? saveDaysRequestedPerWeek : requestedDaysPerWeek;
+
   const minIncomeThreshold = Math.max(0, context.minHouseholdIncome || 0);
 
   // Track worst month for consolidated warning
@@ -4734,7 +4767,9 @@ function buildSimplePlanResult(
 
   const resolveOtherDaily = (parent: 'parent1' | 'parent2', calendarDays: number): number => {
     const net = resolveWorkingNet(parent);
-    return calendarDays > 0 ? net / calendarDays : 0;
+    // Use SGI-style 30-day months for daily income so broken months don't change the daily rate
+    const effectiveDays = calendarDays > 0 ? 30 : 0;
+    return effectiveDays > 0 ? net / effectiveDays : 0;
   };
 
   let monthIndex = 0;
@@ -4743,7 +4778,13 @@ function buildSimplePlanResult(
     const monthStart = startOfMonth(addMonths(baseStart, monthIndex));
     const monthEnd = endOfMonth(monthStart);
     const calendarDays = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
-    const monthlyCapacity = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
+    const baseMonthlyCapacity = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
+    const monthlyCapacity = isSaveDaysStrategy
+      ? Math.min(
+          baseMonthlyCapacity,
+          Math.max(1, Math.round(effectiveRequestedDaysPerWeek * WEEKS_PER_MONTH))
+        )
+      : baseMonthlyCapacity;
 
     // Determine if this is a simultaneous period
     const isSimultaneousPeriod = monthIndex > 0 && monthIndex <= simultaneousMonths;
