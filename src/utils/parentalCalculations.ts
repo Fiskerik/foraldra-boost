@@ -5003,6 +5003,8 @@ function buildSimplePlanResult(
 
       monthlyBenefitIncome = parent1BenefitIncome + parent2BenefitIncome;
 
+      const perParentBenefitDays = highDaysUsedPerParent + lowDaysUsedPerParent;
+
       const parent1CAEligibleDays =
         context.parent1.hasCollectiveAgreement && monthlyBenefitIncome > 0
           ? Math.min(calendarDays, caRemainingCalendarDays.parent1)
@@ -5015,11 +5017,14 @@ function buildSimplePlanResult(
       const parent1CACoverage = calendarDays > 0 ? Math.min(1, parent1CAEligibleDays / calendarDays) : 0;
       const parent2CACoverage = calendarDays > 0 ? Math.min(1, parent2CAEligibleDays / calendarDays) : 0;
 
-      const parent1ParentalSalary = parent1CAEligibleDays > 0 && parent1BenefitIncome > 0
-        ? Math.round(parent1BenefitIncome * 0.1)
+      const parent1EligibleBenefitDays = perParentBenefitDays * parent1CACoverage;
+      const parent2EligibleBenefitDays = perParentBenefitDays * parent2CACoverage;
+
+      const parent1ParentalSalary = parent1CAEligibleDays > 0 && parent1BonusPerDay > 0
+        ? Math.round(parent1BonusPerDay * parent1EligibleBenefitDays)
         : 0;
-      const parent2ParentalSalary = parent2CAEligibleDays > 0 && parent2BenefitIncome > 0
-        ? Math.round(parent2BenefitIncome * 0.1)
+      const parent2ParentalSalary = parent2CAEligibleDays > 0 && parent2BonusPerDay > 0
+        ? Math.round(parent2BonusPerDay * parent2EligibleBenefitDays)
         : 0;
 
       monthlyParentalSalaryIncome = parent1ParentalSalary + parent2ParentalSalary;
@@ -5068,7 +5073,6 @@ function buildSimplePlanResult(
         caRemainingCalendarDays.parent2 = Math.max(0, caRemainingCalendarDays.parent2 - parent2CAEligibleDays);
       }
 
-      const perParentBenefitDays = highDaysUsedPerParent + lowDaysUsedPerParent;
       const combinedBenefitDays = perParentBenefitDays * 2;
       const combinedHighDaysUsed = highDaysUsedPerParent * 2;
       const combinedLowDaysUsed = lowDaysUsedPerParent * 2;
@@ -5288,12 +5292,14 @@ function buildSimplePlanResult(
       : 0;
 
     const caCoverage = calendarDays > 0 ? Math.min(1, caEligibleCalendarDays / calendarDays) : 0;
-    const monthlyParentalSalaryIncome = activeParentInfo.hasCollectiveAgreement && 
-      caRemainingCalendarDays[singleParent] > 0 && monthlyBenefitIncome > 0
-      ? Math.round(monthlyBenefitIncome * 0.1)
+    const totalBenefitDaysForMonth = totalHighDaysUsed + totalLowDaysUsed;
+    const eligibleBenefitDays = totalBenefitDaysForMonth * caCoverage;
+    const monthlyParentalSalaryIncome = activeParentInfo.hasCollectiveAgreement &&
+      caRemainingCalendarDays[singleParent] > 0 && bonusPerBenefitDay > 0 && eligibleBenefitDays > 0
+      ? Math.round(bonusPerBenefitDay * eligibleBenefitDays)
       : 0;
     const caBenefitDays = monthlyParentalSalaryIncome > 0
-      ? Math.min(totalHighDaysUsed + totalLowDaysUsed, Math.round((totalHighDaysUsed + totalLowDaysUsed) * caCoverage))
+      ? Math.min(totalBenefitDaysForMonth, Math.round(eligibleBenefitDays))
       : 0;
 
     if (monthlyParentalSalaryIncome > 0 && caEligibleCalendarDays > 0) {
@@ -5313,7 +5319,6 @@ function buildSimplePlanResult(
     }
 
     const dailyIncome = calendarDays > 0 ? monthlyTotalIncome / calendarDays : 0;
-    const totalBenefitDaysForMonth = totalHighDaysUsed + totalLowDaysUsed;
     const daysPerWeek = totalBenefitDaysForMonth > 0
       ? Math.min(7, Math.max(1, Math.round(totalBenefitDaysForMonth / WEEKS_PER_MONTH)))
       : 0;
