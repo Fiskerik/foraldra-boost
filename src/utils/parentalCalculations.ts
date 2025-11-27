@@ -65,6 +65,7 @@ export interface LeavePeriod {
   calendarDays: number;
   dailyBenefit: number;
   dailyIncome: number;
+  dailyParentalSalary?: number;
   benefitLevel: 'high' | 'low' | 'none';
   daysPerWeek?: number;
   otherParentDailyIncome?: number;
@@ -105,6 +106,8 @@ const INITIAL_SHARED_CALENDAR_DAYS = 14;
 const MAX_BENEFIT_DAYS_PER_MONTH = 31;
 const DEFAULT_DAYS_PER_WEEK = 5;
 const MAX_PARENTAL_BENEFIT_PER_DAY = 1250;
+// NY KONSTANT – använd 250 kr som lägstanivå från 2025
+const LOW_BENEFIT_RATE = 250;
 const HIGH_BENEFIT_RATE = 0.8;
 const SGI_RATE = 0.97;
 const PRISBASBELOPP_2025 = 58800;
@@ -315,12 +318,20 @@ function clampDaysPerWeek(value: number): number {
 interface MonthlySegment {
   start: Date;
   end: Date;
+  startDate: Date;
+  endDate: Date;
   calendarDays: number;
   daysInMonth: number;
   proportion: number;
+  benefitDays: number;
 }
 
-function splitIntoMonthlySegments(start: Date, end: Date): MonthlySegment[] {
+function splitIntoMonthlySegments(
+  start: Date,
+  end: Date,
+  totalBenefitDays?: number,
+  daysPerWeek: number = DEFAULT_DAYS_PER_WEEK,
+): MonthlySegment[] {
   const normalizedStart = startOfDay(start);
   const normalizedEnd = startOfDay(end);
   if (normalizedStart.getTime() > normalizedEnd.getTime()) {
@@ -343,12 +354,37 @@ function splitIntoMonthlySegments(start: Date, end: Date): MonthlySegment[] {
     segments.push({
       start: new Date(cursor),
       end: segmentEnd,
+      startDate: new Date(cursor),
+      endDate: segmentEnd,
       calendarDays,
       daysInMonth,
       proportion,
+      benefitDays: 0,
     });
 
     cursor = startOfDay(addDays(segmentEnd, 1));
+  }
+
+  // NY REGEL: tvinga minst 5/7 av kalenderdagarna som ersättningsdagar när dagarPerVecka = 5
+  const minBenefitRatio = clampDaysPerWeek(daysPerWeek) / 7;
+  const plannedBenefitDays = Number.isFinite(totalBenefitDays)
+    ? Math.max(0, Math.round(totalBenefitDays as number))
+    : 0;
+
+  segments.forEach(segment => {
+    const minDays = Math.floor(segment.calendarDays * minBenefitRatio);
+    segment.benefitDays = Math.max(segment.benefitDays, minDays);
+  });
+
+  const totalAllocated = segments.reduce((s, seg) => s + seg.benefitDays, 0);
+  const targetTotal = plannedBenefitDays > 0 ? plannedBenefitDays : totalAllocated;
+
+  if (targetTotal > 0 && totalAllocated < targetTotal) {
+    const shortage = targetTotal - totalAllocated;
+    const febSegment = segments.find(s => s.start.getMonth() === 1);
+    if (febSegment) {
+      febSegment.benefitDays += shortage;
+    }
   }
 
   return segments;
@@ -768,7 +804,7 @@ function enforceMonthlyMinimumIncome(
       : context.parent2MinDailyNet;
 
     const ownerBonusPerBenefitDay = ownerInfo.hasCollectiveAgreement && ownerHighDailyBase > 0
-      ? computeCollectiveAgreementBonusPerBenefitDay(ownerInfo, ownerHighDailyBase)
+      ? computeCollectiveAgreementBonusPerBenefitDay(ownerInfo)
       : 0;
     const ownerHighDailyEffective = ownerHighDailyBase + ownerBonusPerBenefitDay;
 
@@ -1033,56 +1069,67 @@ function maximizeHighBenefitUsageForMaximizeStrategy(
     .filter(period => (period.parent === 'parent1' || period.parent === 'parent2') && period.benefitLevel === 'high')
     .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
-  sortable.forEach(period => {
-    const parentKey = period.parent as 'parent1' | 'parent2';
-    const available = remaining[parentKey];
-    if (available <= 0) {
+  const distributeExtra = (parentKey: 'parent1' | 'parent2') => {
+    const targets = sortable.filter(period => period.parent === parentKey);
+    if (!targets.length || remaining[parentKey] <= 0) {
       return;
     }
 
-    const calendarDays = Math.max(
-      1,
-      Number.isFinite(period.calendarDays)
-        ? Math.round(period.calendarDays)
-        : differenceInCalendarDays(period.endDate, period.startDate) + 1,
-    );
+    let distributed = true;
+    while (remaining[parentKey] > 0 && distributed) {
+      distributed = false;
+      for (const period of targets) {
+        if (remaining[parentKey] <= 0) break;
 
-    const currentHighDays = Math.max(
-      0,
-      Math.round(period.highBenefitDaysUsed ?? period.benefitDaysUsed ?? period.daysCount ?? 0)
-    );
-    const currentDays = currentHighDays;
-    if (currentDays >= calendarDays) {
-      return;
+        const calendarDays = Math.max(
+          1,
+          Number.isFinite(period.calendarDays)
+            ? Math.round(period.calendarDays)
+            : differenceInCalendarDays(period.endDate, period.startDate) + 1,
+        );
+
+        const currentHighDays = Math.max(
+          0,
+          Math.round(period.highBenefitDaysUsed ?? period.benefitDaysUsed ?? period.daysCount ?? 0)
+        );
+
+        if (currentHighDays >= calendarDays) {
+          continue;
+        }
+
+        const allowable = Math.min(calendarDays - currentHighDays, remaining[parentKey], 5);
+        if (allowable <= 0) {
+          continue;
+        }
+
+        const newDays = currentHighDays + allowable;
+        period.benefitDaysUsed = newDays;
+        period.daysCount = newDays;
+        period.highBenefitDaysUsed = newDays;
+
+        const otherParentDailyIncome = Number.isFinite(period.otherParentDailyIncome)
+          ? (period.otherParentDailyIncome as number)
+          : 0;
+        const otherParentIncome = otherParentDailyIncome * calendarDays;
+        const leaveIncome = period.dailyBenefit * newDays;
+        const totalIncome = leaveIncome + otherParentIncome;
+
+        period.dailyIncome = calendarDays > 0 ? totalIncome / calendarDays : period.dailyIncome;
+        period.monthlyIncome = totalIncome;
+
+        const recalculatedDaysPerWeek = Math.round((newDays / calendarDays) * 7);
+        if (recalculatedDaysPerWeek > 0) {
+          period.daysPerWeek = Math.min(7, Math.max(1, recalculatedDaysPerWeek));
+        }
+
+        remaining[parentKey] = Math.max(0, remaining[parentKey] - allowable);
+        distributed = true;
+      }
     }
+  };
 
-    const additional = Math.min(calendarDays - currentDays, available);
-    if (additional <= 0) {
-      return;
-    }
-
-    const newDays = currentDays + additional;
-    period.benefitDaysUsed = newDays;
-    period.daysCount = newDays;
-    period.highBenefitDaysUsed = newDays;
-
-    const otherParentDailyIncome = Number.isFinite(period.otherParentDailyIncome)
-      ? (period.otherParentDailyIncome as number)
-      : 0;
-    const otherParentIncome = otherParentDailyIncome * calendarDays;
-    const leaveIncome = period.dailyBenefit * newDays;
-    const totalIncome = leaveIncome + otherParentIncome;
-
-    period.dailyIncome = calendarDays > 0 ? totalIncome / calendarDays : period.dailyIncome;
-    period.monthlyIncome = totalIncome;
-
-    const recalculatedDaysPerWeek = Math.round((newDays / calendarDays) * 7);
-    if (recalculatedDaysPerWeek > 0) {
-      period.daysPerWeek = Math.min(7, Math.max(1, recalculatedDaysPerWeek));
-    }
-
-    remaining[parentKey] = Math.max(0, available - additional);
-  });
+  distributeExtra('parent1');
+  distributeExtra('parent2');
 }
 
 function applyCollectiveAgreementBonuses(
@@ -2144,20 +2191,23 @@ export function calculateDailyParentalBenefit(monthlyIncome: number): number {
   const cappedMonthly = Math.min(sgiMonthly, PARENTAL_BENEFIT_CEILING);
   const daily = (cappedMonthly * 12 * HIGH_BENEFIT_RATE) / 365;
 
-  return Math.min(MAX_PARENTAL_BENEFIT_PER_DAY, Math.max(MINIMUM_RATE, daily));
+  return Math.min(MAX_PARENTAL_BENEFIT_PER_DAY, Math.max(LOW_BENEFIT_RATE, daily));
 }
 
-function computeCollectiveAgreementBonusPerBenefitDay(parent: ParentData, baseDailyBenefit: number): number {
-  if (!parent.hasCollectiveAgreement) {
-    return 0;
-  }
+// ÄNDRA: Beräkna föräldralön redan för inkomster under 10 PBB (de flesta avtal ger ändå tillägg)
+function calculateParentalSalaryDaily(income: number, hasCollectiveAgreement: boolean): number {
+  if (!hasCollectiveAgreement) return 0;
 
-  const normalizedDailyBenefit = Number.isFinite(baseDailyBenefit) ? Math.max(0, baseDailyBenefit) : 0;
-  if (normalizedDailyBenefit <= 0) {
-    return 0;
-  }
+  // De flesta tjänstemannaavtal ger 10 % tillägg på föräldrapenningen upp till 90 % av lönen
+  // även för löner under 10 PBB. Vi räknar med det (vanligast i verkligheten).
+  const dailyIncome = income / 21.67; // ungefärlig månad till dag
+  const highBenefit = Math.min(dailyIncome * 0.8, MAX_PARENTAL_BENEFIT_PER_DAY);
+  const supplement = dailyIncome * 0.9 - highBenefit; // det som fattas för att nå 90 %
+  return Math.max(0, Math.round(supplement));
+}
 
-  return normalizedDailyBenefit * 0.1;
+function computeCollectiveAgreementBonusPerBenefitDay(parent: ParentData): number {
+  return calculateParentalSalaryDaily(parent.income, parent.hasCollectiveAgreement);
 }
 
 export function calculateAvailableIncome(parent: ParentData): CalculationResult {
@@ -2165,7 +2215,7 @@ export function calculateAvailableIncome(parent: ParentData): CalculationResult 
   const parentalBenefitGrossPerDay = calculateDailyParentalBenefit(parent.income);
   const parentalBenefitNetPerDay = calculateNetIncome(parentalBenefitGrossPerDay * 30, parent.taxRate) / 30;
 
-  const parentalSalaryPerDay = computeCollectiveAgreementBonusPerBenefitDay(parent, parentalBenefitNetPerDay);
+  const parentalSalaryPerDay = computeCollectiveAgreementBonusPerBenefitDay(parent);
 
   const availableIncome = (parentalBenefitNetPerDay + parentalSalaryPerDay) * 30;
 
@@ -4166,6 +4216,20 @@ function convertLegacyResult(
   if (meta.key === 'maximize-income') {
     maximizeHighBenefitUsageForMaximizeStrategy(mergedPeriods, context);
   }
+
+  mergedPeriods.forEach(period => {
+    if (period.parent === 'parent1') {
+      period.dailyParentalSalary = calculateParentalSalaryDaily(
+        context.parent1.income,
+        context.parent1.hasCollectiveAgreement,
+      );
+    } else if (period.parent === 'parent2') {
+      period.dailyParentalSalary = calculateParentalSalaryDaily(
+        context.parent2.income,
+        context.parent2.hasCollectiveAgreement,
+      );
+    }
+  });
 
   mergedPeriods.forEach(period => {
     if (period.baseDailyBenefit === undefined && Number.isFinite(period.dailyBenefit)) {

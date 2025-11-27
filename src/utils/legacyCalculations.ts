@@ -966,32 +966,32 @@ function optimizeParentalLeaveLegacy(preferences, inputs) {
         plan2MinDagar.användaMinDagar = användaMinDagar2;
     }
 
-    const minLevelResult = applyMinimumLevelDayUsage({
-        requestedWeeks1: desiredWeeks1,
-        requestedWeeks2: desiredWeeks2,
-        baseDaysPerWeek1: dagarPerVecka1NoExtra || dagarPerVecka1,
-        baseDaysPerWeek2: dagarPerVecka2,
-        includePartner,
-        minIncomeRequirement: minInkomst,
-        barnbidrag,
-        tillägg,
-        arbetsInkomst1,
-        arbetsInkomst2,
-        användaInkomstDagar1,
-        användaInkomstDagar2,
-        användaMinDagar1,
-        användaMinDagar2,
-        förälder1MinDagar,
-        förälder2MinDagar,
-        plan1,
-        plan1MinDagar,
-        plan2,
-        plan2MinDagar
-    });
-    användaMinDagar1 = minLevelResult.användaMinDagar1;
-    användaMinDagar2 = minLevelResult.användaMinDagar2;
-    förälder1MinDagar = minLevelResult.förälder1MinDagar;
-    förälder2MinDagar = minLevelResult.förälder2MinDagar;
+    // const minLevelResult = applyMinimumLevelDayUsage({
+    //     requestedWeeks1: desiredWeeks1,
+    //     requestedWeeks2: desiredWeeks2,
+    //     baseDaysPerWeek1: dagarPerVecka1NoExtra || dagarPerVecka1,
+    //     baseDaysPerWeek2: dagarPerVecka2,
+    //     includePartner,
+    //     minIncomeRequirement: minInkomst,
+    //     barnbidrag,
+    //     tillägg,
+    //     arbetsInkomst1,
+    //     arbetsInkomst2,
+    //     användaInkomstDagar1,
+    //     användaInkomstDagar2,
+    //     användaMinDagar1,
+    //     användaMinDagar2,
+    //     förälder1MinDagar,
+    //     förälder2MinDagar,
+    //     plan1,
+    //     plan1MinDagar,
+    //     plan2,
+    //     plan2MinDagar
+    // });
+    // användaMinDagar1 = minLevelResult.användaMinDagar1;
+    // användaMinDagar2 = minLevelResult.användaMinDagar2;
+    // förälder1MinDagar = minLevelResult.förälder1MinDagar;
+    // förälder2MinDagar = minLevelResult.förälder2MinDagar;
 
     const phase1Segments = [];
     if (plan1.weeks > 0) {
@@ -1656,32 +1656,32 @@ function optimizeParentalLeaveParentalSalary(preferences, inputs) {
         plan2MinDagar.användaMinDagar = användaMinDagar2;
     }
 
-    const minLevelResult = applyMinimumLevelDayUsage({
-        requestedWeeks1: desiredWeeks1,
-        requestedWeeks2: desiredWeeks2,
-        baseDaysPerWeek1: dagarPerVecka1NoExtra || dagarPerVecka1,
-        baseDaysPerWeek2: dagarPerVecka2,
-        includePartner,
-        minIncomeRequirement: minInkomst,
-        barnbidrag,
-        tillägg,
-        arbetsInkomst1,
-        arbetsInkomst2,
-        användaInkomstDagar1,
-        användaInkomstDagar2,
-        användaMinDagar1,
-        användaMinDagar2,
-        förälder1MinDagar,
-        förälder2MinDagar,
-        plan1,
-        plan1MinDagar,
-        plan2,
-        plan2MinDagar
-    });
-    användaMinDagar1 = minLevelResult.användaMinDagar1;
-    användaMinDagar2 = minLevelResult.användaMinDagar2;
-    förälder1MinDagar = minLevelResult.förälder1MinDagar;
-    förälder2MinDagar = minLevelResult.förälder2MinDagar;
+    // const minLevelResult = applyMinimumLevelDayUsage({
+    //     requestedWeeks1: desiredWeeks1,
+    //     requestedWeeks2: desiredWeeks2,
+    //     baseDaysPerWeek1: dagarPerVecka1NoExtra || dagarPerVecka1,
+    //     baseDaysPerWeek2: dagarPerVecka2,
+    //     includePartner,
+    //     minIncomeRequirement: minInkomst,
+    //     barnbidrag,
+    //     tillägg,
+    //     arbetsInkomst1,
+    //     arbetsInkomst2,
+    //     användaInkomstDagar1,
+    //     användaInkomstDagar2,
+    //     användaMinDagar1,
+    //     användaMinDagar2,
+    //     förälder1MinDagar,
+    //     förälder2MinDagar,
+    //     plan1,
+    //     plan1MinDagar,
+    //     plan2,
+    //     plan2MinDagar
+    // });
+    // användaMinDagar1 = minLevelResult.användaMinDagar1;
+    // användaMinDagar2 = minLevelResult.användaMinDagar2;
+    // förälder1MinDagar = minLevelResult.förälder1MinDagar;
+    // förälder2MinDagar = minLevelResult.förälder2MinDagar;
 
     const phase1Segments = [];
     if (plan1.weeks > 0) {
