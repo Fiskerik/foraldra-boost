@@ -5393,7 +5393,254 @@ function buildSimplePlanResult(
     });
   };
 
+  const enforceMonthlyMinimumsAndCaps = () => {
+    const targetMonthlyIncome = Math.max(0, minIncomeThreshold);
+    if (targetMonthlyIncome <= 0) {
+      return;
+    }
+
+    const sortedPeriods = periods
+      .slice()
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+    const allocateIncome = (
+      period: LeavePeriod,
+      beneficiary: 'parent1' | 'parent2',
+      sourceParent: 'parent1' | 'parent2',
+      type: 'high' | 'low',
+      days: number
+    ) => {
+      const calendarDays = period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
+      const monthlyCapacity = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
+
+      const currentHigh = Math.max(0, period.highBenefitDaysUsed ?? 0);
+      const currentLow = Math.max(0, period.lowBenefitDaysUsed ?? 0);
+      const currentTotal = currentHigh + currentLow;
+      const availableCapacity = Math.max(0, monthlyCapacity - currentTotal);
+      if (availableCapacity <= 0 || days <= 0) {
+        return 0;
+      }
+
+      const effectiveDays = Math.min(days, availableCapacity);
+      const leaveDailyIncome = resolveDailyBenefit(beneficiary);
+      const lowDailyIncome = beneficiary === 'parent1' ? context.parent1MinDailyNet : context.parent2MinDailyNet;
+      const incomeRate = type === 'high' ? leaveDailyIncome : lowDailyIncome;
+      const addedIncome = incomeRate * effectiveDays;
+
+      if (type === 'high') {
+        period.highBenefitDaysUsed = currentHigh + effectiveDays;
+      } else {
+        period.lowBenefitDaysUsed = currentLow + effectiveDays;
+      }
+
+      const updatedTotal = (period.highBenefitDaysUsed ?? 0) + (period.lowBenefitDaysUsed ?? 0);
+      period.benefitDaysUsed = updatedTotal;
+      period.daysCount = updatedTotal;
+      const updatedDaysPerWeek = updatedTotal > 0 ? Math.min(7, Math.max(1, Math.round(updatedTotal / WEEKS_PER_MONTH))) : 0;
+      period.daysPerWeek = updatedDaysPerWeek || undefined;
+
+      period.monthlyIncome = (period.monthlyIncome ?? 0) + addedIncome;
+      const incomeKey = beneficiary === 'parent1' ? 'parent1BenefitIncome' : 'parent2BenefitIncome';
+      period[incomeKey] = (period[incomeKey] ?? 0) + addedIncome;
+      const parentIncomeKey = beneficiary === 'parent1' ? 'parent1Income' : 'parent2Income';
+      period[parentIncomeKey] = (period[parentIncomeKey] ?? 0) + addedIncome;
+
+      if (type === 'high') {
+        if (sourceParent === 'parent1') {
+          remainingHighDays.parent1 = Math.max(0, remainingHighDays.parent1 - effectiveDays);
+          quotaHighDaysUsed.parent1 += effectiveDays;
+        } else {
+          remainingHighDays.parent2 = Math.max(0, remainingHighDays.parent2 - effectiveDays);
+          quotaHighDaysUsed.parent2 += effectiveDays;
+        }
+      } else {
+        if (sourceParent === 'parent1') {
+          remainingLowDays.parent1 = Math.max(0, remainingLowDays.parent1 - effectiveDays);
+          quotaLowDaysUsed.parent1 += effectiveDays;
+        } else {
+          remainingLowDays.parent2 = Math.max(0, remainingLowDays.parent2 - effectiveDays);
+          quotaLowDaysUsed.parent2 += effectiveDays;
+        }
+      }
+
+      if (beneficiary !== sourceParent) {
+        if (type === 'high') {
+          if (beneficiary === 'parent1') {
+            transferredToParent1 += effectiveDays;
+          } else {
+            transferredToParent2 += effectiveDays;
+          }
+        } else {
+          if (beneficiary === 'parent1') {
+            transferredToParent1 += effectiveDays;
+          } else {
+            transferredToParent2 += effectiveDays;
+          }
+        }
+      }
+
+      return addedIncome;
+    };
+
+    sortedPeriods.forEach((period) => {
+      const calendarDays = period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
+      const monthlyCapacity = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
+      const currentMonthlyIncome = Math.max(0, period.monthlyIncome ?? 0);
+      const currentHigh = Math.max(0, period.highBenefitDaysUsed ?? 0);
+      const currentLow = Math.max(0, period.lowBenefitDaysUsed ?? 0);
+      const currentTotal = currentHigh + currentLow;
+
+      const gap = Math.max(0, targetMonthlyIncome - currentMonthlyIncome);
+      let capacityLeft = Math.max(0, monthlyCapacity - currentTotal);
+      let remainingGap = gap;
+
+      if (period.parent === 'both') {
+        const perParentCapacity = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
+        const parent1Used = Math.max(0, currentHigh / 2 + currentLow / 2);
+        const parent2Used = parent1Used;
+        const parent1CapLeft = Math.max(0, perParentCapacity - parent1Used);
+        const parent2CapLeft = Math.max(0, perParentCapacity - parent2Used);
+
+        const buildSimultaneousSources = () => {
+          const sources: Array<{ parent: 'parent1' | 'parent2'; type: 'high' | 'low'; available: number; rate: number; cap: number }>
+            = [];
+          const parent1HighRate = resolveDailyBenefit('parent1');
+          const parent2HighRate = resolveDailyBenefit('parent2');
+          const parent1LowRate = context.parent1MinDailyNet;
+          const parent2LowRate = context.parent2MinDailyNet;
+
+          if (parent1CapLeft > 0 && remainingHighDays.parent1 > 0) {
+            sources.push({ parent: 'parent1', type: 'high', available: Math.min(remainingHighDays.parent1, parent1CapLeft), rate: parent1HighRate, cap: parent1CapLeft });
+          }
+          if (parent2CapLeft > 0 && remainingHighDays.parent2 > 0) {
+            sources.push({ parent: 'parent2', type: 'high', available: Math.min(remainingHighDays.parent2, parent2CapLeft), rate: parent2HighRate, cap: parent2CapLeft });
+          }
+          if (parent1CapLeft > 0 && remainingLowDays.parent1 > 0) {
+            sources.push({ parent: 'parent1', type: 'low', available: Math.min(remainingLowDays.parent1, parent1CapLeft), rate: parent1LowRate, cap: parent1CapLeft });
+          }
+          if (parent2CapLeft > 0 && remainingLowDays.parent2 > 0) {
+            sources.push({ parent: 'parent2', type: 'low', available: Math.min(remainingLowDays.parent2, parent2CapLeft), rate: parent2LowRate, cap: parent2CapLeft });
+          }
+          return sources.sort((a, b) => b.rate - a.rate);
+        };
+
+        let sources = buildSimultaneousSources();
+        sources.forEach((source) => {
+          if (capacityLeft <= 0 || remainingGap <= 0) {
+            return;
+          }
+
+          const maxDays = Math.min(source.available, capacityLeft, source.cap);
+          if (maxDays <= 0) {
+            return;
+          }
+
+          const daysNeeded = isSaveDaysStrategy && source.rate > 0 ? Math.min(maxDays, Math.ceil(remainingGap / source.rate)) : maxDays;
+          const addedIncome = allocateIncome(period, source.parent, source.parent, source.type, daysNeeded);
+          remainingGap = Math.max(0, remainingGap - addedIncome);
+          capacityLeft = Math.max(0, capacityLeft - daysNeeded);
+        });
+
+        if (isMaximizeStrategy && capacityLeft > 0) {
+          sources = buildSimultaneousSources();
+          sources.forEach((source) => {
+            if (capacityLeft <= 0) {
+              return;
+            }
+            const maxDays = Math.min(source.available, capacityLeft, source.cap);
+            if (maxDays <= 0) {
+              return;
+            }
+            allocateIncome(period, source.parent, source.parent, source.type, maxDays);
+            capacityLeft = Math.max(0, capacityLeft - maxDays);
+          });
+        }
+      } else {
+        const leaveParent = period.parent as 'parent1' | 'parent2';
+        const otherParent = leaveParent === 'parent1' ? 'parent2' : 'parent1';
+
+        const sources: Array<{ parent: 'parent1' | 'parent2'; type: 'high' | 'low'; available: number; rate: number }> = [];
+
+        const leaveHighRate = resolveDailyBenefit(leaveParent);
+        const leaveLowRate = leaveParent === 'parent1' ? context.parent1MinDailyNet : context.parent2MinDailyNet;
+        if (remainingHighDays[leaveParent] > 0 && capacityLeft > 0) {
+          sources.push({ parent: leaveParent, type: 'high', available: Math.min(remainingHighDays[leaveParent], capacityLeft), rate: leaveHighRate });
+        }
+        if (remainingHighDays[otherParent] > 0 && capacityLeft > 0) {
+          sources.push({ parent: otherParent, type: 'high', available: Math.min(remainingHighDays[otherParent], capacityLeft), rate: resolveDailyBenefit(otherParent) });
+        }
+        if (remainingLowDays[leaveParent] > 0 && capacityLeft > 0) {
+          sources.push({ parent: leaveParent, type: 'low', available: Math.min(remainingLowDays[leaveParent], capacityLeft), rate: leaveLowRate });
+        }
+        if (remainingLowDays[otherParent] > 0 && capacityLeft > 0) {
+          const otherLowRate = otherParent === 'parent1' ? context.parent1MinDailyNet : context.parent2MinDailyNet;
+          sources.push({ parent: otherParent, type: 'low', available: Math.min(remainingLowDays[otherParent], capacityLeft), rate: otherLowRate });
+        }
+
+        sources.sort((a, b) => b.rate - a.rate);
+
+        sources.forEach((source) => {
+          if (capacityLeft <= 0 || remainingGap <= 0) {
+            return;
+          }
+          const maxDays = Math.min(source.available, capacityLeft);
+          if (maxDays <= 0 || source.rate <= 0) {
+            return;
+          }
+
+          const daysNeeded = isSaveDaysStrategy ? Math.min(maxDays, Math.ceil(remainingGap / source.rate)) : maxDays;
+          const addedIncome = allocateIncome(period, leaveParent, source.parent, source.type, daysNeeded);
+          remainingGap = Math.max(0, remainingGap - addedIncome);
+          capacityLeft = Math.max(0, capacityLeft - daysNeeded);
+        });
+
+        if (isMaximizeStrategy && capacityLeft > 0) {
+          sources.forEach((source) => {
+            if (capacityLeft <= 0) {
+              return;
+            }
+            const maxDays = Math.min(source.available, capacityLeft);
+            if (maxDays <= 0) {
+              return;
+            }
+            allocateIncome(period, leaveParent, source.parent, source.type, maxDays);
+            capacityLeft = Math.max(0, capacityLeft - maxDays);
+          });
+        }
+      }
+
+      if (remainingGap > 0) {
+        warnings.push(
+          `Varning: Inkomstravet på ${formatCurrency(targetMonthlyIncome)} kunde inte uppnås i ${format(period.startDate, 'MMMM yyyy', { locale: sv })} ` +
+          `på grund av otillräckligt antal dagar. Saknas ${formatCurrency(remainingGap)}.`
+        );
+      }
+
+      const updatedTotal = Math.max(0, period.highBenefitDaysUsed ?? 0) + Math.max(0, period.lowBenefitDaysUsed ?? 0);
+      if (updatedTotal > monthlyCapacity) {
+        warnings.push(
+          `Varning: Antalet föräldradagar i ${format(period.startDate, 'MMMM yyyy', { locale: sv })} överstiger månadsgränsen ` +
+          `${monthlyCapacity} dagar. Planen har begränsats till att följa månadsantalet.`
+        );
+        const excess = updatedTotal - monthlyCapacity;
+        const lowDays = Math.max(0, period.lowBenefitDaysUsed ?? 0);
+        const highDays = Math.max(0, period.highBenefitDaysUsed ?? 0);
+        if (lowDays >= excess) {
+          period.lowBenefitDaysUsed = lowDays - excess;
+        } else {
+          const highOverflow = excess - lowDays;
+          period.lowBenefitDaysUsed = 0;
+          period.highBenefitDaysUsed = Math.max(0, highDays - highOverflow);
+        }
+        const clampedTotal = Math.max(0, period.highBenefitDaysUsed ?? 0) + Math.max(0, period.lowBenefitDaysUsed ?? 0);
+        period.benefitDaysUsed = clampedTotal;
+        period.daysCount = clampedTotal;
+      }
+    });
+  };
+
   topUpSingleParentPeriods();
+  enforceMonthlyMinimumsAndCaps();
 
   applyCollectiveAgreementBonuses(periods, context);
   backfillCollectiveAgreementIncome(periods);
@@ -5402,12 +5649,20 @@ function buildSimplePlanResult(
   totalBenefitDays = 0;
   const recomputedHighUsage: RemainingBenefitDays = { parent1: 0, parent2: 0 };
   const recomputedLowUsage: RemainingBenefitDays = { parent1: 0, parent2: 0 };
+  worstMonth = null;
 
   periods.forEach(period => {
     const monthlyIncome = Number.isFinite(period.monthlyIncome)
       ? (period.monthlyIncome as number)
       : (period.dailyIncome ?? 0) * Math.max(1, period.calendarDays ?? differenceInCalendarDays(period.endDate, period.startDate) + 1);
     totalIncome += monthlyIncome;
+
+    if (minIncomeThreshold > 0 && monthlyIncome < minIncomeThreshold) {
+      const deficit = minIncomeThreshold - monthlyIncome;
+      if (!worstMonth || deficit > worstMonth.deficit) {
+        worstMonth = { date: period.startDate, income: monthlyIncome, deficit };
+      }
+    }
 
     const highDays = Math.max(0, period.highBenefitDaysUsed ?? 0);
     const lowDays = Math.max(0, period.lowBenefitDaysUsed ?? 0);
