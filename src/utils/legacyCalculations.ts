@@ -439,18 +439,14 @@ function optimizeParentalLeaveLegacy(preferences, inputs) {
     let totalDagarBehövda1 = weeks1 * dagarPerVecka1;
     let totalDagarBehövda2 = weeks2 * dagarPerVecka2;
 
-    // Transfer days from Parent 2 to Parent 1 if needed (respecting 90-day reserve)
     if (includePartner && totalDagarBehövda1 > förälder1InkomstDagar) {
         const minDagarBehövda2 = weeks2 * dagarPerVecka2;
-        // Parent 2 must keep at least 90 reserved high-benefit days
-        const överförbaraDagar2 = Math.max(0, förälder2InkomstDagar - 90 - minDagarBehövda2);
+        const överförbaraDagar2 = Math.max(0, förälder2InkomstDagar - 90 - minDagarBehövda2 - 10);
         const överförDagar = Math.min(överförbaraDagar2, totalDagarBehövda1 - förälder1InkomstDagar);
-        if (överförDagar > 0) {
-            förälder2InkomstDagar -= överförDagar;
-            förälder1InkomstDagar += överförDagar;
-            totalDagarBehövda1 = weeks1 * dagarPerVecka1;
-            genomförbarhet.transferredDays += överförDagar;
-        }
+        förälder2InkomstDagar -= överförDagar;
+        förälder1InkomstDagar += överförDagar;
+        totalDagarBehövda1 = weeks1 * dagarPerVecka1;
+        genomförbarhet.transferredDays += överförDagar;
     }
 
     if (totalDagarBehövda1 > förälder1InkomstDagar) {
@@ -745,10 +741,9 @@ function optimizeParentalLeaveLegacy(preferences, inputs) {
                     (önskadeDagar - (dagarPerVecka1NoExtra || dagarPerVecka1)) * plan1NoExtraWeeksTotal;
                 if (extraDagar > 0) {
                     const minBehov2 = weeks2 * dagarPerVecka2;
-                    // Parent 2 must keep at least 90 reserved high-benefit days
                     const överförbara = Math.max(
                         0,
-                        förälder2InkomstDagar - 90 - minBehov2
+                        förälder2InkomstDagar - 90 - minBehov2 - 10
                     );
                     const blockStorlek = Math.max(1, plan1NoExtraWeeksTotal);
                     const möjligaLån = Math.min(överförbara, extraDagar);
@@ -828,14 +823,8 @@ function optimizeParentalLeaveLegacy(preferences, inputs) {
             }
         }
 
-        // For "longer" strategy: Parent 1's min days should come BEFORE Parent 2 starts
-        // For other strategies: keep existing behavior
-        const plan1MinStartWeek = strategy === "longer" 
-            ? plan1ExtraWeeks + plan1NoExtraWeeksTotal  // Parent 1 min days immediately after Parent 1's income days
-            : plan1ExtraWeeks + plan1NoExtraWeeksTotal; // Default: same position
-
         plan1MinDagar = {
-            startWeek: plan1MinStartWeek,
+            startWeek: plan1ExtraWeeks + plan1NoExtraWeeksTotal,
             weeks: minDagarWeeks1,
             dagarPerVecka: dagarPerVecka1NoExtra || dagarPerVecka1,
             inkomst: Math.round(
@@ -889,18 +878,8 @@ function optimizeParentalLeaveLegacy(preferences, inputs) {
         plan2ExtraWeeks = extra2 > 0 ? weeks2 : 0;
         plan2NoExtraWeeksTotal = plan2ExtraWeeks > 0 ? weeks2NoExtra : totalWeeks2;
 
-        // For "longer" strategy: Parent 2 should start AFTER all of Parent 1's days (including min days)
-        // Calculate how many weeks Parent 1's min days will take
-        const parent1MinWeeksEstimate = användaMinDagar1 > 0 
-            ? Math.max(1, Math.round(användaMinDagar1 / Math.max(dagarPerVecka1NoExtra || dagarPerVecka1, 1)))
-            : 0;
-        
-        const plan2StartWeek = strategy === "longer"
-            ? plan1ExtraWeeks + plan1NoExtraWeeksTotal + parent1MinWeeksEstimate // After ALL Parent 1 periods
-            : plan1ExtraWeeks + plan1NoExtraWeeksTotal; // Default: after Parent 1's income days only
-
         plan2 = {
-            startWeek: plan2StartWeek,
+            startWeek: plan1ExtraWeeks + plan1NoExtraWeeksTotal,
             weeks: plan2ExtraWeeks,
             dagarPerVecka: dagarPerVecka2,
             inkomst: Math.round(beräknaMånadsinkomst(dag2, dagarPerVecka2, extra2, barnbidrag, tillägg)),
