@@ -5408,10 +5408,13 @@ function buildSimplePlanResult(
       beneficiary: 'parent1' | 'parent2',
       sourceParent: 'parent1' | 'parent2',
       type: 'high' | 'low',
-      days: number
+      days: number,
+      combinedCapacityOverride?: number
     ) => {
       const calendarDays = period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
-      const monthlyCapacity = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
+      const monthlyCapacity = combinedCapacityOverride
+        ? Math.max(0, combinedCapacityOverride)
+        : Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
 
       const currentHigh = Math.max(0, period.highBenefitDaysUsed ?? 0);
       const currentLow = Math.max(0, period.lowBenefitDaysUsed ?? 0);
@@ -5489,9 +5492,13 @@ function buildSimplePlanResult(
       const currentHigh = Math.max(0, period.highBenefitDaysUsed ?? 0);
       const currentLow = Math.max(0, period.lowBenefitDaysUsed ?? 0);
       const currentTotal = currentHigh + currentLow;
+      const baseMonthlyCapacity = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
+      const effectiveMonthlyCapacity = period.parent === 'both'
+        ? baseMonthlyCapacity * 2
+        : baseMonthlyCapacity;
 
       const gap = Math.max(0, targetMonthlyIncome - currentMonthlyIncome);
-      let capacityLeft = Math.max(0, monthlyCapacity - currentTotal);
+      let capacityLeft = Math.max(0, effectiveMonthlyCapacity - currentTotal);
       let remainingGap = gap;
 
       if (period.parent === 'both') {
@@ -5500,6 +5507,7 @@ function buildSimplePlanResult(
         const parent2Used = parent1Used;
         const parent1CapLeft = Math.max(0, perParentCapacity - parent1Used);
         const parent2CapLeft = Math.max(0, perParentCapacity - parent2Used);
+        const combinedCapacity = perParentCapacity * 2;
 
         const buildSimultaneousSources = () => {
           const sources: Array<{ parent: 'parent1' | 'parent2'; type: 'high' | 'low'; available: number; rate: number; cap: number }>
@@ -5536,7 +5544,7 @@ function buildSimplePlanResult(
           }
 
           const daysNeeded = isSaveDaysStrategy && source.rate > 0 ? Math.min(maxDays, Math.ceil(remainingGap / source.rate)) : maxDays;
-          const addedIncome = allocateIncome(period, source.parent, source.parent, source.type, daysNeeded);
+          const addedIncome = allocateIncome(period, source.parent, source.parent, source.type, daysNeeded, combinedCapacity);
           remainingGap = Math.max(0, remainingGap - addedIncome);
           capacityLeft = Math.max(0, capacityLeft - daysNeeded);
         });
@@ -5551,7 +5559,7 @@ function buildSimplePlanResult(
             if (maxDays <= 0) {
               return;
             }
-            allocateIncome(period, source.parent, source.parent, source.type, maxDays);
+            allocateIncome(period, source.parent, source.parent, source.type, maxDays, combinedCapacity);
             capacityLeft = Math.max(0, capacityLeft - maxDays);
           });
         }
@@ -5589,7 +5597,7 @@ function buildSimplePlanResult(
           }
 
           const daysNeeded = isSaveDaysStrategy ? Math.min(maxDays, Math.ceil(remainingGap / source.rate)) : maxDays;
-          const addedIncome = allocateIncome(period, leaveParent, source.parent, source.type, daysNeeded);
+          const addedIncome = allocateIncome(period, leaveParent, source.parent, source.type, daysNeeded, effectiveMonthlyCapacity);
           remainingGap = Math.max(0, remainingGap - addedIncome);
           capacityLeft = Math.max(0, capacityLeft - daysNeeded);
         });
@@ -5603,7 +5611,7 @@ function buildSimplePlanResult(
             if (maxDays <= 0) {
               return;
             }
-            allocateIncome(period, leaveParent, source.parent, source.type, maxDays);
+            allocateIncome(period, leaveParent, source.parent, source.type, maxDays, effectiveMonthlyCapacity);
             capacityLeft = Math.max(0, capacityLeft - maxDays);
           });
         }
@@ -5617,12 +5625,12 @@ function buildSimplePlanResult(
       }
 
       const updatedTotal = Math.max(0, period.highBenefitDaysUsed ?? 0) + Math.max(0, period.lowBenefitDaysUsed ?? 0);
-      if (updatedTotal > monthlyCapacity) {
+      if (updatedTotal > effectiveMonthlyCapacity) {
         warnings.push(
           `Varning: Antalet föräldradagar i ${format(period.startDate, 'MMMM yyyy', { locale: sv })} överstiger månadsgränsen ` +
-          `${monthlyCapacity} dagar. Planen har begränsats till att följa månadsantalet.`
+          `${effectiveMonthlyCapacity} dagar. Planen har begränsats till att följa månadsantalet.`
         );
-        const excess = updatedTotal - monthlyCapacity;
+        const excess = updatedTotal - effectiveMonthlyCapacity;
         const lowDays = Math.max(0, period.lowBenefitDaysUsed ?? 0);
         const highDays = Math.max(0, period.highBenefitDaysUsed ?? 0);
         if (lowDays >= excess) {
