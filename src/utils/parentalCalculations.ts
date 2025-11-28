@@ -1132,20 +1132,17 @@ function maximizeHighBenefitUsageForMaximizeStrategy(
   distributeExtra('parent2');
 }
 
-function applyCollectiveAgreementBonuses(
+export function applyCollectiveAgreementBonuses(
   periods: LeavePeriod[],
   context: ConversionContext
 ): void {
   const parentKeys: Array<'parent1' | 'parent2'> = ['parent1', 'parent2'];
-  const monthsUsed: Record<'parent1' | 'parent2', Set<string>> = {
-    parent1: new Set(),
-    parent2: new Set(),
-  };
   const bonusMonthsUsed: Record<'parent1' | 'parent2', number> = {
     parent1: 0,
     parent2: 0,
   };
 
+  // Sort periods chronologically
   const sortedPeriods = [...periods].sort(
     (a, b) => startOfDay(new Date(a.startDate)).getTime() - startOfDay(new Date(b.startDate)).getTime()
   );
@@ -1158,34 +1155,35 @@ function applyCollectiveAgreementBonuses(
 
     for (const parentKey of parentKeys) {
       const parentInfo = parentKey === 'parent1' ? context.parent1 : context.parent2;
+      
+      // Skip if no collective agreement
       if (!parentInfo.hasCollectiveAgreement) {
         continue;
       }
 
-      const parentBenefitIncome = parentKey === 'parent1'
-        ? Math.max(0, period.parent1BenefitIncome ?? 0)
-        : Math.max(0, period.parent2BenefitIncome ?? 0);
-
-      if (parentBenefitIncome <= 0) {
-        continue;
-      }
-
+      // Skip if already used 6 months
       if (bonusMonthsUsed[parentKey] >= COLLECTIVE_AGREEMENT_MAX_MONTHS) {
         continue;
       }
 
-      const monthKey = `${period.startDate.getFullYear()}-${period.startDate.getMonth()}`;
-      if (monthsUsed[parentKey].has(monthKey)) {
+      // Get parent's benefit income for this period
+      const parentBenefitIncome = parentKey === 'parent1'
+        ? Math.max(0, period.parent1BenefitIncome ?? 0)
+        : Math.max(0, period.parent2BenefitIncome ?? 0);
+
+      // Must have benefit income to get bonus
+      if (parentBenefitIncome <= 0) {
         continue;
       }
 
+      // Calculate 10% bonus
       const bonus = Math.round(parentBenefitIncome * 0.1);
       if (bonus <= 0) {
         continue;
       }
 
+      // Apply bonus
       bonusMonthsUsed[parentKey] += 1;
-      monthsUsed[parentKey].add(monthKey);
 
       const benefitDaysUsed = Math.max(0, period.benefitDaysUsed ?? period.daysCount ?? 0);
       period.collectiveAgreementEligibleCalendarDays =
@@ -1482,6 +1480,8 @@ function ensureMinimumIncomePerMonth(
   preferLowBenefit: boolean,
   reservedHighDays: RemainingBenefitDays
 ): void {
+
+  
   if (!context.minHouseholdIncome || context.minHouseholdIncome <= 0) {
     return;
   }
@@ -5312,7 +5312,9 @@ function buildSimplePlanResult(
     singleParentPeriods.forEach(period => {
       const leaveParent = period.parent as 'parent1' | 'parent2';
       const calendarDays = period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
-      const monthlyCapacity = Math.min(MAX_BENEFIT_DAYS_PER_MONTH, calendarDays);
+      // Use actual calendar days in the month as capacity limit
+      const monthLength = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
+      const monthlyCapacity = Math.min(monthLength, calendarDays);
       let currentHigh = Math.max(0, period.highBenefitDaysUsed ?? 0);
       let currentLow = Math.max(0, period.lowBenefitDaysUsed ?? 0);
       let currentTotalBenefitDays = currentHigh + currentLow;
