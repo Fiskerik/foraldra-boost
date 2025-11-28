@@ -122,6 +122,7 @@ export function LeavePeriodCard({
 
     const step = totalMonths > 12 ? 1 : 0.5;
     let bestValue = -Infinity;
+    let bestSecondaryValue = -Infinity;
     let bestParent1Months: number | null = null;
 
     for (let parent1M = 0; parent1M <= totalMonths; parent1M += step) {
@@ -143,9 +144,26 @@ export function LeavePeriodCard({
         continue;
       }
 
-      const value = strategy === 'maximize-income' ? target.totalIncome : target.daysSaved;
-      if (value > bestValue) {
-        bestValue = value;
+      const isSaveDays = strategy === 'save-days';
+      const primaryValue = isSaveDays ? target.daysSaved : target.totalIncome;
+      const fallbackDaysSaved = TOTAL_BENEFIT_DAYS - (target.daysUsed ?? 0);
+      const safePrimaryValue = Number.isFinite(primaryValue)
+        ? primaryValue
+        : isSaveDays
+          ? fallbackDaysSaved
+          : 0;
+      const secondaryValue = isSaveDays
+        ? target.totalIncome
+        : Number.isFinite(target.daysSaved)
+          ? target.daysSaved
+          : fallbackDaysSaved;
+
+      if (
+        safePrimaryValue > bestValue ||
+        (safePrimaryValue === bestValue && secondaryValue > bestSecondaryValue)
+      ) {
+        bestValue = safePrimaryValue;
+        bestSecondaryValue = secondaryValue;
         bestParent1Months = parent1M;
       }
     }
