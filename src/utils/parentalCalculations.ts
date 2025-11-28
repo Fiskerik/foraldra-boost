@@ -5355,6 +5355,8 @@ function buildSimplePlanResult(
 
     singleParentPeriods.forEach(period => {
       const leaveParent = period.parent as 'parent1' | 'parent2';
+      const monthStart = startOfMonth(period.startDate);
+      const monthEnd = endOfMonth(period.startDate);
       const calendarDays = period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
       // Use actual calendar days in the month as capacity limit
       const monthLength = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
@@ -5373,7 +5375,6 @@ function buildSimplePlanResult(
       }
       
       if (remainingCapacity <= 0 && currentMonthlyIncome < targetMonthlyIncome) {
-        const monthStart = startOfMonth(period.startDate);
         const deficit = targetMonthlyIncome - currentMonthlyIncome;
         warnings.push(`Varning: Kan inte nå ${formatCurrency(targetMonthlyIncome)} för ${format(monthStart, 'MMMM yyyy', { locale: sv })} - alla ${monthlyCapacity} dagar är redan använda. Underskott: ${formatCurrency(deficit)}.`);
         return;
