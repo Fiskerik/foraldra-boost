@@ -1481,10 +1481,21 @@ function ensureMinimumIncomePerMonth(
   reservedHighDays: RemainingBenefitDays
 ): void {
 
-  
+
   if (!context.minHouseholdIncome || context.minHouseholdIncome <= 0) {
     return;
   }
+
+  const MAX_ITERATIONS = 10; // Increase from current value
+  let iterationCount = 0;
+
+  while (iterationCount < MAX_ITERATIONS) {
+    iterationCount++;
+
+    let progressMade = false;
+    let worstDeficit = 0;
+    let worstMonth: { start: Date; end: Date; owner: 'parent1' | 'parent2' } | null = null;
+    let deficitFound = false;
 
   const timelineStart = startOfDay(new Date(context.baseStartDate.getFullYear(), context.baseStartDate.getMonth(), 1));
   const limitDate = timelineLimit ? startOfDay(timelineLimit) : null;
@@ -1718,6 +1729,8 @@ function ensureMinimumIncomePerMonth(
       continue;
     }
 
+    deficitFound = true;
+
     const ignoreCalendarCapsThisMonth = deficit > 0;
     const hasBenefitDays = (parentKey: 'parent1' | 'parent2') =>
       remainingLowDays[parentKey] > 0 || remainingHighDays[parentKey] > 0;
@@ -1739,6 +1752,11 @@ function ensureMinimumIncomePerMonth(
       owner = 'parent2';
     } else {
       owner = 'parent1';
+    }
+
+    if (deficit > worstDeficit) {
+      worstDeficit = deficit;
+      worstMonth = { start: monthStart, end: monthEnd, owner };
     }
 
     const otherParent: 'parent1' | 'parent2' = owner === 'parent1' ? 'parent2' : 'parent1';
@@ -1905,6 +1923,8 @@ function ensureMinimumIncomePerMonth(
         return;
       }
 
+      progressMade = true;
+
       const daysPerWeek = clampDaysPerWeek(takeDays / WEEKS_PER_MONTH);
       const weeksUsed = daysPerWeek > 0 ? takeDays / daysPerWeek : 0;
       let calendarDays = Math.max(1, Math.round(weeksUsed * 7));
@@ -2027,8 +2047,12 @@ function ensureMinimumIncomePerMonth(
             }
           }
         }
-        
-        if (!anyIncreased) break;
+
+        if (anyIncreased) {
+          progressMade = true;
+        } else {
+          break;
+        }
         escalationAttempts++;
       }
     }
@@ -2083,6 +2107,8 @@ function ensureMinimumIncomePerMonth(
             needsSequencing: true,
           });
 
+          progressMade = true;
+
           if (chosenLevel === 'high') {
             remainingHighDays[owner] = Math.max(0, remainingHighDays[owner] - takeDays);
             const chronologicalTracker = owner === 'parent1'
@@ -2103,6 +2129,15 @@ function ensureMinimumIncomePerMonth(
       console.warn(
         `Month ${format(monthStart, 'MMM yyyy', { locale: sv })} remains ${Math.round(remainingDeficit)} kr below minimum after top-up attempts`
       );
+    }
+  }
+
+    if (!deficitFound || worstDeficit <= 0 || !worstMonth) {
+      break;
+    }
+
+    if (!progressMade) {
+      break;
     }
   }
 
@@ -5159,53 +5194,62 @@ function buildSimplePlanResult(
     let totalLowDaysUsed = 0;
     const lowCapacityBase = Math.max(0, monthlyCapacity - totalHighDaysUsed);
 
-    if (shouldUseMaxDays) {
-      // Maximize income: use remaining capacity for low days if available
-      const availableOwnLow = Math.max(0, remainingLowDays[singleParent]);
-      ownLowDays = Math.min(lowCapacityBase, availableOwnLow);
-      
-      if (ownLowDays > 0) {
-        remainingLowDays[singleParent] = Math.max(0, remainingLowDays[singleParent] - ownLowDays);
-        quotaLowDaysUsed[singleParent] += ownLowDays;
-        totalLowDaysUsed += ownLowDays;
-      }
-    } else if (remainingDeficit > 0 && effectiveLowDailyIncome > 0 && lowCapacityBase > 0) {
-      const neededLow = Math.min(
-        lowCapacityBase,
-        Math.ceil(remainingDeficit / effectiveLowDailyIncome)
-      );
+    const availableOwnHigh = Math.max(0, remainingHighDays[singleParent]);
 
-      if (neededLow > 0) {
+    // Only use low-benefit days if:
+    // 1. Gap is small (< 500 kr) - for fine-tuning
+    // 2. OR no high-benefit days remain
+    const shouldUseLowDays = remainingDeficit < 500 || availableOwnHigh <= 0;
+
+    if (shouldUseLowDays) {
+      if (shouldUseMaxDays) {
+        // Maximize income: use remaining capacity for low days if available
         const availableOwnLow = Math.max(0, remainingLowDays[singleParent]);
-        ownLowDays = Math.min(neededLow, availableOwnLow);
+        ownLowDays = Math.min(lowCapacityBase, availableOwnLow);
 
         if (ownLowDays > 0) {
           remainingLowDays[singleParent] = Math.max(0, remainingLowDays[singleParent] - ownLowDays);
           quotaLowDaysUsed[singleParent] += ownLowDays;
           totalLowDaysUsed += ownLowDays;
-          remainingDeficit = Math.max(0, remainingDeficit - ownLowDays * effectiveLowDailyIncome);
         }
+      } else if (remainingDeficit > 0 && effectiveLowDailyIncome > 0 && lowCapacityBase > 0) {
+        const neededLow = Math.min(
+          lowCapacityBase,
+          Math.ceil(remainingDeficit / effectiveLowDailyIncome)
+        );
 
-        const lowCapacityLeft = lowCapacityBase - ownLowDays;
-        if (remainingDeficit > 0 && lowCapacityLeft > 0) {
-          const transferableLow = Math.max(0, remainingLowDays[otherParent]);
-          if (transferableLow > 0) {
-            const borrowLow = Math.min(
-              lowCapacityLeft,
-              transferableLow,
-              Math.ceil(remainingDeficit / effectiveLowDailyIncome)
-            );
+        if (neededLow > 0) {
+          const availableOwnLow = Math.max(0, remainingLowDays[singleParent]);
+          ownLowDays = Math.min(neededLow, availableOwnLow);
 
-            if (borrowLow > 0) {
-              borrowedLowDays = borrowLow;
-              totalLowDaysUsed += borrowLow;
-              remainingLowDays[otherParent] = Math.max(0, remainingLowDays[otherParent] - borrowLow);
-              quotaLowDaysUsed[otherParent] += borrowLow;
-              remainingDeficit = Math.max(0, remainingDeficit - borrowLow * effectiveLowDailyIncome);
-              if (singleParent === 'parent1') {
-                transferredToParent1 += borrowLow;
-              } else {
-                transferredToParent2 += borrowLow;
+          if (ownLowDays > 0) {
+            remainingLowDays[singleParent] = Math.max(0, remainingLowDays[singleParent] - ownLowDays);
+            quotaLowDaysUsed[singleParent] += ownLowDays;
+            totalLowDaysUsed += ownLowDays;
+            remainingDeficit = Math.max(0, remainingDeficit - ownLowDays * effectiveLowDailyIncome);
+          }
+
+          const lowCapacityLeft = lowCapacityBase - ownLowDays;
+          if (remainingDeficit > 0 && lowCapacityLeft > 0) {
+            const transferableLow = Math.max(0, remainingLowDays[otherParent]);
+            if (transferableLow > 0) {
+              const borrowLow = Math.min(
+                lowCapacityLeft,
+                transferableLow,
+                Math.ceil(remainingDeficit / effectiveLowDailyIncome)
+              );
+
+              if (borrowLow > 0) {
+                borrowedLowDays = borrowLow;
+                totalLowDaysUsed += borrowLow;
+                remainingLowDays[otherParent] = Math.max(0, remainingLowDays[otherParent] - borrowLow);
+                quotaLowDaysUsed[otherParent] += borrowLow;
+                remainingDeficit = Math.max(0, remainingDeficit - borrowLow * effectiveLowDailyIncome);
+                if (singleParent === 'parent1') {
+                  transferredToParent1 += borrowLow;
+                } else {
+                  transferredToParent2 += borrowLow;
+                }
               }
             }
           }
@@ -5311,6 +5355,8 @@ function buildSimplePlanResult(
 
     singleParentPeriods.forEach(period => {
       const leaveParent = period.parent as 'parent1' | 'parent2';
+      const monthStart = startOfMonth(period.startDate);
+      const monthEnd = endOfMonth(period.startDate);
       const calendarDays = period.calendarDays ?? Math.max(1, differenceInCalendarDays(period.endDate, period.startDate) + 1);
       // Use actual calendar days in the month as capacity limit
       const monthLength = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
@@ -5329,7 +5375,6 @@ function buildSimplePlanResult(
       }
       
       if (remainingCapacity <= 0 && currentMonthlyIncome < targetMonthlyIncome) {
-        const monthStart = startOfMonth(period.startDate);
         const deficit = targetMonthlyIncome - currentMonthlyIncome;
         warnings.push(`Varning: Kan inte nå ${formatCurrency(targetMonthlyIncome)} för ${format(monthStart, 'MMMM yyyy', { locale: sv })} - alla ${monthlyCapacity} dagar är redan använda. Underskott: ${formatCurrency(deficit)}.`);
         return;
