@@ -9,6 +9,7 @@ import { AvailableIncomeDisplay } from "@/components/AvailableIncomeDisplay";
 import { LeavePeriodCard } from "@/components/LeavePeriodCard";
 import { OptimizationResults } from "@/components/OptimizationResults";
 import { InteractiveSliders } from "@/components/InteractiveSliders";
+import { StrategyDetails } from "@/components/StrategyDetails";
 import {
   ParentData,
   calculateAvailableIncome,
@@ -16,7 +17,7 @@ import {
   OptimizationResult,
   calculateMaxLeaveMonths,
 } from "@/utils/parentalCalculations";
-import { Baby, Sparkles, Save, UserPlus, LogIn, LogOut, User } from "lucide-react";
+import { Baby, Sparkles, Save, UserPlus, LogIn, LogOut, User, FileDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +29,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlanCache } from "@/hooks/usePlanCache";
+import { exportPlanToPDF } from "@/utils/pdfExport";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -53,6 +55,42 @@ const Index = () => {
   const [isFirstOptimization, setIsFirstOptimization] = useState(true);
   const [planName, setPlanName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [showDetailedPreview, setShowDetailedPreview] = useState(false);
+
+  const handleExportPDF = async () => {
+    if (!optimizationResults || !hasChosenStrategy) return;
+
+    const selectedStrategy = optimizationResults[selectedStrategyIndex];
+    const planToExport = {
+      id: 'preview',
+      name: planName || 'Min föräldraledighetsplan',
+      expected_birth_date: new Date().toISOString(),
+      parent1_income: parent1Income,
+      parent1_has_agreement: parent1HasAgreement,
+      parent2_income: parent2Income,
+      parent2_has_agreement: parent2HasAgreement,
+      tax_rate: taxRate,
+      municipality: municipality,
+      total_months: totalMonths,
+      parent1_months: parent1Months,
+      household_income: householdIncome,
+      days_per_week: daysPerWeek,
+      simultaneous_leave: simultaneousLeave,
+      simultaneous_months: simultaneousMonths,
+      selected_strategy_index: selectedStrategyIndex,
+      optimization_results: optimizationResults,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      await exportPlanToPDF(planToExport as any);
+      toast.success('PDF exporterad!');
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error('Kunde inte exportera PDF. Försök igen.');
+    }
+  };
 
   // Auto-recalculate when collective agreement checkbox changes
   useEffect(() => {
@@ -502,23 +540,95 @@ const Index = () => {
             />
             
             {hasChosenStrategy && (
-              <div className="flex justify-center mt-8">
-                {!showSliders ? (
-                  <Button
-                    onClick={() => setShowSliders(true)}
-                    size="lg"
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    Justera parametrar
-                  </Button>
+              <div className="space-y-6 mt-8">
+                {!showDetailedPreview ? (
+                  <>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="flex justify-center">
+                          <Button 
+                            onClick={() => setShowDetailedPreview(true)}
+                            size="lg"
+                            className="w-full md:w-auto"
+                          >
+                            <FileDown className="mr-2 h-5 w-5" />
+                            Visa plandetaljer
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <div className="flex justify-center">
+                      {!showSliders ? (
+                        <Button
+                          onClick={() => setShowSliders(true)}
+                          size="lg"
+                          className="bg-primary hover:bg-primary/90"
+                        >
+                          Justera parametrar
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => setShowSliders(false)}
+                          variant="outline"
+                          size="lg"
+                        >
+                          Dölj justeringar
+                        </Button>
+                      )}
+                    </div>
+                  </>
                 ) : (
-                  <Button
-                    onClick={() => setShowSliders(false)}
-                    variant="outline"
-                    size="lg"
-                  >
-                    Dölj justeringar
-                  </Button>
+                  <>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <h2 className="text-2xl font-bold">Din valda plan</h2>
+                      <div className="flex gap-2 w-full sm:w-auto">
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setShowDetailedPreview(false)}
+                          className="flex-1 sm:flex-none"
+                        >
+                          Stäng
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          onClick={handleExportPDF}
+                          className="flex-1 sm:flex-none"
+                        >
+                          <FileDown className="mr-2 h-4 w-4" />
+                          Exportera PDF
+                        </Button>
+                        {user ? (
+                          <Button 
+                            onClick={() => {
+                              setShowDetailedPreview(false);
+                              setTimeout(() => {
+                                document.getElementById('save-plan-section')?.scrollIntoView({ behavior: 'smooth' });
+                              }, 100);
+                            }}
+                            className="flex-1 sm:flex-none"
+                          >
+                            <Save className="mr-2 h-4 w-4" />
+                            Spara plan
+                          </Button>
+                        ) : (
+                          <Button 
+                            onClick={() => navigate('/auth')}
+                            className="flex-1 sm:flex-none"
+                          >
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            Logga in
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <StrategyDetails
+                      strategy={optimizationResults[selectedStrategyIndex]}
+                      minHouseholdIncome={householdIncome}
+                      timelineMonths={totalMonths}
+                      showSummaryBreakdown
+                    />
+                  </>
                 )}
               </div>
             )}

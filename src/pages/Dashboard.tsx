@@ -13,6 +13,7 @@ export default function Dashboard() {
   const location = useLocation();
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (user) {
@@ -34,11 +35,49 @@ export default function Dashboard() {
 
       if (error) throw error;
       setPlans(data || []);
+      setSelectedPlanIds(new Set()); // Clear selection when reloading
     } catch (error) {
       console.error('Error loading plans:', error);
       toast.error('Kunde inte ladda dina planer. Försök igen.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const togglePlanSelection = (planId: string) => {
+    setSelectedPlanIds(prev => {
+      const next = new Set(prev);
+      if (next.has(planId)) {
+        next.delete(planId);
+      } else {
+        next.add(planId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllPlans = () => {
+    setSelectedPlanIds(new Set(plans.map(p => p.id)));
+  };
+
+  const deselectAllPlans = () => {
+    setSelectedPlanIds(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    if (!user || selectedPlanIds.size === 0) return;
+
+    try {
+      for (const planId of selectedPlanIds) {
+        const { error } = await supabase.rpc('soft_delete_plan', { plan_id: planId });
+        if (error) throw error;
+      }
+
+      toast.success(`${selectedPlanIds.size} planer raderade!`);
+      await loadPlans();
+    } catch (error) {
+      console.error('Error deleting plans:', error);
+      toast.error('Kunde inte radera planerna. Försök igen.');
     }
   };
 
@@ -85,11 +124,43 @@ export default function Dashboard() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {plans.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} onDelete={loadPlans} />
-            ))}
-          </div>
+          <>
+            {selectedPlanIds.size > 0 && (
+              <div className="flex items-center justify-between bg-muted/50 p-4 rounded-lg mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium">
+                    {selectedPlanIds.size} plan{selectedPlanIds.size > 1 ? 'er' : ''} markerad{selectedPlanIds.size > 1 ? 'e' : ''}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={deselectAllPlans}>
+                    Avmarkera alla
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex justify-end mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={selectedPlanIds.size === plans.length ? deselectAllPlans : selectAllPlans}
+              >
+                {selectedPlanIds.size === plans.length ? 'Avmarkera alla' : 'Markera alla'}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {plans.map((plan) => (
+                <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  isSelected={selectedPlanIds.has(plan.id)}
+                  onToggleSelect={() => togglePlanSelection(plan.id)}
+                  onDelete={selectedPlanIds.size > 0 ? handleBulkDelete : loadPlans}
+                  selectedCount={selectedPlanIds.size}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </AppLayout>
