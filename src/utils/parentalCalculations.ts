@@ -4916,6 +4916,7 @@ function buildSimplePlanResult(
   };
 
   let monthIndex = 0;
+  let hasCreatedInitialBothPeriod = false;
 
   while (monthIndex < totalMonths) {
     const monthStart = startOfMonth(addMonths(baseStart, monthIndex));
@@ -4930,7 +4931,135 @@ function buildSimplePlanResult(
       : baseMonthlyCapacity;
     const calendarCapacity = Math.min(monthlyCapacity, calendarDays);
 
-    // Determine if this is a simultaneous period
+    // For the first month (monthIndex === 0), create an initial "both" period for the first 14 calendar days
+    if (monthIndex === 0 && !hasCreatedInitialBothPeriod) {
+      const initialCalendarDays = Math.min(INITIAL_SHARED_CALENDAR_DAYS, calendarDays);
+      const initialWorkingDays = INITIAL_SHARED_WORKING_DAYS;
+      const initialEndDate = addDays(monthStart, initialCalendarDays - 1);
+
+      const parent1HighDaily = resolveDailyBenefit('parent1');
+      const parent2HighDaily = resolveDailyBenefit('parent2');
+      const parent1CaActive = context.parent1.hasCollectiveAgreement &&
+        caBonusMonthsUsed.parent1 < COLLECTIVE_AGREEMENT_MAX_MONTHS;
+      const parent2CaActive = context.parent2.hasCollectiveAgreement &&
+        caBonusMonthsUsed.parent2 < COLLECTIVE_AGREEMENT_MAX_MONTHS;
+
+      const parent1BenefitIncome = parent1HighDaily * initialWorkingDays * (parent1CaActive ? 1.1 : 1);
+      const parent2BenefitIncome = parent2HighDaily * initialWorkingDays * (parent2CaActive ? 1.1 : 1);
+      const monthlyTotalIncome = parent1BenefitIncome + parent2BenefitIncome;
+
+      const averageBenefitPerDay = initialWorkingDays > 0 ? (parent1BenefitIncome + parent2BenefitIncome) / (initialWorkingDays * 2) : 0;
+      const dailyIncome = initialCalendarDays > 0 ? monthlyTotalIncome / initialCalendarDays : 0;
+      const daysPerWeek = initialWorkingDays > 0
+        ? Math.min(7, Math.max(1, Math.round(initialWorkingDays / (initialCalendarDays / 7))))
+        : 0;
+
+      periods.push({
+        parent: 'both',
+        startDate: monthStart,
+        endDate: initialEndDate,
+        daysCount: initialWorkingDays * 2,
+        benefitDaysUsed: initialWorkingDays * 2,
+        highBenefitDaysUsed: initialWorkingDays * 2,
+        lowBenefitDaysUsed: 0,
+        calendarDays: initialCalendarDays,
+        dailyBenefit: averageBenefitPerDay,
+        dailyIncome,
+        benefitLevel: 'high',
+        daysPerWeek: daysPerWeek || undefined,
+        otherParentDailyIncome: 0,
+        otherParentMonthlyIncome: 0,
+        monthlyIncome: monthlyTotalIncome,
+        isInitialTenDayPeriod: true,
+        isSimultaneous: true,
+        parent1BenefitDays: initialWorkingDays,
+        parent2BenefitDays: initialWorkingDays,
+        parent1Income: parent1BenefitIncome,
+        parent2Income: parent2BenefitIncome,
+        parent1BenefitIncome: parent1BenefitIncome,
+        parent2BenefitIncome: parent2BenefitIncome,
+        parent1ParentalSalary: undefined,
+        parent2ParentalSalary: undefined,
+      });
+
+      // Deduct from remaining high days for both parents
+      remainingHighDays.parent1 -= initialWorkingDays;
+      remainingHighDays.parent2 -= initialWorkingDays;
+      usedHighDays.parent1 += initialWorkingDays;
+      usedHighDays.parent2 += initialWorkingDays;
+      totalIncome += monthlyTotalIncome;
+      totalBenefitDays += initialWorkingDays * 2;
+
+      hasCreatedInitialBothPeriod = true;
+
+      // If there are remaining days in this month after the initial period, create a single-parent period
+      const remainingCalendarDays = calendarDays - initialCalendarDays;
+      if (remainingCalendarDays > 0) {
+        const remainingStart = addDays(initialEndDate, 1);
+        const remainingEnd = monthEnd;
+
+        // Determine which parent takes the remaining days of month 0
+        const singleParent: 'parent1' | 'parent2' = 'parent1';
+        const workingParent: 'parent1' | 'parent2' = 'parent2';
+        const workingNetMonthly = resolveWorkingNet(workingParent);
+        const leaveDailyIncome = resolveDailyBenefit(singleParent);
+
+        const activeParentInfo = context.parent1;
+        const caActive = activeParentInfo.hasCollectiveAgreement &&
+          caBonusMonthsUsed[singleParent] < COLLECTIVE_AGREEMENT_MAX_MONTHS;
+        const caMultiplier = caActive ? 1.1 : 1;
+        const effectiveDailyIncome = leaveDailyIncome * caMultiplier;
+
+        const remainingCapacity = Math.min(MAX_BENEFIT_DAYS_PER_MONTH - initialWorkingDays, remainingCalendarDays);
+        const daysNeeded = isMaximizeStrategy
+          ? remainingCapacity
+          : Math.ceil(Math.max(0, minIncomeThreshold - workingNetMonthly) / effectiveDailyIncome);
+
+        const highDaysToUse = Math.min(
+          daysNeeded,
+          remainingCapacity,
+          Math.max(0, remainingHighDays[singleParent])
+        );
+
+        if (highDaysToUse > 0) {
+          remainingHighDays[singleParent] -= highDaysToUse;
+          usedHighDays[singleParent] += highDaysToUse;
+
+          const benefitIncome = highDaysToUse * effectiveDailyIncome;
+          const periodIncome = benefitIncome + workingNetMonthly;
+
+          periods.push({
+            parent: singleParent,
+            startDate: remainingStart,
+            endDate: remainingEnd,
+            daysCount: highDaysToUse,
+            benefitDaysUsed: highDaysToUse,
+            highBenefitDaysUsed: highDaysToUse,
+            lowBenefitDaysUsed: 0,
+            calendarDays: remainingCalendarDays,
+            dailyBenefit: leaveDailyIncome,
+            dailyIncome: remainingCalendarDays > 0 ? periodIncome / remainingCalendarDays : 0,
+            benefitLevel: 'high',
+            daysPerWeek: Math.min(7, Math.max(1, Math.round(highDaysToUse / (remainingCalendarDays / 7)))),
+            otherParentDailyIncome: workingNetMonthly / 30,
+            otherParentMonthlyIncome: workingNetMonthly,
+            monthlyIncome: periodIncome,
+          });
+
+          if (caActive) {
+            caBonusMonthsUsed[singleParent] += 1;
+          }
+
+          totalIncome += periodIncome;
+          totalBenefitDays += highDaysToUse;
+        }
+      }
+
+      monthIndex += 1;
+      continue;
+    }
+
+    // Determine if this is a simultaneous period (for months after month 0)
     const isSimultaneousPeriod = monthIndex > 0 && monthIndex <= simultaneousMonths;
 
     let activeParent: 'parent1' | 'parent2' | 'both';
