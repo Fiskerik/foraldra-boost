@@ -30,9 +30,10 @@ interface PlanCardProps {
   onToggleSelect?: () => void;
   onDelete?: () => void;
   selectedCount?: number;
+  onOpenPreview?: () => void;
 }
 
-export const PlanCard = ({ plan, isSelected = false, onToggleSelect, onDelete, selectedCount = 0 }: PlanCardProps) => {
+export const PlanCard = ({ plan, isSelected = false, onToggleSelect, onDelete, selectedCount = 0, onOpenPreview }: PlanCardProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const { user } = useAuth();
   const selectedStrategy = plan.optimization_results?.[plan.selected_strategy_index];
@@ -137,12 +138,16 @@ export const PlanCard = ({ plan, isSelected = false, onToggleSelect, onDelete, s
 
         {/* Action buttons */}
         <div className="flex gap-2">
-          <Link to={`/plan/${plan.id}`} className="flex-1">
-            <Button className="w-full">
-              Öppna plan
-              <ChevronRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
+          <Button 
+            className="flex-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenPreview?.();
+            }}
+          >
+            Öppna plan
+            <ChevronRight className="ml-2 h-4 w-4" />
+          </Button>
           
           <AlertDialog>
             <AlertDialogTrigger asChild>
