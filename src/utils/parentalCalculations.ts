@@ -5375,8 +5375,7 @@ function buildSimplePlanResult(
       }
       
       if (remainingCapacity <= 0 && currentMonthlyIncome < targetMonthlyIncome) {
-        const deficit = targetMonthlyIncome - currentMonthlyIncome;
-        warnings.push(`Varning: Kan inte nå ${formatCurrency(targetMonthlyIncome)} för ${format(monthStart, 'MMMM yyyy', { locale: sv })} - alla ${monthlyCapacity} dagar är redan använda. Underskott: ${formatCurrency(deficit)}.`);
+        // Individual month warnings are disabled - consolidated warning shows worst month only
         return;
       }
 
@@ -5729,18 +5728,12 @@ function buildSimplePlanResult(
       }
 
       if (remainingGap > 0) {
-        warnings.push(
-          `Varning: Inkomstravet på ${formatCurrency(targetMonthlyIncome)} kunde inte uppnås i ${format(period.startDate, 'MMMM yyyy', { locale: sv })} ` +
-          `på grund av otillräckligt antal dagar. Saknas ${formatCurrency(remainingGap)}.`
-        );
+        // Individual month warnings are disabled - consolidated warning shows worst month only
       }
 
       const updatedTotal = Math.max(0, period.highBenefitDaysUsed ?? 0) + Math.max(0, period.lowBenefitDaysUsed ?? 0);
       if (updatedTotal > effectiveMonthlyCapacity) {
-        warnings.push(
-          `Varning: Antalet föräldradagar i ${format(period.startDate, 'MMMM yyyy', { locale: sv })} överstiger månadsgränsen ` +
-          `${effectiveMonthlyCapacity} dagar. Planen har begränsats till att följa månadsantalet.`
-        );
+        // Individual month warnings are disabled - consolidated warning shows worst month only
         const excess = updatedTotal - effectiveMonthlyCapacity;
         const lowDays = Math.max(0, period.lowBenefitDaysUsed ?? 0);
         const highDays = Math.max(0, period.highBenefitDaysUsed ?? 0);
