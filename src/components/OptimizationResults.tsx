@@ -1,24 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { OptimizationResult, formatPeriod, formatCurrency, LeavePeriod } from "@/utils/parentalCalculations";
-import { TimelineChart } from "./TimelineChart";
+import { OptimizationResult, formatCurrency } from "@/utils/parentalCalculations";
 import {
-  Calendar,
   TrendingUp,
   PiggyBank,
-  Users,
   Clock,
-  ChevronDown,
-  ChevronUp,
   AlertTriangle,
   X,
   Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
-import { format, endOfMonth, differenceInCalendarDays, addDays, startOfMonth } from "date-fns";
-import { sv } from "date-fns/locale";
-import { buildMonthlyBreakdownEntries } from "@/utils/incomeSummary";
 
 interface OptimizationResultsProps {
   results: OptimizationResult[];
@@ -32,26 +23,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
   if (!Array.isArray(results) || results.length === 0) {
     return null;
   }
-  const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
-  const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
   const [compareOpen, setCompareOpen] = useState(false);
-
-  const togglePeriod = (resultIndex: number, periodIndex: number) => {
-    const key = `${resultIndex}-${periodIndex}`;
-    setExpandedPeriods(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const handleCardClick = (index: number) => {
-    if (expandedIndex === index) {
-      // Clicking on the expanded card collapses it
-      setExpandedIndex(null);
-    } else {
-      // Expand the clicked card
-      setExpandedIndex(index);
-      onSelectStrategy(index);
-    }
-  };
 
   const openComparison = () => {
     setCompareOpen(true);
@@ -98,448 +70,25 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     []
   );
 
-  interface MonthlyBreakdown {
-    startDate: Date;
-    endDate: Date;
-    calendarDays: number;
-    benefitDays: number;
-    monthlyIncome: number;
-    leaveParentIncome: number;
-    otherParentIncome: number;
-    benefitIncome: number;
-    daysPerWeekValue: number;
-    otherParentMonthlyBase: number;
-  }
-
-  interface MonthlyBreakdownEntry extends MonthlyBreakdown {
-    monthKey: string;
-    monthStart: Date;
-    monthLength: number;
-    daysPerWeekValues: number[];
-    benefitLevels: Array<'parental-salary' | 'high' | 'low' | 'none'>;
-    benefitDaysByLevel: Record<string, number>;
-  }
-
-  const breakDownByMonth = (period: LeavePeriod): MonthlyBreakdown[] => {
-    const startDate = new Date(period.startDate);
-    const endDate = new Date(period.endDate);
-    
-    // Skip periods with benefitLevel 'none' entirely - they're calendar fillers
-    // representing both parents working (no leave)
-    if ((period.benefitLevel as string) === 'none') {
-      return [];
-    }
-    
-    // Only treat actual compensated days as benefit days
-    const rawBenefitDays = Math.max(0, Math.round(period.benefitDaysUsed ?? period.daysCount));
-    const totalBenefitDays = rawBenefitDays;
-
-    const segments: MonthlyBreakdown[] = [];
-    let cursor = new Date(startDate);
-
-    const normalizedDaysPerWeek =
-      period.daysPerWeek && period.daysPerWeek > 0
-        ? period.daysPerWeek
-        : 7;
-
-    while (cursor <= endDate) {
-      const monthStart = new Date(cursor);
-      const monthEndCandidate = endOfMonth(monthStart);
-      const monthEnd = monthEndCandidate < endDate ? monthEndCandidate : endDate;
-      const calendarDays = Math.max(1, differenceInCalendarDays(monthEnd, monthStart) + 1);
-
-      segments.push({
-        startDate: monthStart,
-        endDate: monthEnd,
-        calendarDays,
-        benefitDays: 0,
-        monthlyIncome: 0,
-        leaveParentIncome: 0,
-        otherParentIncome: 0,
-        benefitIncome: 0,
-        daysPerWeekValue: normalizedDaysPerWeek,
-        otherParentMonthlyBase: period.parent === 'both' ? 0 : period.otherParentMonthlyIncome || 0,
-      });
-
-      cursor = addDays(monthEnd, 1);
-    }
-
-    if (segments.length === 0) {
-      return [];
-    }
-
-    const daysPerWeek =
-      period.daysPerWeek && period.daysPerWeek > 0
-        ? period.daysPerWeek
-        : 7;
-    const expectedBenefitDaysPerMonth = daysPerWeek * 4.33;
-
-    const totalCalendarDays = segments.reduce((sum, segment) => sum + segment.calendarDays, 0) || 1;
-    let remainingBenefitDays = totalBenefitDays;
-    let carryOver = 0;
-
-    segments.forEach((segment, index) => {
-      if (remainingBenefitDays <= 0) {
-        segment.benefitDays = 0;
-      } else {
-        const monthStart = startOfMonth(segment.startDate);
-        const monthEndDate = endOfMonth(monthStart);
-        const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
-        const isFullMonth = segment.calendarDays >= monthLength;
-        
-        let allocated: number;
-        if (isFullMonth) {
-          // Full month: use expectedBenefitDaysPerMonth (max 30)
-          allocated = Math.min(
-            Math.round(expectedBenefitDaysPerMonth),
-            30,
-            remainingBenefitDays
-          );
-        } else {
-          // Partial month: proportional based on how much of the month it is
-          const proportion = segment.calendarDays / monthLength;
-          allocated = Math.min(
-            Math.round(expectedBenefitDaysPerMonth * proportion),
-            remainingBenefitDays
-          );
-        }
-        
-        segment.benefitDays = Math.max(0, allocated);
-        remainingBenefitDays -= segment.benefitDays;
-      }
-      
-      // Calculate monthly income for this segment using the period's daily income to ensure
-      // the full household income is represented, while still breaking out the benefit and
-      // working parent contributions for display.
-      const benefitDaily = period.dailyBenefit;
-      const monthStart = startOfMonth(segment.startDate);
-      const monthEndDate = endOfMonth(monthStart);
-      const monthLength = Math.max(1, differenceInCalendarDays(monthEndDate, monthStart) + 1);
-
-      const totalSegmentIncome = Math.max(0, Math.round((period.dailyIncome || 0) * segment.calendarDays));
-
-      // Prefer monthly base from legacy; fallback to daily base (e.g., for filler 'none' periods)
-      const monthlyBaseFromOther = period.parent === 'both' ? 0 : (period.otherParentMonthlyIncome || 0);
-      const dailyBaseFromOther = period.parent === 'both' ? 0 : (period.otherParentDailyIncome || 0);
-      const computedMonthlyBase = monthlyBaseFromOther > 0
-        ? monthlyBaseFromOther
-        : (dailyBaseFromOther > 0 ? dailyBaseFromOther * 30 : 0);
-
-      const isFullMonthSegment =
-        segment.calendarDays >= monthLength &&
-        segment.startDate.getDate() === 1 &&
-        segment.endDate.getDate() === monthEndDate.getDate();
-
-      // Parental benefit: use allocated benefit days, with a max of 30 days for full months
-      let benefitIncome = 0;
-      if (benefitDaily > 0 && segment.benefitDays > 0) {
-        const benefitDaysForMonth = isFullMonthSegment ? Math.min(segment.benefitDays, 31) : segment.benefitDays;
-        benefitIncome = benefitDaily * Math.max(0, Math.round(benefitDaysForMonth));
-      }
-      benefitIncome = Math.min(totalSegmentIncome, Math.max(0, Math.round(benefitIncome)));
-
-      // Working parent's monthly income (clamped so total matches household income)
-      let otherParentIncome = 0;
-      if (period.parent !== 'both') {
-        let baseOtherIncome = 0;
-        if (computedMonthlyBase > 0) {
-          baseOtherIncome = isFullMonthSegment
-            ? computedMonthlyBase
-            : computedMonthlyBase * (segment.calendarDays / monthLength);
-        } else if (dailyBaseFromOther > 0) {
-          baseOtherIncome = dailyBaseFromOther * segment.calendarDays;
-        }
-
-        const maxAllowedOtherIncome = Math.max(0, totalSegmentIncome - benefitIncome);
-
-        otherParentIncome = Math.min(
-          Math.max(0, Math.round(baseOtherIncome)),
-          Math.max(0, Math.round(maxAllowedOtherIncome))
-        );
-      }
-
-      // Leave parent's income representation for the breakdown
-      let leaveParentIncome: number;
-      if (period.parent === 'both') {
-        leaveParentIncome = totalSegmentIncome;
-      } else {
-        leaveParentIncome = benefitIncome;
-        const combinedDisplayed = otherParentIncome + benefitIncome;
-        if (combinedDisplayed < totalSegmentIncome) {
-          leaveParentIncome += totalSegmentIncome - combinedDisplayed;
-        }
-      }
-
-      // Compose monthly totals
-      segment.benefitIncome = benefitIncome;
-      segment.otherParentIncome = otherParentIncome;
-      segment.leaveParentIncome = Math.max(0, Math.round(leaveParentIncome));
-      segment.monthlyIncome = totalSegmentIncome;
-      segment.daysPerWeekValue = normalizedDaysPerWeek;
-      segment.otherParentMonthlyBase = monthlyBaseFromOther > 0
-        ? monthlyBaseFromOther
-        : (dailyBaseFromOther > 0 ? dailyBaseFromOther * 30 : 0);
-    });
-
-    return segments;
-  };
-
-  const createMonthlyBreakdownEntries = (periodList: LeavePeriod[]): MonthlyBreakdownEntry[] => {
-    if (periodList.length === 0) {
-      return [];
-    }
-
-    const monthMap = new Map<string, MonthlyBreakdownEntry>();
-
-    periodList.forEach(period => {
-      breakDownByMonth(period).forEach(segment => {
-        const monthStart = startOfMonth(segment.startDate);
-        const key = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
-        const monthLength = differenceInCalendarDays(endOfMonth(monthStart), monthStart) + 1;
-        const existing = monthMap.get(key);
-
-        if (!existing) {
-          monthMap.set(key, {
-            ...segment,
-            startDate: new Date(segment.startDate),
-            endDate: new Date(segment.endDate),
-            monthKey: key,
-            monthStart,
-            monthLength,
-            daysPerWeekValues: [segment.daysPerWeekValue],
-            benefitLevels: [segment.daysPerWeekValue > 0 ? period.benefitLevel : 'none'],
-            benefitDaysByLevel: {
-              [period.benefitLevel]: segment.benefitDays
-            }
-          });
-          return;
-        }
-
-        existing.startDate =
-          existing.startDate.getTime() <= segment.startDate.getTime()
-            ? existing.startDate
-            : new Date(segment.startDate);
-        existing.endDate =
-          existing.endDate.getTime() >= segment.endDate.getTime()
-            ? existing.endDate
-            : new Date(segment.endDate);
-        existing.calendarDays += segment.calendarDays;
-        existing.benefitDays += segment.benefitDays;
-        existing.monthlyIncome += segment.monthlyIncome;
-        existing.monthLength = monthLength;
-        existing.leaveParentIncome += segment.leaveParentIncome;
-        existing.otherParentIncome += segment.otherParentIncome;
-        existing.benefitIncome += segment.benefitIncome;
-        if (!existing.daysPerWeekValues.includes(segment.daysPerWeekValue)) {
-          existing.daysPerWeekValues.push(segment.daysPerWeekValue);
-        }
-        if (segment.otherParentMonthlyBase > existing.otherParentMonthlyBase) {
-          existing.otherParentMonthlyBase = segment.otherParentMonthlyBase;
-        }
-        
-        // Track benefit levels and days by level
-        if (!existing.benefitLevels.includes(period.benefitLevel)) {
-          existing.benefitLevels.push(period.benefitLevel);
-        }
-        if (!existing.benefitDaysByLevel[period.benefitLevel]) {
-          existing.benefitDaysByLevel[period.benefitLevel] = 0;
-        }
-        existing.benefitDaysByLevel[period.benefitLevel] += segment.benefitDays;
-      });
-    });
-
-    return Array.from(monthMap.values()).sort((a, b) => a.monthStart.getTime() - b.monthStart.getTime());
-  };
-
-  interface PeriodGroup {
-    parent: LeavePeriod["parent"];
-    periods: LeavePeriod[];
-  }
-
-  const groupConsecutivePeriods = (periodList: LeavePeriod[]): PeriodGroup[] => {
-    if (periodList.length === 0) {
-      return [];
-    }
-
-    const sorted = [...periodList].sort((a, b) => {
-      const dateA = a.startDate instanceof Date ? a.startDate : new Date(a.startDate);
-      const dateB = b.startDate instanceof Date ? b.startDate : new Date(b.startDate);
-      return dateA.getTime() - dateB.getTime();
-    });
-    const groups: PeriodGroup[] = [];
-
-    sorted.forEach(period => {
-      const lastGroup = groups[groups.length - 1];
-      const lastSegment = lastGroup?.periods[lastGroup.periods.length - 1];
-
-      const periodStartDate = period.startDate instanceof Date ? period.startDate : new Date(period.startDate);
-      const lastEndDate = lastSegment?.endDate instanceof Date ? lastSegment.endDate : (lastSegment?.endDate ? new Date(lastSegment.endDate) : null);
-
-      const canGroup =
-        lastGroup &&
-        lastEndDate &&
-        lastGroup.parent === period.parent &&
-        differenceInCalendarDays(periodStartDate, addDays(lastEndDate, 1)) === 0;
-
-      if (canGroup) {
-        lastGroup.periods.push(period);
-      } else {
-        groups.push({ parent: period.parent, periods: [period] });
-      }
-    });
-
-    return groups;
-  };
-
-  const capitalizeFirstLetter = (str: string) => {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  };
-
-  const getBenefitLevelLabel = (level: string): string => {
-    switch (level) {
-      case 'parental-salary': return 'Föräldrapenning + Föräldralön';
-      case 'high': return 'Föräldrapenning';
-      case 'low': return 'Lägstanivå (250 kr/dag)';
-      default: return level;
-    }
-  };
-
-  const getBenefitBadgeStyles = (level: string): string => {
-    switch (level) {
-      case 'parental-salary':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'low':
-        return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'high':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      default:
-        return 'bg-muted text-muted-foreground border-muted';
-    }
-  };
-
   // Render strategy card function
-  const renderStrategyCard = (result: OptimizationResult | undefined, index: number, isExpanded: boolean = false, isCollapsed: boolean = false) => {
+  const renderStrategyCard = (result: OptimizationResult | undefined, index: number) => {
     if (!result) {
       console.log("renderStrategyCard: missing result at index", index, results);
       return null;
-    }
-
-    const filteredPeriods = result.periods.filter(period => period.benefitLevel !== 'none');
-    const periodGroups = groupConsecutivePeriods(filteredPeriods);
-
-    const initialTenDayGroupIndex = periodGroups.findIndex(group =>
-      group.periods.length > 0 && group.periods.every(period => period.isInitialTenDayPeriod)
-    );
-
-    if (initialTenDayGroupIndex > 0) {
-      const [initialGroup] = periodGroups.splice(initialTenDayGroupIndex, 1);
-      periodGroups.unshift(initialGroup);
-    }
-
-    const groupMonthlyBreakdowns = periodGroups.map(group =>
-      createMonthlyBreakdownEntries(group.periods)
-    );
-
-    const aggregatedMonthMap = new Map<string, {
-      totalIncome: number;
-      totalCalendarDays: number;
-      monthStart: Date;
-      monthLength: number;
-    }>();
-
-    const allMonthlyEntries = createMonthlyBreakdownEntries(result.periods);
-
-    allMonthlyEntries.forEach(month => {
-      const existing = aggregatedMonthMap.get(month.monthKey);
-
-      if (!existing) {
-        aggregatedMonthMap.set(month.monthKey, {
-          totalIncome: month.monthlyIncome,
-          totalCalendarDays: month.calendarDays,
-          monthStart: month.monthStart,
-          monthLength: month.monthLength,
-        });
-        return;
-      }
-
-      existing.totalIncome += month.monthlyIncome;
-      existing.totalCalendarDays += month.calendarDays;
-    });
-
-    const eligibleAggregatedEntries = Array.from(aggregatedMonthMap.entries()).filter(([, info]) =>
-      info.totalCalendarDays >= info.monthLength
-    );
-
-    let lowestAggregatedKey: string | null = null;
-    let lowestAggregatedIncome = Infinity;
-
-    eligibleAggregatedEntries.forEach(([key, info]) => {
-      if (info.totalIncome < lowestAggregatedIncome - 0.5) {
-        lowestAggregatedKey = key;
-        lowestAggregatedIncome = info.totalIncome;
-        return;
-      }
-
-      if (Math.abs(info.totalIncome - lowestAggregatedIncome) <= 0.5) {
-        if (!lowestAggregatedKey) {
-          lowestAggregatedKey = key;
-          lowestAggregatedIncome = info.totalIncome;
-          return;
-        }
-
-        const currentBest = aggregatedMonthMap.get(lowestAggregatedKey);
-        if (currentBest && info.monthStart.getTime() < currentBest.monthStart.getTime()) {
-          lowestAggregatedKey = key;
-          lowestAggregatedIncome = info.totalIncome;
-        }
-      }
-    });
-
-    const lowestMonthlyIncome = lowestAggregatedKey
-      ? aggregatedMonthMap.get(lowestAggregatedKey)?.totalIncome ?? Infinity
-      : Infinity;
-
-    const isLowestBelowMinimum =
-      Number.isFinite(lowestMonthlyIncome) && lowestMonthlyIncome < minHouseholdIncome;
-
-    // If collapsed, show minimal view
-    if (isCollapsed) {
-      const strategyIcon = result.strategy === 'save-days'
-        ? <PiggyBank className="h-4 w-4 text-parent1" />
-        : <TrendingUp className="h-4 w-4 text-parent2" />;
-
-      return (
-        <Card 
-          key={index}
-          className="cursor-pointer hover:shadow-md transition-all opacity-70 hover:opacity-100"
-          onClick={() => handleCardClick(index)}
-        >
-          <CardContent className="p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {strategyIcon}
-              <span className="font-semibold text-sm">{result.title}</span>
-            </div>
-            <div className="text-sm font-bold">{formatCurrency(result.totalIncome)}</div>
-          </CardContent>
-        </Card>
-      );
     }
 
     const strategyIcon = result.strategy === 'save-days'
       ? <PiggyBank className="h-5 w-5 md:h-8 md:w-8 text-parent1 flex-shrink-0" />
       : <TrendingUp className="h-5 w-5 md:h-8 md:w-8 text-parent2 flex-shrink-0" />;
 
-    const monthlyBreakdown = buildMonthlyBreakdownEntries(result.periods);
-
     return (
       <Card
         key={index}
-        className={`relative shadow-soft transition-all ${isExpanded ? '' : 'cursor-pointer hover:shadow-lg'} ${
+        className={`relative shadow-soft transition-all hover:shadow-lg ${
           selectedIndex === index
             ? `ring-2 md:ring-4 ${result.strategy === 'maximize-income' ? 'ring-blue-500' : 'ring-primary'} shadow-xl`
             : ''
         }`}
-        onClick={() => !isExpanded && handleCardClick(index)}
       >
         <CardHeader className={`${result.strategy === 'save-days' ? 'bg-parent1/10' : 'bg-parent2/10'} p-2 md:p-6 relative`}>
           <div className="flex items-start justify-between gap-2">
@@ -605,204 +154,107 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
               ))}
             </div>
           ) : null}
+
+          <div className="mt-4 flex justify-center">
+            <Button
+              onClick={() => onSelectStrategy(index)}
+              className="w-full md:w-auto"
+            >
+              Välj denna strategi
+            </Button>
+          </div>
         </CardHeader>
-        
-        {/* Expanded Details */}
-        {isExpanded && (
-          <CardContent className="pt-3 md:pt-6 space-y-3 md:space-y-6 p-2 md:p-6">
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Tidslinje
-              </h3>
-              <TimelineChart
-                periods={result.periods}
-                minHouseholdIncome={minHouseholdIncome}
-                calendarMonthsLimit={timelineMonths}
-              />
-            </div>
-
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Månad för månad
-              </h3>
-              <div className="space-y-2">
-                {monthlyBreakdown.map((month) => {
-                  const isMonthExpanded = expandedMonths[month.monthKey] ?? false;
-                  const isFullMonth = month.calendarDays >= month.monthLength;
-                  const lowLevelDays = Math.round(month.benefitDaysByLevel["low"] ?? 0);
-
-                  return (
-                    <Card
-                      key={month.monthKey}
-                      className="cursor-pointer hover:shadow-md transition-shadow"
-                      onClick={() => setExpandedMonths(prev => ({ ...prev, [month.monthKey]: !prev[month.monthKey] }))}
-                    >
-                      <CardContent className="p-3 md:p-4">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                          <div className="flex-1 w-full">
-                            <div className="font-semibold flex items-center gap-2 flex-wrap">
-                              {capitalizeFirstLetter(format(month.monthStart, 'MMMM yyyy', { locale: sv }))}
-                              {!isFullMonth && (
-                                <Badge variant="outline" className="text-xs">
-                                  {month.calendarDays} dagar
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {month.parents.map((parent, idx) => (
-                                <Badge
-                                  key={idx}
-                                  className={
-                                    parent === 'Parent 1'
-                                      ? 'bg-parent1/20 text-parent1 border-parent1/30'
-                                      : parent === 'Parent 2'
-                                      ? 'bg-parent2/20 text-parent2 border-parent2/30'
-                                      : 'bg-both/20 text-both border-both/30'
-                                  }
-                                  variant="outline"
-                                >
-                                  {parent}
-                                </Badge>
-                              ))}
-                            </div>
-                            {lowLevelDays > 0 && (
-                              <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                <span className="inline-block h-2 w-2 rounded-sm bg-amber-500" />
-                                Lägstanivå: {lowLevelDays} dagar
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-left sm:text-right w-full sm:w-auto">
-                            <div className="font-bold text-base md:text-lg">{formatCurrency(month.monthlyIncome)}</div>
-                            <div className="text-xs md:text-sm text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {month.benefitDays} dagar
-                            </div>
-                          </div>
-                        </div>
-
-                        {isMonthExpanded && (
-                          <div className="mt-4 pt-4 border-t">
-                            <div className="text-sm text-muted-foreground mb-2">Inkomstdetaljer för {capitalizeFirstLetter(format(month.monthStart, 'MMMM yyyy', { locale: sv }))}</div>
-                            <div className="space-y-2">
-                              <div>
-                                <div className="text-sm font-medium">Föräldrapenning</div>
-                                <div className="text-lg font-bold">{formatCurrency(month.benefitIncome)}</div>
-                              </div>
-                              {month.parentalSalaryIncome > 0 && (
-                                <div>
-                                  <div className="text-sm font-medium">Föräldralön</div>
-                                  <div className="text-lg font-bold">{formatCurrency(month.parentalSalaryIncome)}</div>
-                                </div>
-                              )}
-                              {month.otherParentIncome > 0 && (
-                                <div>
-                                  <div className="text-sm font-medium">Arbetande förälder</div>
-                                  <div className="text-lg font-bold">{formatCurrency(month.otherParentIncome)}</div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          </CardContent>
-        )}
       </Card>
     );
   };
 
   return (
-    <>
-      <div className="space-y-4 md:space-y-8">
-        <div className="text-center space-y-1 md:space-y-2">
-          <h2 className="text-lg md:text-3xl font-bold">Optimeringsförslag</h2>
-          <p className="text-[10px] md:text-sm text-muted-foreground">
-            * Föräldrapenning baseras på 7 dagar per vecka
-          </p>
-        </div>
-
-        {/* Adaptive layout based on expanded state */}
-        <div className={`${expandedIndex !== null ? 'flex flex-col gap-3' : 'grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6'}`}>
-          {results.map((result, index) => {
-            const isExpanded = expandedIndex === index;
-            const isCollapsed = expandedIndex !== null && expandedIndex !== index;
-            return renderStrategyCard(result, index, isExpanded, isCollapsed);
-          })}
-        </div>
+    <div className="space-y-3 md:space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 md:gap-4">
+        <h2 className="text-lg md:text-2xl font-bold">Optimeringsförslag</h2>
+        <p className="text-[10px] md:text-sm text-muted-foreground">
+          * Föräldrapenning baseras på {results[0]?.periods[0]?.daysPerWeek || 7} dagar per vecka
+        </p>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
+        {results.map((result, index) => renderStrategyCard(result, index))}
+      </div>
+
+      {/* Comparison Modal */}
       {compareOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in-0"
           onClick={closeComparison}
         >
-          <div
-            className="w-full max-w-6xl max-h-[90vh] overflow-y-auto bg-background rounded-2xl shadow-xl border animate-scale-in"
+          <Card
+            className="max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 md:p-6 border-b">
-              <div>
-                <h3 className="text-lg md:text-2xl font-bold">Jämför strategier</h3>
-                <p className="text-xs md:text-sm text-muted-foreground">Sida vid sida för att hitta bästa helheten.</p>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Jämför strategier</CardTitle>
+                <Button variant="ghost" size="icon" onClick={closeComparison}>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-              <Button variant="ghost" size="icon" onClick={closeComparison}>
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {comparisonMetrics.map((metric) => {
+                  const values = results.map((result) => ({
+                    result,
+                    value: metric.extract(result),
+                  }));
+                  const bestValue = metric.preferLower
+                    ? Math.min(...values.map((v) => v.value))
+                    : Math.max(...values.map((v) => v.value));
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 md:p-6">
-              {results.map((result, colIndex) => (
-                <div key={colIndex} className="space-y-3">
-                  <div className={`rounded-xl border p-3 md:p-4 ${result.strategy === 'maximize-income' ? 'bg-blue-50 border-blue-200' : 'bg-parent1/10 border-parent1/40'}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-[10px] md:text-xs uppercase tracking-wide text-muted-foreground">Strategi</p>
-                        <h4 className="text-base md:text-xl font-bold">{result.title}</h4>
-                        <p className="text-xs md:text-sm text-muted-foreground">{result.description}</p>
+                  return (
+                    <div key={metric.key} className="space-y-2">
+                      <h3 className="font-semibold text-sm">{metric.label}</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {values.map(({ result, value }, idx) => {
+                          const isBest = Math.abs(value - bestValue) < 0.01;
+                          return (
+                            <div
+                              key={idx}
+                              className={`p-3 rounded-lg border flex items-center justify-between ${
+                                isBest
+                                  ? "bg-accent/20 border-accent"
+                                  : "bg-muted/50"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {result.strategy === 'save-days' ? (
+                                  <PiggyBank className="h-4 w-4 text-parent1" />
+                                ) : (
+                                  <TrendingUp className="h-4 w-4 text-parent2" />
+                                )}
+                                <span className="text-sm font-medium">
+                                  {result.title}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm font-bold">
+                                  {metric.formatValue(value, result)}
+                                </span>
+                                {isBest && (
+                                  <Check className="h-4 w-4 text-accent" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      {result.strategy === 'maximize-income' ? (
-                        <TrendingUp className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
-                      ) : (
-                        <PiggyBank className="h-6 w-6 md:h-8 md:w-8 text-parent1" />
-                      )}
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {comparisonMetrics.map(metric => {
-                      const values = results.map(r => metric.extract(r));
-                      const targetValue = metric.preferLower ? Math.min(...values) : Math.max(...values);
-                      const currentValue = metric.extract(result);
-                      const isBest = (!Number.isNaN(targetValue) && Number.isFinite(targetValue)) &&
-                        ((metric.preferLower && currentValue <= targetValue) || (!metric.preferLower && currentValue >= targetValue));
-
-                      return (
-                        <div
-                          key={`${result.title}-${metric.key}`}
-                          className={`flex items-center justify-between rounded-lg border p-2 md:p-3 ${isBest ? 'border-green-500/60 bg-green-50' : 'border-border'}`}
-                        >
-                          <div className="text-xs md:text-sm text-muted-foreground">{metric.label}</div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-sm md:text-base font-bold">{metric.formatValue(currentValue, result)}</div>
-                            {isBest && <Check className="h-4 w-4 text-green-600" />}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
-    </>
+    </div>
   );
 }
