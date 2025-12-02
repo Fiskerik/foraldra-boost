@@ -10,15 +10,15 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
-  Check,
-  X,
-  Save,
   AlertTriangle,
-  Columns3,
+  X,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfMonth } from "date-fns";
+import { sv } from "date-fns/locale";
+import { buildMonthlyBreakdownEntries } from "@/utils/incomeSummary";
 
 interface OptimizationResultsProps {
   results: OptimizationResult[];
@@ -33,8 +33,8 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     return null;
   }
   const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
-  const [overlayOpen, setOverlayOpen] = useState(false);
-  const [overlayIndex, setOverlayIndex] = useState<number | null>(null);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
   const [compareOpen, setCompareOpen] = useState(false);
 
   const togglePeriod = (resultIndex: number, periodIndex: number) => {
@@ -43,19 +43,14 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
   };
 
   const handleCardClick = (index: number) => {
-    if (overlayOpen && overlayIndex !== null) {
-      // If overlay is open, switch to the clicked strategy
-      setOverlayIndex(index);
+    if (expandedIndex === index) {
+      // Clicking on the expanded card collapses it
+      setExpandedIndex(null);
     } else {
-      // Open overlay with clicked strategy
-      setOverlayIndex(index);
-      setOverlayOpen(true);
+      // Expand the clicked card
+      setExpandedIndex(index);
+      onSelectStrategy(index);
     }
-  };
-
-  const closeOverlay = () => {
-    setOverlayOpen(false);
-    setOverlayIndex(null);
   };
 
   const openComparison = () => {
@@ -396,8 +391,34 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     return groups;
   };
 
+  const capitalizeFirstLetter = (str: string) => {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  };
+
+  const getBenefitLevelLabel = (level: string): string => {
+    switch (level) {
+      case 'parental-salary': return 'Föräldrapenning + Föräldralön';
+      case 'high': return 'Föräldrapenning';
+      case 'low': return 'Lägstanivå (250 kr/dag)';
+      default: return level;
+    }
+  };
+
+  const getBenefitBadgeStyles = (level: string): string => {
+    switch (level) {
+      case 'parental-salary':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'low':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'high':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      default:
+        return 'bg-muted text-muted-foreground border-muted';
+    }
+  };
+
   // Render strategy card function
-  const renderStrategyCard = (result: OptimizationResult | undefined, index: number, isInOverlay: boolean = false) => {
+  const renderStrategyCard = (result: OptimizationResult | undefined, index: number, isExpanded: boolean = false, isCollapsed: boolean = false) => {
     if (!result) {
       console.log("renderStrategyCard: missing result at index", index, results);
       return null;
@@ -481,68 +502,55 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
     const isLowestBelowMinimum =
       Number.isFinite(lowestMonthlyIncome) && lowestMonthlyIncome < minHouseholdIncome;
 
+    // If collapsed, show minimal view
+    if (isCollapsed) {
+      const strategyIcon = result.strategy === 'save-days'
+        ? <PiggyBank className="h-4 w-4 text-parent1" />
+        : <TrendingUp className="h-4 w-4 text-parent2" />;
+
+      return (
+        <Card 
+          key={index}
+          className="cursor-pointer hover:shadow-md transition-all opacity-70 hover:opacity-100"
+          onClick={() => handleCardClick(index)}
+        >
+          <CardContent className="p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {strategyIcon}
+              <span className="font-semibold text-sm">{result.title}</span>
+            </div>
+            <div className="text-sm font-bold">{formatCurrency(result.totalIncome)}</div>
+          </CardContent>
+        </Card>
+      );
+    }
+
     const strategyIcon = result.strategy === 'save-days'
       ? <PiggyBank className="h-5 w-5 md:h-8 md:w-8 text-parent1 flex-shrink-0" />
       : <TrendingUp className="h-5 w-5 md:h-8 md:w-8 text-parent2 flex-shrink-0" />;
 
+    const monthlyBreakdown = buildMonthlyBreakdownEntries(result.periods);
+
     return (
       <Card
         key={index}
-          className={`relative shadow-soft transition-all cursor-pointer hover:shadow-lg ${
-            selectedIndex === index
-              ? `ring-2 md:ring-4 ${result.strategy === 'maximize-income' ? 'ring-blue-500' : 'ring-primary'} shadow-xl`
-              : ''
-          }`}
-        onClick={() => !isInOverlay && handleCardClick(index)}
+        className={`relative shadow-soft transition-all ${isExpanded ? '' : 'cursor-pointer hover:shadow-lg'} ${
+          selectedIndex === index
+            ? `ring-2 md:ring-4 ${result.strategy === 'maximize-income' ? 'ring-blue-500' : 'ring-primary'} shadow-xl`
+            : ''
+        }`}
+        onClick={() => !isExpanded && handleCardClick(index)}
       >
         <CardHeader className={`${result.strategy === 'save-days' ? 'bg-parent1/10' : 'bg-parent2/10'} p-2 md:p-6 relative`}>
-          {isInOverlay && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-2 top-2 z-10"
-              onClick={(e) => {
-                e.stopPropagation();
-                closeOverlay();
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
           <div className="flex items-start justify-between gap-2">
             <div className="space-y-0.5 md:space-y-1 flex-1">
               <div className="flex items-center gap-2">
-                {isInOverlay && strategyIcon}
+                {strategyIcon}
                 <CardTitle className="text-sm md:text-2xl">{result.title}</CardTitle>
               </div>
               <p className="text-[10px] md:text-sm text-muted-foreground">
                 {result.description}
               </p>
-            </div>
-            <div className="flex items-center gap-1.5 md:gap-3">
-              {!isInOverlay && (
-                <>
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectStrategy(index);
-                    }}
-                    variant={selectedIndex === index ? "default" : "outline"}
-                    size="sm"
-                    className="flex-shrink-0"
-                  >
-                    {selectedIndex === index ? (
-                      <>
-                        <Check className="h-3 w-3 md:h-4 md:w-4 mr-1" />
-                        <span className="text-xs md:text-sm">Vald</span>
-                      </>
-                    ) : (
-                      <span className="text-xs md:text-sm">Välj</span>
-                    )}
-                  </Button>
-                  {strategyIcon}
-                </>
-              )}
             </div>
           </div>
           
@@ -584,7 +592,7 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
             </div>
           </div>
 
-          {isInOverlay && result.warnings?.length ? (
+          {result.warnings?.length ? (
             <div className="mt-2 md:mt-4 space-y-1">
               {result.warnings.map((warning, warningIndex) => (
                 <div
@@ -599,42 +607,110 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
           ) : null}
         </CardHeader>
         
-        {/* Collapsible Details - Only in overlay */}
-        {isInOverlay && (
+        {/* Expanded Details */}
+        {isExpanded && (
           <CardContent className="pt-3 md:pt-6 space-y-3 md:space-y-6 p-2 md:p-6">
-            <TimelineChart
-              periods={result.periods}
-              minHouseholdIncome={minHouseholdIncome}
-              calendarMonthsLimit={timelineMonths}
-            />
-
-            <div className="space-y-2 md:space-y-3">
-              <div className="flex items-center gap-1 md:gap-2 text-[10px] md:text-sm font-semibold">
-                <Calendar className="h-3 w-3 md:h-4 md:w-4" />
-                <span>Ledighetsperioder</span>
-              </div>
-              
-              <div className="space-y-2 md:space-y-3">
-                <p className="text-xs text-muted-foreground">Detaljerad periodvy kommer snart.</p>
-              </div>
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Tidslinje
+              </h3>
+              <TimelineChart
+                periods={result.periods}
+                minHouseholdIncome={minHouseholdIncome}
+                calendarMonthsLimit={timelineMonths}
+              />
             </div>
 
-            {/* Save button in overlay */}
-            <div className="flex justify-center pt-6 mt-6 border-t">
-              <Button 
-                size="lg"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeOverlay();
-                  setTimeout(() => {
-                    document.getElementById('save-plan-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }, 300);
-                }}
-                className="w-full md:w-auto"
-              >
-                <Save className="mr-2 h-5 w-5" />
-                Spara denna plan
-              </Button>
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Månad för månad
+              </h3>
+              <div className="space-y-2">
+                {monthlyBreakdown.map((month) => {
+                  const isMonthExpanded = expandedMonths[month.monthKey] ?? false;
+                  const isFullMonth = month.calendarDays >= month.monthLength;
+                  const lowLevelDays = Math.round(month.benefitDaysByLevel["low"] ?? 0);
+
+                  return (
+                    <Card
+                      key={month.monthKey}
+                      className="cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => setExpandedMonths(prev => ({ ...prev, [month.monthKey]: !prev[month.monthKey] }))}
+                    >
+                      <CardContent className="p-3 md:p-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div className="flex-1 w-full">
+                            <div className="font-semibold flex items-center gap-2 flex-wrap">
+                              {capitalizeFirstLetter(format(month.monthStart, 'MMMM yyyy', { locale: sv }))}
+                              {!isFullMonth && (
+                                <Badge variant="outline" className="text-xs">
+                                  {month.calendarDays} dagar
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {month.parents.map((parent, idx) => (
+                                <Badge
+                                  key={idx}
+                                  className={
+                                    parent === 'Parent 1'
+                                      ? 'bg-parent1/20 text-parent1 border-parent1/30'
+                                      : parent === 'Parent 2'
+                                      ? 'bg-parent2/20 text-parent2 border-parent2/30'
+                                      : 'bg-both/20 text-both border-both/30'
+                                  }
+                                  variant="outline"
+                                >
+                                  {parent}
+                                </Badge>
+                              ))}
+                            </div>
+                            {lowLevelDays > 0 && (
+                              <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                <span className="inline-block h-2 w-2 rounded-sm bg-amber-500" />
+                                Lägstanivå: {lowLevelDays} dagar
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-left sm:text-right w-full sm:w-auto">
+                            <div className="font-bold text-base md:text-lg">{formatCurrency(month.monthlyIncome)}</div>
+                            <div className="text-xs md:text-sm text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {month.benefitDays} dagar
+                            </div>
+                          </div>
+                        </div>
+
+                        {isMonthExpanded && (
+                          <div className="mt-4 pt-4 border-t">
+                            <div className="text-sm text-muted-foreground mb-2">Inkomstdetaljer för {capitalizeFirstLetter(format(month.monthStart, 'MMMM yyyy', { locale: sv }))}</div>
+                            <div className="space-y-2">
+                              <div>
+                                <div className="text-sm font-medium">Föräldrapenning</div>
+                                <div className="text-lg font-bold">{formatCurrency(month.benefitIncome)}</div>
+                              </div>
+                              {month.parentalSalaryIncome > 0 && (
+                                <div>
+                                  <div className="text-sm font-medium">Föräldralön</div>
+                                  <div className="text-lg font-bold">{formatCurrency(month.parentalSalaryIncome)}</div>
+                                </div>
+                              )}
+                              {month.otherParentIncome > 0 && (
+                                <div>
+                                  <div className="text-sm font-medium">Arbetande förälder</div>
+                                  <div className="text-lg font-bold">{formatCurrency(month.otherParentIncome)}</div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
           </CardContent>
         )}
@@ -652,42 +728,15 @@ export function OptimizationResults({ results, minHouseholdIncome, selectedIndex
           </p>
         </div>
 
-        <div className="flex justify-center">
-          <Button
-            variant="secondary"
-            onClick={openComparison}
-            className="flex items-center gap-2"
-          >
-            <Columns3 className="h-4 w-4" />
-            Jämför strategier (2/2)
-          </Button>
-        </div>
-
-        {/* Grid view - always visible */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
-          {results.map((result, index) => renderStrategyCard(result, index, false))}
+        {/* Adaptive layout based on expanded state */}
+        <div className={`${expandedIndex !== null ? 'flex flex-col gap-3' : 'grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6'}`}>
+          {results.map((result, index) => {
+            const isExpanded = expandedIndex === index;
+            const isCollapsed = expandedIndex !== null && expandedIndex !== index;
+            return renderStrategyCard(result, index, isExpanded, isCollapsed);
+          })}
         </div>
       </div>
-
-      {/* Overlay */}
-      {overlayOpen && overlayIndex !== null && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in"
-          onClick={(e) => {
-            // Allow clicking on background cards to switch
-            if (e.target === e.currentTarget) {
-              // Don't close, just ignore
-            }
-          }}
-        >
-          <div
-            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-scale-in"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {renderStrategyCard(results[overlayIndex], overlayIndex, true)}
-          </div>
-        </div>
-      )}
 
       {compareOpen && (
         <div
