@@ -67,7 +67,11 @@ interface StrategyDetailsProps {
 export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths, showSummaryBreakdown = false }: StrategyDetailsProps) {
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
   const filteredPeriods = strategy.periods;
-  const monthlyBreakdown = buildMonthlyBreakdownEntries(strategy.periods);
+  const monthlyBreakdown = useMemo(() => {
+    const entries = buildMonthlyBreakdownEntries(strategy.periods);
+    // Sort by startDate to ensure chronological order
+    return entries.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  }, [strategy.periods]);
   const {
     lowestFullMonthIncome,
     hasEligibleFullMonths,
@@ -318,7 +322,7 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths, 
                             {capitalizeFirstLetter(format(month.monthStart, 'MMMM yyyy', { locale: sv }))}
                             {!isFullMonth && (
                               <Badge variant="outline" className="text-xs">
-                                {month.calendarDays} dagar
+                                {format(month.startDate, 'd', { locale: sv })} - {format(month.endDate, 'd MMMM', { locale: sv })}
                               </Badge>
                             )}
                           </div>
