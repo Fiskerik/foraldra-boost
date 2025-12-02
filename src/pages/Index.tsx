@@ -55,7 +55,6 @@ const Index = () => {
   const [isFirstOptimization, setIsFirstOptimization] = useState(true);
   const [planName, setPlanName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [showDetailedPreview, setShowDetailedPreview] = useState(false);
 
   const handleExportPDF = async () => {
     if (!optimizationResults || !hasChosenStrategy) return;
@@ -541,95 +540,45 @@ const Index = () => {
             
             {hasChosenStrategy && (
               <div className="space-y-6 mt-8">
-                {!showDetailedPreview ? (
-                  <>
-                    <Card>
-                      <CardContent className="pt-6">
-                        <div className="flex justify-center">
-                          <Button 
-                            onClick={() => setShowDetailedPreview(true)}
-                            size="lg"
-                            className="w-full md:w-auto"
-                          >
-                            <FileDown className="mr-2 h-5 w-5" />
-                            Visa plandetaljer
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    <div className="flex justify-center">
-                      {!showSliders ? (
-                        <Button
-                          onClick={() => setShowSliders(true)}
-                          size="lg"
-                          className="bg-primary hover:bg-primary/90"
-                        >
-                          Justera parametrar
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={() => setShowSliders(false)}
-                          variant="outline"
-                          size="lg"
-                        >
-                          Dölj justeringar
-                        </Button>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <h2 className="text-2xl font-bold">Din valda plan</h2>
-                      <div className="flex gap-2 w-full sm:w-auto">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setShowDetailedPreview(false)}
-                          className="flex-1 sm:flex-none"
-                        >
-                          Stäng
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          onClick={handleExportPDF}
-                          className="flex-1 sm:flex-none"
-                        >
-                          <FileDown className="mr-2 h-4 w-4" />
-                          Exportera PDF
-                        </Button>
-                        {user ? (
-                          <Button 
-                            onClick={() => {
-                              setShowDetailedPreview(false);
-                              setTimeout(() => {
-                                document.getElementById('save-plan-section')?.scrollIntoView({ behavior: 'smooth' });
-                              }, 100);
-                            }}
-                            className="flex-1 sm:flex-none"
-                          >
-                            <Save className="mr-2 h-4 w-4" />
-                            Spara plan
-                          </Button>
-                        ) : (
-                          <Button 
-                            onClick={() => navigate('/auth')}
-                            className="flex-1 sm:flex-none"
-                          >
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Logga in
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <StrategyDetails
-                      strategy={optimizationResults[selectedStrategyIndex]}
-                      minHouseholdIncome={householdIncome}
-                      timelineMonths={totalMonths}
-                      showSummaryBreakdown
-                    />
-                  </>
-                )}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <h2 className="text-2xl font-bold">Plandetaljer</h2>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <Button 
+                      variant="outline" 
+                      onClick={handleExportPDF}
+                      className="flex-1 sm:flex-none"
+                    >
+                      <FileDown className="mr-2 h-4 w-4" />
+                      Exportera PDF
+                    </Button>
+                  </div>
+                </div>
+                <StrategyDetails
+                  strategy={optimizationResults[selectedStrategyIndex]}
+                  minHouseholdIncome={householdIncome}
+                  timelineMonths={totalMonths}
+                  showSummaryBreakdown
+                />
+                
+                <div className="flex justify-center">
+                  {!showSliders ? (
+                    <Button
+                      onClick={() => setShowSliders(true)}
+                      size="lg"
+                      className="bg-primary hover:bg-primary/90"
+                    >
+                      Justera parametrar
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => setShowSliders(false)}
+                      variant="outline"
+                      size="lg"
+                    >
+                      Dölj justeringar
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </div>
