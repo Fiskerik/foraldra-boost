@@ -1,19 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { PlanCard } from '@/components/PlanCard';
 import { Button } from '@/components/ui/button';
-import { Plus, FileText } from 'lucide-react';
+import { Plus, FileText, Edit, FileDown, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { StrategyDetails } from '@/components/StrategyDetails';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { OptimizationResult } from '@/utils/parentalCalculations';
+import { exportPlanToPDF } from '@/utils/pdfExport';
+import { format } from 'date-fns';
+import { sv } from 'date-fns/locale';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set());
+  const [previewPlan, setPreviewPlan] = useState<any | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -80,6 +89,44 @@ export default function Dashboard() {
       toast.error('Kunde inte radera planerna. Försök igen.');
     }
   };
+
+  const handleOpenPreview = (plan: any) => {
+    setPreviewPlan(plan);
+    setPreviewOpen(true);
+  };
+
+  const handleExportPDF = async () => {
+    if (!previewPlan) return;
+
+    try {
+      await exportPlanToPDF(previewPlan);
+      toast.success('PDF exporterad!');
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error('Kunde inte exportera PDF. Försök igen.');
+    }
+  };
+
+  // Rehydrate optimization results: convert date strings to Date objects
+  const rehydrateOptimizationResults = (raw: any[]): OptimizationResult[] => {
+    return raw.map((res) => ({
+      ...res,
+      periods: res.periods.map((p: any) => ({
+        ...p,
+        startDate: new Date(p.startDate),
+        endDate: new Date(p.endDate),
+        dailyIncome: Number(p.dailyIncome ?? 0),
+        dailyBenefit: Number(p.dailyBenefit ?? 0),
+        otherParentMonthlyIncome: Number(p.otherParentMonthlyIncome ?? 0),
+        otherParentDailyIncome: Number(p.otherParentDailyIncome ?? 0),
+        benefitDaysUsed: Number(p.benefitDaysUsed ?? p.daysCount ?? 0),
+        daysCount: Number(p.daysCount ?? 0),
+        daysPerWeek: p.daysPerWeek != null ? Number(p.daysPerWeek) : undefined,
+      })),
+    }));
+  };
+
+  const previewStrategy = previewPlan ? rehydrateOptimizationResults(previewPlan.optimization_results)[previewPlan.selected_strategy_index] : null;
 
   if (loading) {
     return (
@@ -157,11 +204,60 @@ export default function Dashboard() {
                   onToggleSelect={() => togglePlanSelection(plan.id)}
                   onDelete={selectedPlanIds.size > 0 ? handleBulkDelete : loadPlans}
                   selectedCount={selectedPlanIds.size}
+                  onOpenPreview={() => handleOpenPreview(plan)}
                 />
               ))}
             </div>
           </>
         )}
+
+        {/* Preview Dialog */}
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <DialogTitle className="text-2xl mb-2">{previewPlan?.name}</DialogTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Förväntat födelsedatum: {previewPlan && format(new Date(previewPlan.expected_birth_date), 'd MMM yyyy', { locale: sv })}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportPDF}
+                  >
+                    <FileDown className="h-4 w-4 mr-2" />
+                    Exportera PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setPreviewOpen(false);
+                      navigate(`/plan/${previewPlan?.id}`);
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Redigera
+                  </Button>
+                </div>
+              </div>
+            </DialogHeader>
+            
+            {previewStrategy && (
+              <div className="mt-4">
+                <StrategyDetails
+                  strategy={previewStrategy}
+                  minHouseholdIncome={previewPlan.household_income}
+                  timelineMonths={previewPlan.total_months}
+                  showSummaryBreakdown
+                />
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );
