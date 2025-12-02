@@ -380,12 +380,31 @@ function splitIntoMonthlySegments(
   const targetTotal = plannedBenefitDays > 0 ? plannedBenefitDays : totalAllocated;
 
   if (targetTotal > 0 && totalAllocated < targetTotal) {
-    const shortage = targetTotal - totalAllocated;
-    const febSegment = segments.find(s => s.start.getMonth() === 1);
-    if (febSegment) {
-      febSegment.benefitDays += shortage;
+    let shortage = targetTotal - totalAllocated;
+
+    // Distribute any remaining days across available months without exceeding
+    // the actual number of days in each month. This keeps usage aligned with
+    // the real calendar (e.g. February only has 28/29 days).
+    for (const segment of segments) {
+      if (shortage <= 0) {
+        break;
+      }
+
+      const remainingCapacity = Math.max(0, segment.calendarDays - segment.benefitDays);
+      if (remainingCapacity <= 0) {
+        continue;
+      }
+
+      const allocation = Math.min(remainingCapacity, shortage);
+      segment.benefitDays += allocation;
+      shortage -= allocation;
     }
   }
+
+  // Final safeguard: never allow a monthly segment to exceed its calendar days.
+  segments.forEach(segment => {
+    segment.benefitDays = Math.min(segment.benefitDays, segment.calendarDays);
+  });
 
   return segments;
 }
