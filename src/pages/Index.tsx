@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { calculateStrategyIncomeSummary, StrategyIncomeSummary } from "@/utils/incomeSummary";
+import { DEFAULT_VALUES, AppliedDefaults, getDefaultsFootnote } from "@/utils/defaultValues";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,7 +63,10 @@ const Index = () => {
     optimalParent1Months: number;
     explanation: string;
     tips: string[];
+    expectedTotalIncome?: number;
+    expectedDaysSaved?: number;
   } | null>(null);
+  const [aiDefaultsFootnote, setAiDefaultsFootnote] = useState<string | null>(null);
 
   const handleExportPDF = async () => {
     if (!optimizationResults || !hasChosenStrategy) return;
@@ -187,14 +191,42 @@ const Index = () => {
   };
 
   const handleAIOptimize = async () => {
-    if (!municipality) {
-      toast.error("Vänligen välj kommun först");
-      return;
-    }
-
     setIsAIOptimizing(true);
     
     try {
+      // Track which defaults are being used
+      const appliedDefaults: AppliedDefaults = {
+        parent1Income: parent1Income === 0 || !parent1Income,
+        parent2Income: parent2Income === 0 || !parent2Income,
+        parent1HasAgreement: false, // Checkboxes have explicit values
+        parent2HasAgreement: false,
+        taxRate: taxRate === 0 || !taxRate,
+        totalMonths: totalMonths === 0 || !totalMonths,
+        parent1Months: false, // Will be determined by AI
+        simultaneousMonths: false,
+        householdIncome: householdIncome === 0 || !householdIncome,
+      };
+
+      // Apply defaults where needed
+      const effectiveParent1Income = appliedDefaults.parent1Income ? DEFAULT_VALUES.income : parent1Income;
+      const effectiveParent2Income = appliedDefaults.parent2Income ? DEFAULT_VALUES.income : parent2Income;
+      const effectiveTaxRate = appliedDefaults.taxRate ? DEFAULT_VALUES.taxRate : taxRate;
+      const effectiveTotalMonths = appliedDefaults.totalMonths ? DEFAULT_VALUES.totalMonths : totalMonths;
+      const effectiveHouseholdIncome = appliedDefaults.householdIncome ? DEFAULT_VALUES.householdIncome : householdIncome;
+      const effectiveSimultaneousMonths = simultaneousLeave ? simultaneousMonths : 0;
+
+      const effectiveParent1Data: ParentData = {
+        income: effectiveParent1Income,
+        hasCollectiveAgreement: parent1HasAgreement,
+        taxRate: effectiveTaxRate,
+      };
+
+      const effectiveParent2Data: ParentData = {
+        income: effectiveParent2Income,
+        hasCollectiveAgreement: parent2HasAgreement,
+        taxRate: effectiveTaxRate,
+      };
+
       // Calculate results for all possible distributions
       const distributionResults: {
         parent1Months: number;
@@ -205,18 +237,18 @@ const Index = () => {
         warningCount: number;
       }[] = [];
 
-      for (let p1Months = 0; p1Months <= totalMonths; p1Months++) {
-        const p2Months = totalMonths - p1Months;
+      for (let p1Months = 0; p1Months <= effectiveTotalMonths; p1Months++) {
+        const p2Months = effectiveTotalMonths - p1Months;
         
         const results = optimizeLeave(
-          parent1Data,
-          parent2Data,
-          totalMonths,
+          effectiveParent1Data,
+          effectiveParent2Data,
+          effectiveTotalMonths,
           p1Months,
           p2Months,
-          householdIncome,
+          effectiveHouseholdIncome,
           7, // Use 7 days/week for theoretical max
-          simultaneousLeave ? simultaneousMonths : 0,
+          effectiveSimultaneousMonths,
           true
         );
 
@@ -240,12 +272,12 @@ const Index = () => {
       // Call AI edge function
       const response = await supabase.functions.invoke('optimize-parental-leave', {
         body: {
-          parent1: parent1Data,
-          parent2: parent2Data,
-          totalMonths,
-          minHouseholdIncome: householdIncome,
+          parent1: effectiveParent1Data,
+          parent2: effectiveParent2Data,
+          totalMonths: effectiveTotalMonths,
+          minHouseholdIncome: effectiveHouseholdIncome,
           strategy: selectedStrategyIndex === 0 ? 'maximize-income' : 'save-days',
-          simultaneousMonths: simultaneousLeave ? simultaneousMonths : 0,
+          simultaneousMonths: effectiveSimultaneousMonths,
           daysPerWeek,
           distributionResults,
         }
@@ -262,8 +294,28 @@ const Index = () => {
         return;
       }
 
-      setAiResult(result);
+      // Find the expected income and days saved for the recommended distribution
+      const recommendedDistribution = distributionResults.find(
+        d => d.parent1Months === result.optimalParent1Months
+      );
+
+      // Store footnote about defaults
+      const footnote = getDefaultsFootnote(appliedDefaults);
+      setAiDefaultsFootnote(footnote);
+
+      setAiResult({
+        ...result,
+        expectedTotalIncome: recommendedDistribution?.totalIncome,
+        expectedDaysSaved: recommendedDistribution?.daysSaved,
+      });
       setAiDialogOpen(true);
+
+      // Update state with effective values if defaults were used
+      if (appliedDefaults.parent1Income) setParent1Income(DEFAULT_VALUES.income);
+      if (appliedDefaults.parent2Income) setParent2Income(DEFAULT_VALUES.income);
+      if (appliedDefaults.taxRate) setTaxRate(DEFAULT_VALUES.taxRate);
+      if (appliedDefaults.totalMonths) setTotalMonths(DEFAULT_VALUES.totalMonths);
+      if (appliedDefaults.householdIncome) setHouseholdIncome(DEFAULT_VALUES.householdIncome);
       
     } catch (error) {
       console.error('AI optimization error:', error);
@@ -838,6 +890,7 @@ const Index = () => {
         result={aiResult}
         totalMonths={totalMonths}
         onApply={handleApplyAIResult}
+        defaultsFootnote={aiDefaultsFootnote}
       />
     </div>
   );

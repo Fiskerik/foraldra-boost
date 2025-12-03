@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Lightbulb, CheckCircle2 } from "lucide-react";
+import { Sparkles, Lightbulb, CheckCircle2, TrendingUp, PiggyBank, Info } from "lucide-react";
 
 interface AIOptimizationDialogProps {
   open: boolean;
@@ -15,9 +15,12 @@ interface AIOptimizationDialogProps {
     optimalParent1Months: number;
     explanation: string;
     tips: string[];
+    expectedTotalIncome?: number;
+    expectedDaysSaved?: number;
   } | null;
   totalMonths: number;
   onApply: (parent1Months: number) => void;
+  defaultsFootnote?: string | null;
 }
 
 export function AIOptimizationDialog({
@@ -26,6 +29,7 @@ export function AIOptimizationDialog({
   result,
   totalMonths,
   onApply,
+  defaultsFootnote,
 }: AIOptimizationDialogProps) {
   if (!result) return null;
 
@@ -64,6 +68,34 @@ export function AIOptimizationDialog({
             </div>
           </div>
 
+          {/* Expected outcomes */}
+          {(result.expectedTotalIncome || result.expectedDaysSaved) && (
+            <div className="grid grid-cols-2 gap-4">
+              {result.expectedTotalIncome && (
+                <div className="bg-accent/50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                    <TrendingUp className="h-4 w-4" />
+                    Förväntad total inkomst
+                  </div>
+                  <p className="text-lg font-semibold">
+                    {Math.round(result.expectedTotalIncome).toLocaleString('sv-SE')} kr
+                  </p>
+                </div>
+              )}
+              {result.expectedDaysSaved !== undefined && (
+                <div className="bg-accent/50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                    <PiggyBank className="h-4 w-4" />
+                    Sparade dagar
+                  </div>
+                  <p className="text-lg font-semibold">
+                    {result.expectedDaysSaved} dagar
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Explanation */}
           <div className="space-y-2">
             <h4 className="font-medium flex items-center gap-2">
@@ -92,11 +124,21 @@ export function AIOptimizationDialog({
               </ul>
             </div>
           )}
+
+          {/* Defaults footnote */}
+          {defaultsFootnote && (
+            <div className="bg-muted/50 rounded-lg p-3 flex items-start gap-2">
+              <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                {defaultsFootnote}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Avbryt
+            Stäng
           </Button>
           <Button 
             onClick={() => {
