@@ -627,6 +627,15 @@ function detectMinimumIncomeWarnings(
     const monthLength = Math.max(1, differenceInCalendarDays(monthEndCandidate, monthStart) + 1);
     const isFullMonth = metrics.coveredDays >= monthLength;
 
+    // Skip first and last months from minimum income warnings - they are broken months
+    const isFirstLeaveMonth = monthStart.getTime() === timelineStart.getTime();
+    const isLastLeaveMonth = latestExistingEnd && monthEnd.getTime() >= latestExistingEnd.getTime();
+    
+    if (isFirstLeaveMonth || isLastLeaveMonth) {
+      cursor = startOfDay(addMonths(monthStart, 1));
+      continue;
+    }
+
     if (isFullMonth && metrics.hasNonInitialOwnerLeave) {
       const hasSimultaneousOnly =
         metrics.overlappingPeriods.length > 0 &&
@@ -4941,11 +4950,11 @@ function buildSimplePlanResult(
       const parent2HighDaily = resolveDailyBenefit('parent2');
       const parent1CaActive = context.parent1.hasCollectiveAgreement &&
         caBonusMonthsUsed.parent1 < COLLECTIVE_AGREEMENT_MAX_MONTHS;
-      const parent2CaActive = context.parent2.hasCollectiveAgreement &&
-        caBonusMonthsUsed.parent2 < COLLECTIVE_AGREEMENT_MAX_MONTHS;
+      // Parent 2 does NOT get Föräldralön during the initial "both" period - only when their dedicated leave starts
+      const parent2CaActive = false;
 
       const parent1BenefitIncome = parent1HighDaily * initialWorkingDays * (parent1CaActive ? 1.1 : 1);
-      const parent2BenefitIncome = parent2HighDaily * initialWorkingDays * (parent2CaActive ? 1.1 : 1);
+      const parent2BenefitIncome = parent2HighDaily * initialWorkingDays;
       const monthlyTotalIncome = parent1BenefitIncome + parent2BenefitIncome;
 
       const averageBenefitPerDay = initialWorkingDays > 0 ? (parent1BenefitIncome + parent2BenefitIncome) / (initialWorkingDays * 2) : 0;
