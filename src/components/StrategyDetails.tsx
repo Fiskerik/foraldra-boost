@@ -57,6 +57,33 @@ const renderDailyCalculation = (total: number, days: number) => {
   );
 };
 
+const renderPerParentDailyCalculation = (
+  parent1BenefitIncome: number,
+  parent2BenefitIncome: number,
+  parent1Days: number,
+  parent2Days: number
+) => {
+  const parent1Daily = parent1Days > 0 ? parent1BenefitIncome / parent1Days : 0;
+  const parent2Daily = parent2Days > 0 ? parent2BenefitIncome / parent2Days : 0;
+  const parent1DayLabel = formatDayCountLabel(parent1Days);
+  const parent2DayLabel = formatDayCountLabel(parent2Days);
+
+  if (!parent1DayLabel && !parent2DayLabel) {
+    return null;
+  }
+
+  return (
+    <div className="mt-1 text-[10px] md:text-xs text-muted-foreground space-y-0.5">
+      {parent1DayLabel && parent1Daily > 0 && (
+        <div>F1: {formatCurrencyWithDecimals(parent1Daily)}/dag × {parent1DayLabel}</div>
+      )}
+      {parent2DayLabel && parent2Daily > 0 && (
+        <div>F2: {formatCurrencyWithDecimals(parent2Daily)}/dag × {parent2DayLabel}</div>
+      )}
+    </div>
+  );
+};
+
 interface StrategyDetailsProps {
   strategy: OptimizationResult;
   minHouseholdIncome: number;
@@ -365,7 +392,16 @@ export function StrategyDetails({ strategy, minHouseholdIncome, timelineMonths, 
                           <div>
                             <div className="text-sm text-muted-foreground">Föräldrapenning</div>
                             <div className="font-semibold">{formatCurrency(month.benefitIncome)}</div>
-                            {renderDailyCalculation(month.benefitIncome, month.benefitDays)}
+                            {showParentBreakdown ? (
+                              renderPerParentDailyCalculation(
+                                month.parentBenefitIncomeByParent.parent1 ?? 0,
+                                month.parentBenefitIncomeByParent.parent2 ?? 0,
+                                month.parentBenefitDaysByParent.parent1 ?? 0,
+                                month.parentBenefitDaysByParent.parent2 ?? 0
+                              )
+                            ) : (
+                              renderDailyCalculation(month.benefitIncome, month.benefitDays)
+                            )}
                             {showParentBreakdown && parentLeaveEntries.length > 0 && (
                               <div className="mt-2 space-y-1.5">
                                   {parentLeaveEntries.map(({ parentKey, benefitPart, parentalSalaryPart, benefitDays }) => (
