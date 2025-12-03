@@ -10,6 +10,7 @@ import { LeavePeriodCard } from "@/components/LeavePeriodCard";
 import { OptimizationResults } from "@/components/OptimizationResults";
 import { InteractiveSliders } from "@/components/InteractiveSliders";
 import { StrategyDetails } from "@/components/StrategyDetails";
+import { AIOptimizationDialog } from "@/components/AIOptimizationDialog";
 import {
   ParentData,
   calculateAvailableIncome,
@@ -17,7 +18,7 @@ import {
   OptimizationResult,
   calculateMaxLeaveMonths,
 } from "@/utils/parentalCalculations";
-import { Baby, Sparkles, Save, UserPlus, LogIn, LogOut, User, FileDown } from "lucide-react";
+import { Baby, Sparkles, Save, UserPlus, LogIn, LogOut, User, FileDown, Wand2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +56,13 @@ const Index = () => {
   const [isFirstOptimization, setIsFirstOptimization] = useState(true);
   const [planName, setPlanName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isAIOptimizing, setIsAIOptimizing] = useState(false);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiResult, setAiResult] = useState<{
+    optimalParent1Months: number;
+    explanation: string;
+    tips: string[];
+  } | null>(null);
 
   const handleExportPDF = async () => {
     if (!optimizationResults || !hasChosenStrategy) return;
@@ -176,6 +184,99 @@ const Index = () => {
     setSelectedStrategyIndex(index);
     setHasChosenStrategy(true);
     toast.success('Strategi vald!');
+  };
+
+  const handleAIOptimize = async () => {
+    if (!municipality) {
+      toast.error("Vänligen välj kommun först");
+      return;
+    }
+
+    setIsAIOptimizing(true);
+    
+    try {
+      // Calculate results for all possible distributions
+      const distributionResults: {
+        parent1Months: number;
+        parent2Months: number;
+        totalIncome: number;
+        daysSaved: number;
+        meetsMinimum: boolean;
+        warningCount: number;
+      }[] = [];
+
+      for (let p1Months = 0; p1Months <= totalMonths; p1Months++) {
+        const p2Months = totalMonths - p1Months;
+        
+        const results = optimizeLeave(
+          parent1Data,
+          parent2Data,
+          totalMonths,
+          p1Months,
+          p2Months,
+          householdIncome,
+          7, // Use 7 days/week for theoretical max
+          simultaneousLeave ? simultaneousMonths : 0,
+          true
+        );
+
+        // Get the result for the selected strategy type
+        const strategyResult = results.find(r => 
+          r.strategy === (selectedStrategyIndex === 0 ? 'maximize-income' : 'save-days')
+        ) || results[0];
+
+        const hasWarnings = strategyResult.warnings && strategyResult.warnings.length > 0;
+        
+        distributionResults.push({
+          parent1Months: p1Months,
+          parent2Months: p2Months,
+          totalIncome: strategyResult.totalIncome || 0,
+          daysSaved: strategyResult.daysSaved || 0,
+          meetsMinimum: !hasWarnings,
+          warningCount: strategyResult.warnings?.length || 0,
+        });
+      }
+
+      // Call AI edge function
+      const response = await supabase.functions.invoke('optimize-parental-leave', {
+        body: {
+          parent1: parent1Data,
+          parent2: parent2Data,
+          totalMonths,
+          minHouseholdIncome: householdIncome,
+          strategy: selectedStrategyIndex === 0 ? 'maximize-income' : 'save-days',
+          simultaneousMonths: simultaneousLeave ? simultaneousMonths : 0,
+          daysPerWeek,
+          distributionResults,
+        }
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'AI-optimering misslyckades');
+      }
+
+      const result = response.data;
+      
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      setAiResult(result);
+      setAiDialogOpen(true);
+      
+    } catch (error) {
+      console.error('AI optimization error:', error);
+      toast.error('Kunde inte köra AI-optimering. Försök igen.');
+    } finally {
+      setIsAIOptimizing(false);
+    }
+  };
+
+  const handleApplyAIResult = (parent1MonthsValue: number) => {
+    setParent1Months(parent1MonthsValue);
+    handleOptimize({ silent: false, overrides: { parent1Months: parent1MonthsValue } });
+    toast.success('AI-rekommendation tillämpad!');
   };
 
   const handleStrategyPreferenceSelect = (strategy: 'maximize-income' | 'save-days') => {
@@ -517,7 +618,7 @@ const Index = () => {
           onStrategyPreferenceSelect={handleStrategyPreferenceSelect}
         />
 
-        <div className="flex justify-center pt-2 md:pt-6">
+        <div className="flex justify-center gap-3 pt-2 md:pt-6">
           <Button
             onClick={() => handleOptimize()}
             size="lg"
@@ -525,6 +626,16 @@ const Index = () => {
           >
             <Sparkles className="mr-1 md:mr-2 h-3 md:h-5 w-3 md:w-5" />
             Optimera
+          </Button>
+          <Button
+            onClick={handleAIOptimize}
+            disabled={isAIOptimizing}
+            size="lg"
+            variant="outline"
+            className="text-xs md:text-lg px-4 md:px-8 py-3 md:py-6 shadow-soft border-primary text-primary hover:bg-primary/10"
+          >
+            <Wand2 className="mr-1 md:mr-2 h-3 md:h-5 w-3 md:w-5" />
+            {isAIOptimizing ? 'Analyserar...' : 'AI Optimera'}
           </Button>
         </div>
 
@@ -720,6 +831,14 @@ const Index = () => {
           </p>
         </div>
       </footer>
+
+      <AIOptimizationDialog
+        open={aiDialogOpen}
+        onOpenChange={setAiDialogOpen}
+        result={aiResult}
+        totalMonths={totalMonths}
+        onApply={handleApplyAIResult}
+      />
     </div>
   );
 };

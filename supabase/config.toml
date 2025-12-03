@@ -1,1 +1,4 @@
 project_id = "viizyxaqcpazuussntvq"
+
+[functions.optimize-parental-leave]
+verify_jwt = false
