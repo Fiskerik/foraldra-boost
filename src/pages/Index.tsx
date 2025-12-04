@@ -10,7 +10,7 @@ import { LeavePeriodCard } from "@/components/LeavePeriodCard";
 import { OptimizationResults } from "@/components/OptimizationResults";
 import { InteractiveSliders } from "@/components/InteractiveSliders";
 import { StrategyDetails } from "@/components/StrategyDetails";
-import { AIOptimizationDialog } from "@/components/AIOptimizationDialog";
+import { AIOptimizationSection } from "@/components/AIOptimizationSection";
 import {
   ParentData,
   calculateAvailableIncome,
@@ -58,7 +58,7 @@ const Index = () => {
   const [planName, setPlanName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isAIOptimizing, setIsAIOptimizing] = useState(false);
-  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [showAIResult, setShowAIResult] = useState(false);
   const [aiResult, setAiResult] = useState<{
     optimalParent1Months: number;
     explanation: string;
@@ -308,7 +308,12 @@ const Index = () => {
         expectedTotalIncome: recommendedDistribution?.totalIncome,
         expectedDaysSaved: recommendedDistribution?.daysSaved,
       });
-      setAiDialogOpen(true);
+      setShowAIResult(true);
+      
+      // Scroll to the AI result section
+      setTimeout(() => {
+        document.getElementById("ai-result-section")?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
 
       // Update state with effective values if defaults were used
       if (appliedDefaults.parent1Income) setParent1Income(DEFAULT_VALUES.income);
@@ -328,7 +333,13 @@ const Index = () => {
   const handleApplyAIResult = (parent1MonthsValue: number) => {
     setParent1Months(parent1MonthsValue);
     handleOptimize({ silent: false, overrides: { parent1Months: parent1MonthsValue } });
+    setShowAIResult(false);
     toast.success('AI-rekommendation tillämpad!');
+  };
+
+  const handleDismissAIResult = () => {
+    setShowAIResult(false);
+    setAiResult(null);
   };
 
   const handleStrategyPreferenceSelect = (strategy: 'maximize-income' | 'save-days') => {
@@ -773,6 +784,19 @@ const Index = () => {
           />
         )}
 
+        {/* AI Optimization Result - Inline Section */}
+        {showAIResult && aiResult && (
+          <div id="ai-result-section" className="mx-auto max-w-2xl scroll-mt-20">
+            <AIOptimizationSection
+              result={aiResult}
+              totalMonths={totalMonths}
+              onApply={handleApplyAIResult}
+              onDismiss={handleDismissAIResult}
+              defaultsFootnote={aiDefaultsFootnote}
+            />
+          </div>
+        )}
+
         {optimizationResults && selectedStrategyIndex !== null && (
           <Card id="save-plan-section" className="mx-auto max-w-2xl scroll-mt-20">
             <CardHeader>
@@ -883,15 +907,6 @@ const Index = () => {
           </p>
         </div>
       </footer>
-
-      <AIOptimizationDialog
-        open={aiDialogOpen}
-        onOpenChange={setAiDialogOpen}
-        result={aiResult}
-        totalMonths={totalMonths}
-        onApply={handleApplyAIResult}
-        defaultsFootnote={aiDefaultsFootnote}
-      />
     </div>
   );
 };
