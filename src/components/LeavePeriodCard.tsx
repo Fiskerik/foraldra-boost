@@ -222,14 +222,22 @@ export function LeavePeriodCard({
                 <div className="flex flex-col md:flex-row gap-2 md:gap-3">
                   <Button
                     type="button"
-                    className={`flex-1 bg-green-600 hover:bg-green-700 text-white ${selectedStrategy === 'save-days' ? 'ring-2 ring-green-300' : ''}`}
+                    className={`flex-1 transition-all ${
+                      selectedStrategy === 'save-days' 
+                        ? 'bg-primary text-primary-foreground ring-4 ring-primary/30 shadow-lg scale-[1.02]' 
+                        : 'bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30'
+                    }`}
                     onClick={() => handleStrategyButtonClick('save-days')}
                   >
                     Spara dagar
                   </Button>
                   <Button
                     type="button"
-                    className={`flex-1 bg-blue-600 hover:bg-blue-700 text-white ${selectedStrategy === 'maximize-income' ? 'ring-2 ring-blue-300' : ''}`}
+                    className={`flex-1 transition-all ${
+                      selectedStrategy === 'maximize-income' 
+                        ? 'bg-secondary text-secondary-foreground ring-4 ring-secondary/30 shadow-lg scale-[1.02]' 
+                        : 'bg-secondary/20 text-secondary hover:bg-secondary/30 border border-secondary/30'
+                    }`}
                     onClick={() => handleStrategyButtonClick('maximize-income')}
                   >
                     Maximera inkomst
