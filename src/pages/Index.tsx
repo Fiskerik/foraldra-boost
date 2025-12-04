@@ -59,6 +59,7 @@ const Index = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isAIOptimizing, setIsAIOptimizing] = useState(false);
   const [showAIResult, setShowAIResult] = useState(false);
+  const [strategyPreference, setStrategyPreference] = useState<'maximize-income' | 'save-days'>('maximize-income');
   const [aiResult, setAiResult] = useState<{
     optimalParent1Months: number;
     explanation: string;
@@ -348,13 +349,13 @@ const Index = () => {
   };
 
   const handleStrategyPreferenceSelect = (strategy: 'maximize-income' | 'save-days') => {
-    if (!optimizationResults) {
-      return;
-    }
-
-    const targetIndex = optimizationResults.findIndex(result => result.strategy === strategy);
-    if (targetIndex >= 0) {
-      handleSelectStrategy(targetIndex);
+    setStrategyPreference(strategy);
+    
+    if (optimizationResults) {
+      const targetIndex = optimizationResults.findIndex(result => result.strategy === strategy);
+      if (targetIndex >= 0) {
+        handleSelectStrategy(targetIndex);
+      }
     }
   };
 
@@ -682,7 +683,7 @@ const Index = () => {
           onSimultaneousMonthsChange={handleSimultaneousMonthsChange}
           parent1Data={parent1Data}
           parent2Data={parent2Data}
-          selectedStrategy={optimizationResults?.[selectedStrategyIndex]?.strategy || 'maximize-income'}
+          selectedStrategy={strategyPreference}
           onStrategyPreferenceSelect={handleStrategyPreferenceSelect}
         />
 
