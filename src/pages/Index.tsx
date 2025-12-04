@@ -67,6 +67,9 @@ const Index = () => {
     expectedTotalIncome?: number;
     expectedDaysSaved?: number;
     expectedDaysUsed?: number;
+    expectedAverageMonthly?: number;
+    expectedHighestMonth?: number;
+    expectedLowestMonth?: number;
   } | null>(null);
   const [aiDefaultsFootnote, setAiDefaultsFootnote] = useState<string | null>(null);
 
@@ -124,6 +127,40 @@ const Index = () => {
   const parent2Months = Math.max(totalMonths - parent1Months, 0);
   const maxHouseholdIncome = parent1Income + parent2Income;
   const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
+
+  // Build currentResults for AI comparison when optimization results exist
+  const currentResults = useMemo(() => {
+    if (!optimizationResults || optimizationResults.length === 0) return null;
+    
+    const selectedResult = optimizationResults[selectedStrategyIndex];
+    if (!selectedResult) return null;
+
+    // Calculate monthly income breakdown from periods to get highest/lowest
+    const monthlyIncomes: number[] = [];
+    const periods = selectedResult.periods || [];
+    const monthlyMap = new Map<string, number>();
+    
+    periods.forEach(period => {
+      const monthKey = period.startDate ? 
+        `${period.startDate.getFullYear()}-${period.startDate.getMonth()}` : '';
+      if (monthKey && period.monthlyIncome) {
+        monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + period.monthlyIncome);
+      }
+    });
+    
+    monthlyMap.forEach(val => monthlyIncomes.push(val));
+    
+    return {
+      totalIncome: selectedResult.totalIncome || 0,
+      averageMonthlyIncome: selectedResult.averageMonthlyIncome || 0,
+      daysUsed: selectedResult.daysUsed || 0,
+      daysSaved: selectedResult.daysSaved || 0,
+      parent1Months: parent1Months,
+      parent2Months: parent2Months,
+      highestMonthIncome: monthlyIncomes.length > 0 ? Math.max(...monthlyIncomes) : undefined,
+      lowestMonthIncome: monthlyIncomes.length > 0 ? Math.min(...monthlyIncomes) : undefined,
+    };
+  }, [optimizationResults, selectedStrategyIndex, parent1Months, parent2Months]);
 
   const parent1Data: ParentData = {
     income: parent1Income,
@@ -305,14 +342,18 @@ const Index = () => {
       const footnote = getDefaultsFootnote(appliedDefaults);
       setAiDefaultsFootnote(footnote);
 
-      // Calculate days used from the optimization results
+      // Calculate days used and averages from the optimization results
       const daysUsed = recommendedDistribution ? (480 - (recommendedDistribution.daysSaved || 0)) : undefined;
+      const avgMonthly = recommendedDistribution && effectiveTotalMonths > 0 
+        ? recommendedDistribution.totalIncome / effectiveTotalMonths 
+        : undefined;
       
       setAiResult({
         ...result,
         expectedTotalIncome: recommendedDistribution?.totalIncome,
         expectedDaysSaved: recommendedDistribution?.daysSaved,
         expectedDaysUsed: daysUsed,
+        expectedAverageMonthly: avgMonthly,
       });
       setShowAIResult(true);
       
@@ -799,6 +840,7 @@ const Index = () => {
               result={aiResult}
               totalMonths={totalMonths}
               selectedStrategy={strategyPreference}
+              currentResults={currentResults}
               onApply={handleApplyAIResult}
               onDismiss={handleDismissAIResult}
               defaultsFootnote={aiDefaultsFootnote}
