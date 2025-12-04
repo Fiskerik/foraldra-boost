@@ -65,6 +65,7 @@ const Index = () => {
     tips: string[];
     expectedTotalIncome?: number;
     expectedDaysSaved?: number;
+    expectedDaysUsed?: number;
   } | null>(null);
   const [aiDefaultsFootnote, setAiDefaultsFootnote] = useState<string | null>(null);
 
@@ -303,10 +304,14 @@ const Index = () => {
       const footnote = getDefaultsFootnote(appliedDefaults);
       setAiDefaultsFootnote(footnote);
 
+      // Calculate days used from the optimization results
+      const daysUsed = recommendedDistribution ? (480 - (recommendedDistribution.daysSaved || 0)) : undefined;
+      
       setAiResult({
         ...result,
         expectedTotalIncome: recommendedDistribution?.totalIncome,
         expectedDaysSaved: recommendedDistribution?.daysSaved,
+        expectedDaysUsed: daysUsed,
       });
       setShowAIResult(true);
       
@@ -790,6 +795,7 @@ const Index = () => {
             <AIOptimizationSection
               result={aiResult}
               totalMonths={totalMonths}
+              selectedStrategy={selectedStrategyIndex === 0 ? 'maximize-income' : 'save-days'}
               onApply={handleApplyAIResult}
               onDismiss={handleDismissAIResult}
               defaultsFootnote={aiDefaultsFootnote}

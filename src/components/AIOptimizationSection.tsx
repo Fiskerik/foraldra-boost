@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, Lightbulb, CheckCircle2, TrendingUp, PiggyBank, Info, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Sparkles, Lightbulb, CheckCircle2, TrendingUp, PiggyBank, Calendar, Info, X } from "lucide-react";
 
 interface AIOptimizationSectionProps {
   result: {
@@ -9,8 +10,10 @@ interface AIOptimizationSectionProps {
     tips: string[];
     expectedTotalIncome?: number;
     expectedDaysSaved?: number;
+    expectedDaysUsed?: number;
   } | null;
   totalMonths: number;
+  selectedStrategy: 'maximize-income' | 'save-days';
   onApply: (parent1Months: number) => void;
   onDismiss: () => void;
   defaultsFootnote?: string | null;
@@ -19,6 +22,7 @@ interface AIOptimizationSectionProps {
 export function AIOptimizationSection({
   result,
   totalMonths,
+  selectedStrategy,
   onApply,
   onDismiss,
   defaultsFootnote,
@@ -26,16 +30,23 @@ export function AIOptimizationSection({
   if (!result) return null;
 
   const parent2Months = totalMonths - result.optimalParent1Months;
+  const strategyLabel = selectedStrategy === 'maximize-income' ? 'Maximera inkomst' : 'Spara dagar';
+  const strategyColor = selectedStrategy === 'maximize-income' ? 'bg-secondary/20 text-secondary border-secondary/30' : 'bg-primary/20 text-primary border-primary/30';
 
   return (
-    <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-accent/5">
+    <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5">
       <CardHeader className="pb-4">
         <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
-              <Sparkles className="h-5 w-5 text-primary" />
-              AI-rekommendation
-            </CardTitle>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+                <Sparkles className="h-5 w-5 text-primary" />
+                AI-rekommendation
+              </CardTitle>
+              <Badge variant="outline" className={strategyColor}>
+                {strategyLabel}
+              </Badge>
+            </div>
             <CardDescription className="mt-1">
               Baserat på era uppgifter och preferenser
             </CardDescription>
@@ -65,45 +76,54 @@ export function AIOptimizationSection({
             </div>
             <div className="bg-background rounded-lg p-3 text-center">
               <p className="text-xs md:text-sm text-muted-foreground">Förälder 2</p>
-              <p className="text-xl md:text-2xl font-bold text-secondary-foreground">
+              <p className="text-xl md:text-2xl font-bold text-secondary">
                 {parent2Months} mån
               </p>
             </div>
           </div>
         </div>
 
-        {/* Expected outcomes */}
-        {(result.expectedTotalIncome || result.expectedDaysSaved) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-            {result.expectedTotalIncome && (
-              <div className="bg-accent/50 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground mb-1">
-                  <TrendingUp className="h-4 w-4" />
-                  Förväntad total inkomst
-                </div>
-                <p className="text-base md:text-lg font-semibold">
-                  {Math.round(result.expectedTotalIncome).toLocaleString('sv-SE')} kr
-                </p>
+        {/* Expected outcomes - always show all three */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+          {result.expectedTotalIncome !== undefined && (
+            <div className="bg-secondary/10 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground mb-1">
+                <TrendingUp className="h-4 w-4 text-secondary" />
+                Total periodinkomst
               </div>
-            )}
-            {result.expectedDaysSaved !== undefined && (
-              <div className="bg-accent/50 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground mb-1">
-                  <PiggyBank className="h-4 w-4" />
-                  Sparade dagar
-                </div>
-                <p className="text-base md:text-lg font-semibold">
-                  {result.expectedDaysSaved} dagar
-                </p>
+              <p className="text-base md:text-lg font-semibold">
+                {Math.round(result.expectedTotalIncome).toLocaleString('sv-SE')} kr
+              </p>
+            </div>
+          )}
+          {result.expectedDaysUsed !== undefined && (
+            <div className="bg-primary/10 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground mb-1">
+                <Calendar className="h-4 w-4 text-primary" />
+                Använda dagar
               </div>
-            )}
-          </div>
-        )}
+              <p className="text-base md:text-lg font-semibold">
+                {result.expectedDaysUsed} dagar
+              </p>
+            </div>
+          )}
+          {result.expectedDaysSaved !== undefined && (
+            <div className="bg-primary/10 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground mb-1">
+                <PiggyBank className="h-4 w-4 text-primary" />
+                Sparade dagar
+              </div>
+              <p className="text-base md:text-lg font-semibold">
+                {result.expectedDaysSaved} dagar
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Explanation */}
         <div className="space-y-2">
           <h4 className="font-medium flex items-center gap-2 text-sm md:text-base">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <CheckCircle2 className="h-4 w-4 text-primary" />
             Varför denna fördelning?
           </h4>
           <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">
