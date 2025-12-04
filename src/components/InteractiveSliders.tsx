@@ -339,7 +339,7 @@ export function InteractiveSliders({
               )}
 
               <div className="flex gap-2 md:gap-4 items-end">
-                <div className="flex-1 relative pt-1 pb-8">
+                <div className="flex-1 relative pt-1 pb-4">
                   <Slider
                     value={[householdIncome]}
                     onValueChange={(values) => handleHouseholdIncomeChangeInternal(values[0])}
@@ -348,24 +348,8 @@ export function InteractiveSliders({
                     step={1000}
                     className="py-2"
                   />
-                  <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
-                  {/* Current value indicator */}
-                  <div
-                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
-                    style={{ left: `${(householdIncome / maxHouseholdIncome) * 100}%`, transform: "translateX(-50%)" }}
-                  >
-                    <div className="h-4 w-0.5 bg-primary" />
-                  </div>
-                  {incomeBreakPointPercent !== null && (
-                    <div
-                      className="absolute left-0 right-0 bottom-4 pointer-events-none"
-                      style={{ left: `${incomeBreakPointPercent}%`, transform: "translateX(-50%)" }}
-                    >
-                      <div className="h-4 w-0.5 bg-amber-500" />
-                    </div>
-                  )}
                 </div>
-                <div className="hidden md:block w-28 mb-8">
+                <div className="hidden md:block w-28 mb-4">
                   <Input
                     type="number"
                     value={householdIncome}
@@ -396,7 +380,7 @@ export function InteractiveSliders({
                   {formattedTotalMonths} {totalMonths === 1 ? 'månad' : 'månader'}
                 </span>
               </div>
-              <div className="relative pt-1 pb-8">
+              <div className="relative pt-1 pb-4">
                 <Slider
                   value={[totalMonths]}
                   onValueChange={(values) => handleTotalMonthsChangeInternal(values[0])}
@@ -405,22 +389,6 @@ export function InteractiveSliders({
                   step={0.5}
                   className="py-2"
                 />
-                <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
-                {/* Current value indicator */}
-                <div
-                  className="absolute left-0 right-0 bottom-4 pointer-events-none"
-                  style={{ left: `${(totalMonths / monthsSliderMax) * 100}%`, transform: "translateX(-50%)" }}
-                >
-                  <div className="h-4 w-0.5 bg-primary" />
-                </div>
-                {minimumIncomeBreakMonths !== null && (
-                  <div
-                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
-                    style={{ left: `${(minimumIncomeBreakMonths / monthsSliderMax) * 100}%`, transform: "translateX(-50%)" }}
-                  >
-                    <div className="h-4 w-0.5 bg-amber-500" />
-                  </div>
-                )}
               </div>
               <p className="text-[10px] text-muted-foreground">
                 Totalt antal månader lediga. {daysUsed ?? 0} av {TOTAL_BENEFIT_DAYS} dagar används.
@@ -437,7 +405,7 @@ export function InteractiveSliders({
                   {daysPerWeek} {daysPerWeek === 1 ? 'dag' : 'dagar'}
                 </span>
               </div>
-              <div className="relative pt-1 pb-8">
+              <div className="relative pt-1 pb-4">
                 <Slider
                   value={[daysPerWeek]}
                   onValueChange={(values) => handleDaysPerWeekChangeInternal(values[0])}
@@ -446,22 +414,6 @@ export function InteractiveSliders({
                   step={1}
                   className="py-2"
                 />
-                <div className="pointer-events-none absolute left-0 right-0 bottom-4 h-px bg-border" />
-                {/* Current value indicator */}
-                <div
-                  className="absolute left-0 right-0 bottom-4 pointer-events-none"
-                  style={{ left: `${((daysPerWeek - 1) / 6) * 100}%`, transform: "translateX(-50%)" }}
-                >
-                  <div className="h-4 w-0.5 bg-primary" />
-                </div>
-                {minimumIncomeBreakDaysPerWeek !== null && (
-                  <div
-                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
-                    style={{ left: `${((minimumIncomeBreakDaysPerWeek - 1) / 6) * 100}%`, transform: "translateX(-50%)" }}
-                  >
-                    <div className="h-4 w-0.5 bg-amber-500" />
-                  </div>
-                )}
               </div>
             </div>
 
