@@ -338,6 +338,8 @@ const Index = () => {
 
   const handleApplyAIResult = (parent1MonthsValue: number) => {
     setParent1Months(parent1MonthsValue);
+    // Preselect the strategy that the AI was optimizing for
+    handleStrategyPreferenceSelect(strategyPreference);
     handleOptimize({ silent: false, overrides: { parent1Months: parent1MonthsValue } });
     setShowAIResult(false);
     toast.success('AI-rekommendation tillämpad!');
@@ -796,7 +798,7 @@ const Index = () => {
             <AIOptimizationSection
               result={aiResult}
               totalMonths={totalMonths}
-              selectedStrategy={selectedStrategyIndex === 0 ? 'maximize-income' : 'save-days'}
+              selectedStrategy={strategyPreference}
               onApply={handleApplyAIResult}
               onDismiss={handleDismissAIResult}
               defaultsFootnote={aiDefaultsFootnote}

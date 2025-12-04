@@ -172,14 +172,18 @@ export function LeavePeriodCard({
   };
 
   const handleStrategyButtonClick = (strategy: 'maximize-income' | 'save-days') => {
-    const optimalParent1Months = findOptimalDistribution(strategy);
-    if (optimalParent1Months !== null) {
-      onDistributionChange(optimalParent1Months);
-    }
-
+    // Update strategy preference immediately for responsive UI
     if (onStrategyPreferenceSelect) {
       onStrategyPreferenceSelect(strategy);
     }
+
+    // Calculate optimal distribution asynchronously
+    setTimeout(() => {
+      const optimalParent1Months = findOptimalDistribution(strategy);
+      if (optimalParent1Months !== null) {
+        onDistributionChange(optimalParent1Months);
+      }
+    }, 0);
   };
 
   return (
