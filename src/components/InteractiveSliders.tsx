@@ -4,7 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, LeavePeriod, calculateMaxLeaveMonths, TOTAL_BENEFIT_DAYS, quickOptimize, ParentData } from "@/utils/parentalCalculations";
+import { formatCurrency, LeavePeriod, calculateMaxLeaveMonths, TOTAL_BENEFIT_DAYS, quickOptimize, ParentData, WEEKS_PER_MONTH } from "@/utils/parentalCalculations";
 import { StrategyIncomeSummary, calculateStrategyIncomeSummary } from "@/utils/incomeSummary";
 import { TrendingUp, Calendar, Clock, Sparkles, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
@@ -84,6 +84,37 @@ export function InteractiveSliders({
     ? Math.max(0, Math.min(100, (incomeBreakPoint / Math.max(maxHouseholdIncome, 1)) * 100))
     : null;
 
+  const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
+  const monthsSliderMax = Math.max(maxLeaveMonths, totalMonths, 1);
+
+  const totalIncomeBasis = useMemo(() => {
+    const derivedTotalIncome = totalIncome ?? currentHouseholdIncome * totalMonths;
+    if (Number.isFinite(derivedTotalIncome) && derivedTotalIncome > 0) {
+      return derivedTotalIncome;
+    }
+
+    return Math.max(0, householdIncome * Math.max(totalMonths, 1));
+  }, [totalIncome, currentHouseholdIncome, totalMonths, householdIncome]);
+
+  const minimumIncomeBreakMonths = useMemo(() => {
+    if (!householdIncome || householdIncome <= 0) return null;
+    const breakpointMonths = totalIncomeBasis / householdIncome;
+    if (!Number.isFinite(breakpointMonths) || breakpointMonths <= 0) return null;
+
+    return Math.min(monthsSliderMax, Math.max(0, Math.round(breakpointMonths * 2) / 2));
+  }, [householdIncome, totalIncomeBasis, monthsSliderMax]);
+
+  const minimumIncomeBreakDaysPerWeek = useMemo(() => {
+    if (!minimumIncomeBreakMonths || minimumIncomeBreakMonths <= 0) return null;
+
+    const availableDays = daysUsed ?? TOTAL_BENEFIT_DAYS;
+    const estimatedDaysPerWeek = availableDays / (minimumIncomeBreakMonths * WEEKS_PER_MONTH);
+
+    if (!Number.isFinite(estimatedDaysPerWeek)) return null;
+
+    return Math.min(7, Math.max(1, Math.round(estimatedDaysPerWeek * 10) / 10));
+  }, [minimumIncomeBreakMonths, daysUsed]);
+
   // Calculate current parent 1 months from periods
   const currentParent1Months = useMemo(() => {
     if (!periods || periods.length === 0) return 0;
@@ -110,7 +141,7 @@ export function InteractiveSliders({
     }> = [];
     
     // Test +/- 1, 2, 3 months for parent 1
-    for (let delta of [-3, -2, -1, 1, 2, 3]) {
+    for (const delta of [-3, -2, -1, 1, 2, 3]) {
       const testParent1Months = currentParent1Months + delta;
       const testParent2Months = totalMonths - testParent1Months;
       
@@ -180,12 +211,46 @@ export function InteractiveSliders({
     daysPerWeek,
   ]);
 
-  const maxLeaveMonths = calculateMaxLeaveMonths(daysPerWeek);
-  const monthsSliderMax = Math.max(maxLeaveMonths, totalMonths, 1);
-
   const formattedTotalMonths = Number.isInteger(totalMonths)
     ? totalMonths
     : totalMonths.toFixed(1);
+
+  const handleHouseholdIncomeChangeInternal = (value: number) => {
+    const clamped = Math.min(Math.max(value, 0), maxHouseholdIncome);
+    onHouseholdIncomeChange(clamped);
+  };
+
+  const handleTotalMonthsChangeInternal = (value: number) => {
+    const nextMonths = Math.max(0, Math.min(value, monthsSliderMax));
+    const dilutedIncome = totalIncomeBasis / Math.max(nextMonths || 1, 0.5);
+    const adjustedIncome = Math.min(maxHouseholdIncome, Math.round(dilutedIncome));
+
+    onTotalMonthsChange(nextMonths);
+
+    if (adjustedIncome !== householdIncome) {
+      onHouseholdIncomeChange(adjustedIncome);
+    }
+  };
+
+  const handleDaysPerWeekChangeInternal = (value: number) => {
+    const clampedDays = Math.max(1, Math.min(7, Math.round(value)));
+    const availableDays = daysUsed ?? TOTAL_BENEFIT_DAYS;
+    const newMaxMonths = calculateMaxLeaveMonths(clampedDays, availableDays);
+    const adjustedMonths = Math.min(Math.max(totalMonths, 0), newMaxMonths);
+
+    const concentratedIncome = totalIncomeBasis / Math.max(adjustedMonths || 1, 0.5);
+    const adjustedIncome = Math.min(maxHouseholdIncome, Math.round(concentratedIncome));
+
+    onDaysPerWeekChange(clampedDays);
+
+    if (adjustedMonths !== totalMonths) {
+      onTotalMonthsChange(adjustedMonths);
+    }
+
+    if (adjustedIncome !== householdIncome) {
+      onHouseholdIncomeChange(adjustedIncome);
+    }
+  };
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 animate-slide-in-bottom flex justify-center px-4 pb-4">
@@ -245,11 +310,11 @@ export function InteractiveSliders({
                   value={householdIncome}
                   onChange={(e) => {
                     const val = parseInt(e.target.value) || 0;
-                    onHouseholdIncomeChange(Math.min(Math.max(val, 0), maxHouseholdIncome));
+                    handleHouseholdIncomeChangeInternal(val);
                   }}
                   onBlur={(e) => {
                     const val = parseInt(e.target.value);
-                    if (isNaN(val)) onHouseholdIncomeChange(0);
+                    if (isNaN(val)) handleHouseholdIncomeChangeInternal(0);
                   }}
                   min={0}
                   max={maxHouseholdIncome}
@@ -277,7 +342,7 @@ export function InteractiveSliders({
                 <div className="flex-1 relative pt-1 pb-8">
                   <Slider
                     value={[householdIncome]}
-                    onValueChange={(values) => onHouseholdIncomeChange(values[0])}
+                    onValueChange={(values) => handleHouseholdIncomeChangeInternal(values[0])}
                     min={0}
                     max={maxHouseholdIncome}
                     step={1000}
@@ -291,6 +356,14 @@ export function InteractiveSliders({
                   >
                     <div className="h-4 w-0.5 bg-primary" />
                   </div>
+                  {incomeBreakPointPercent !== null && (
+                    <div
+                      className="absolute left-0 right-0 bottom-4 pointer-events-none"
+                      style={{ left: `${incomeBreakPointPercent}%`, transform: "translateX(-50%)" }}
+                    >
+                      <div className="h-4 w-0.5 bg-amber-500" />
+                    </div>
+                  )}
                 </div>
                 <div className="hidden md:block w-28 mb-8">
                   <Input
@@ -298,11 +371,11 @@ export function InteractiveSliders({
                     value={householdIncome}
                     onChange={(e) => {
                       const val = parseInt(e.target.value) || 0;
-                      onHouseholdIncomeChange(Math.min(Math.max(val, 0), maxHouseholdIncome));
+                      handleHouseholdIncomeChangeInternal(val);
                     }}
                     onBlur={(e) => {
                       const val = parseInt(e.target.value);
-                      if (isNaN(val)) onHouseholdIncomeChange(0);
+                      if (isNaN(val)) handleHouseholdIncomeChangeInternal(0);
                     }}
                     min={0}
                     max={maxHouseholdIncome}
@@ -326,7 +399,7 @@ export function InteractiveSliders({
               <div className="relative pt-1 pb-8">
                 <Slider
                   value={[totalMonths]}
-                  onValueChange={(values) => onTotalMonthsChange(values[0])}
+                  onValueChange={(values) => handleTotalMonthsChangeInternal(values[0])}
                   min={0}
                   max={monthsSliderMax}
                   step={0.5}
@@ -340,6 +413,14 @@ export function InteractiveSliders({
                 >
                   <div className="h-4 w-0.5 bg-primary" />
                 </div>
+                {minimumIncomeBreakMonths !== null && (
+                  <div
+                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
+                    style={{ left: `${(minimumIncomeBreakMonths / monthsSliderMax) * 100}%`, transform: "translateX(-50%)" }}
+                  >
+                    <div className="h-4 w-0.5 bg-amber-500" />
+                  </div>
+                )}
               </div>
               <p className="text-[10px] text-muted-foreground">
                 Totalt antal månader lediga. {daysUsed ?? 0} av {TOTAL_BENEFIT_DAYS} dagar används.
@@ -359,7 +440,7 @@ export function InteractiveSliders({
               <div className="relative pt-1 pb-8">
                 <Slider
                   value={[daysPerWeek]}
-                  onValueChange={(values) => onDaysPerWeekChange(values[0])}
+                  onValueChange={(values) => handleDaysPerWeekChangeInternal(values[0])}
                   min={1}
                   max={7}
                   step={1}
@@ -373,6 +454,14 @@ export function InteractiveSliders({
                 >
                   <div className="h-4 w-0.5 bg-primary" />
                 </div>
+                {minimumIncomeBreakDaysPerWeek !== null && (
+                  <div
+                    className="absolute left-0 right-0 bottom-4 pointer-events-none"
+                    style={{ left: `${((minimumIncomeBreakDaysPerWeek - 1) / 6) * 100}%`, transform: "translateX(-50%)" }}
+                  >
+                    <div className="h-4 w-0.5 bg-amber-500" />
+                  </div>
+                )}
               </div>
             </div>
 
