@@ -39,13 +39,15 @@ function ComparisonRow({
   currentValue, 
   aiValue, 
   format = 'number',
-  highlight = 'higher'
+  highlight = 'higher',
+  noHighlight = false
 }: { 
   label: string; 
   currentValue?: number; 
   aiValue?: number;
   format?: 'number' | 'currency' | 'days';
   highlight?: 'higher' | 'lower';
+  noHighlight?: boolean;
 }) {
   if (currentValue === undefined || aiValue === undefined) return null;
   
@@ -57,16 +59,32 @@ function ComparisonRow({
 
   const diff = aiValue - currentValue;
   const isAiBetter = highlight === 'higher' ? diff > 0 : diff < 0;
+  const isAiWorse = highlight === 'higher' ? diff < 0 : diff > 0;
   const diffText = diff > 0 ? `+${formatValue(Math.abs(diff))}` : `-${formatValue(Math.abs(diff))}`;
 
+  // Determine color classes
+  const getValueColor = () => {
+    if (noHighlight || diff === 0) return "";
+    if (isAiBetter) return "font-semibold text-primary";
+    if (isAiWorse) return "font-semibold text-destructive";
+    return "";
+  };
+
+  const getDiffColor = () => {
+    if (noHighlight || diff === 0) return "text-muted-foreground";
+    if (isAiBetter) return "text-primary";
+    if (isAiWorse) return "text-destructive";
+    return "text-muted-foreground";
+  };
+
   return (
-    <div className="grid grid-cols-3 gap-2 py-2 border-b border-border/50 last:border-0">
-      <span className="text-xs md:text-sm text-muted-foreground">{label}</span>
-      <span className="text-xs md:text-sm text-center">{formatValue(currentValue)}</span>
-      <div className="text-xs md:text-sm text-center flex items-center justify-center gap-1">
-        <span className={isAiBetter ? "font-semibold text-primary" : ""}>{formatValue(aiValue)}</span>
+    <div className="grid grid-cols-3 gap-2 py-2.5 border-b border-border/50 last:border-0 items-center">
+      <span className="text-xs text-muted-foreground leading-tight">{label}</span>
+      <span className="text-xs text-center font-medium">{formatValue(currentValue)}</span>
+      <div className="text-xs text-center flex flex-col items-center gap-0.5">
+        <span className={getValueColor()}>{formatValue(aiValue)}</span>
         {diff !== 0 && (
-          <span className={`text-[10px] ${isAiBetter ? "text-primary" : "text-muted-foreground"}`}>
+          <span className={`text-[10px] ${getDiffColor()}`}>
             ({diffText})
           </span>
         )}
@@ -141,15 +159,15 @@ export function AIOptimizationSection({
               <span className="text-xs font-medium text-center text-primary">AI-förslag</span>
             </div>
 
-            {/* Distribution */}
-            <div className="grid grid-cols-3 gap-2 py-2 border-b border-border/50">
-              <span className="text-xs md:text-sm text-muted-foreground flex items-center gap-1">
+            {/* Distribution - no color highlighting */}
+            <div className="grid grid-cols-3 gap-2 py-2.5 border-b border-border/50 items-center">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Users className="h-3 w-3" /> Fördelning
               </span>
-              <span className="text-xs md:text-sm text-center">
+              <span className="text-xs text-center font-medium">
                 {currentResults.parent1Months}/{currentResults.parent2Months} mån
               </span>
-              <span className="text-xs md:text-sm text-center font-semibold text-primary">
+              <span className="text-xs text-center font-medium">
                 {result.optimalParent1Months}/{parent2Months} mån
               </span>
             </div>
